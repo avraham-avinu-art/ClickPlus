@@ -3,6 +3,7 @@ package com.example.clickplus.ui
 import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ClipData
+import android.content.Intent
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
@@ -1133,15 +1134,24 @@ private fun SettingsDialog(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        ThemeCard(ThemeOption.LIGHT, localTheme == ThemeOption.LIGHT) {
-                            localTheme = ThemeOption.LIGHT
-                        }
-                        ThemeCard(ThemeOption.DARK, localTheme == ThemeOption.DARK) {
-                            localTheme = ThemeOption.DARK
-                        }
-                        ThemeCard(ThemeOption.DARK_OLED, localTheme == ThemeOption.DARK_OLED) {
-                            localTheme = ThemeOption.DARK_OLED
-                        }
+                        ThemeCard(
+                            ThemeOption.LIGHT,
+                            localTheme == ThemeOption.LIGHT,
+                            { localTheme = ThemeOption.LIGHT },
+                            Modifier.weight(1f)
+                        )
+                        ThemeCard(
+                            ThemeOption.DARK,
+                            localTheme == ThemeOption.DARK,
+                            { localTheme = ThemeOption.DARK },
+                            Modifier.weight(1f)
+                        )
+                        ThemeCard(
+                            ThemeOption.DARK_OLED,
+                            localTheme == ThemeOption.DARK_OLED,
+                            { localTheme = ThemeOption.DARK_OLED },
+                            Modifier.weight(1f)
+                        )
                     }
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
@@ -1231,7 +1241,8 @@ private fun SettingsDialog(
 private fun ThemeCard(
     option: ThemeOption,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val background = when (option) {
         ThemeOption.LIGHT -> Color(0xFFF4F4F4)
@@ -1240,7 +1251,7 @@ private fun ThemeCard(
         ThemeOption.AUTO -> Color.Gray
     }
 
-    Card(Modifier.weight(1f).clickable(onClick = onClick)) {
+    Card(modifier.clickable(onClick = onClick)) {
         Column(
             Modifier.padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
