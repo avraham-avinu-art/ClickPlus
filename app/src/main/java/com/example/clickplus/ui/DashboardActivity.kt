@@ -107,6 +107,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.AppMode
 import com.example.clickplus.data.AppPreferencesRepository
@@ -798,11 +799,41 @@ private fun BackupScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                SettingCard("ייצוא", "שמור את כל הפעולות, הפרופילים וההגדרות לקובץ JSON.") {
-                    Button(
-                        onClick = { exportLauncher.launch("clickplus-backup.json") },
-                        Modifier.fillMaxWidth(),
-                    ) { Text("ייצוא גיבוי") }
+                SettingCard("ייצוא ושיתוף", "שמור או שתף את כל הפעולות, הפרופילים וההגדרות.") {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { exportLauncher.launch("clickplus-backup.json") },
+                            Modifier.weight(1f),
+                        ) { Text("ייצוא") }
+                        OutlinedButton(
+                            onClick = {
+                                val json = advanced.exportJson(
+                                    JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
+                                    JSONObject().put("tapTimeoutMs", timeout).put("showTapCount", showTapCount)
+                                )
+                                runCatching {
+                                    val file = java.io.File(context.cacheDir, "clickplus-backup.json")
+                                    file.writeText(json)
+                                    val uri = FileProvider.getUriForFile(
+                                        context,
+                                        context.packageName + ".fileprovider",
+                                        file,
+                                    )
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_SEND).apply {
+                                            type = "application/json"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }.let { Intent.createChooser(it, "שיתוף גיבוי ClickPlus") }
+                                    )
+                                    message = "נפתח מסך השיתוף."
+                                }.onFailure {
+                                    message = "השיתוף נכשל: " + (it.message ?: "שגיאה")
+                                }
+                            },
+                            Modifier.weight(1f),
+                        ) { Text("שיתוף") }
+                    }
                 }
             }
             item {
