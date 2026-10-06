@@ -1195,11 +1195,14 @@ private fun PointEditor(
     toleranceY: Float,
     onChange: (Float, Float) -> Unit,
 ) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val outlineColor = MaterialTheme.colorScheme.outline
+    val surfaceColor = MaterialTheme.colorScheme.surfaceVariant
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("תצוגה מקדימה · גרור את הנקודה למיקום המדויק")
         Box(
             Modifier.fillMaxWidth().height(260.dp).background(
-                MaterialTheme.colorScheme.surfaceVariant,
+                surfaceColor,
                 RoundedCornerShape(18.dp),
             ),
         ) {
@@ -1216,19 +1219,19 @@ private fun PointEditor(
                 val px = x * size.width
                 val py = y * size.height
                 drawRect(
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                    color = outlineColor.copy(alpha = 0.35f),
                     style = Stroke(2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f))),
                 )
                 drawRect(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                    color = primaryColor.copy(alpha = 0.16f),
                     topLeft = Offset((x - toleranceX).coerceAtLeast(0f) * size.width, (y - toleranceY).coerceAtLeast(0f) * size.height),
                     size = androidx.compose.ui.geometry.Size(
                         ((toleranceX * 2f).coerceAtMost(1f)) * size.width,
                         ((toleranceY * 2f).coerceAtMost(1f)) * size.height,
                     ),
                 )
-                drawCircle(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), radius = 32f, center = Offset(px, py))
-                drawCircle(MaterialTheme.colorScheme.primary, radius = 11f, center = Offset(px, py))
+                drawCircle(primaryColor.copy(alpha = 0.18f), radius = 32f, center = Offset(px, py))
+                drawCircle(primaryColor, radius = 11f, center = Offset(px, py))
             }
         }
     }
