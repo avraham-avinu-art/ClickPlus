@@ -29,6 +29,8 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     private lateinit var tapDetector: TapDetector
     private lateinit var prefsRepository: AppPreferencesRepository
     private val serviceScope = CoroutineScope(Dispatchers.Main.immediate + Job())
+    private var keyCaptureCallback: ((Int, String) -> Unit)? = null
+    private var suppressKeyUpCode: Int? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -39,6 +41,17 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         tapDetector = TapDetector(actionExecutor, overlayManager)
         prefsRepository = AppPreferencesRepository(applicationContext)
         observePreferences()
+    }
+
+    fun startKeyCapture(onCaptured: (Int, String) -> Unit) {
+        keyCaptureCallback = onCaptured
+        suppressKeyUpCode = null
+        overlayManager.showPill("לכידת מקש", "לחץ עכשיו על הכפתור")
+    }
+
+    fun cancelKeyCapture() {
+        keyCaptureCallback = null
+        suppressKeyUpCode = null
     }
 
     fun testMapping(config: KeyActionConfig) {
@@ -99,6 +112,34 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
+        val capture = keyCaptureCallback
+
+        if (capture != null) {
+            if (event.action == KeyEvent.ACTION_DOWN && !event.repeatCount.let { it > 0 }) {
+                keyCaptureCallback = null
+                suppressKeyUpCode = event.keyCode
+                val name = when (event.keyCode) {
+                    KeyEvent.KEYCODE_VOLUME_UP -> "ווליום עליון"
+                    KeyEvent.KEYCODE_VOLUME_DOWN -> "ווליום תחתון"
+                    KeyEvent.KEYCODE_BACK -> "חזרה"
+                    KeyEvent.KEYCODE_HOME -> "בית"
+                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> "נגן / השהה מדיה"
+                    KeyEvent.KEYCODE_APP_SWITCH -> "יישומים אחרונים"
+                    else -> KeyEvent.keyCodeToString(event.keyCode)
+                        .removePrefix("KEYCODE_")
+                        .replace('_', ' ')
+                }
+                capture.invoke(event.keyCode, name)
+                return true
+            }
+            return true
+        }
+
+        if (event.action == KeyEvent.ACTION_UP && suppressKeyUpCode == event.keyCode) {
+            suppressKeyUpCode = null
+            return true
+        }
+
         if (tapDetector.processKeyEvent(event)) {
             return true
         }
@@ -109,6 +150,8 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
+        keyCaptureCallback = null
+        suppressKeyUpCode = null
         if (instance === this) instance = null
         if (::overlayManager.isInitialized) overlayManager.dismiss()
         serviceScope.cancel()
