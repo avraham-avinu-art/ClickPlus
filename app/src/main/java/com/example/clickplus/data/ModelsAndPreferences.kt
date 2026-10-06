@@ -123,6 +123,7 @@ class AppPreferencesRepository(private val context: Context) {
     companion object {
         val BACKGROUND_ONLY = booleanPreferencesKey("background_only")
         val TAP_TIMEOUT_MS = longPreferencesKey("tap_timeout_ms")
+        val SHOW_TAP_COUNT = booleanPreferencesKey("show_tap_count")
         val MAPPINGS_JSON = stringPreferencesKey("mappings_json")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
@@ -132,6 +133,9 @@ class AppPreferencesRepository(private val context: Context) {
 
     val tapTimeoutFlow: Flow<Long> =
         context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 650L }
+
+    val showTapCountFlow: Flow<Boolean> =
+        context.dataStore.data.map { it[SHOW_TAP_COUNT] ?: false }
 
     val mappingsFlow: Flow<List<KeyActionConfig>> =
         context.dataStore.data.map { prefs ->
@@ -159,6 +163,10 @@ class AppPreferencesRepository(private val context: Context) {
 
     suspend fun saveTapTimeout(ms: Long) {
         context.dataStore.edit { it[TAP_TIMEOUT_MS] = ms.coerceIn(300L, 1200L) }
+    }
+
+    suspend fun saveShowTapCount(enabled: Boolean) {
+        context.dataStore.edit { it[SHOW_TAP_COUNT] = enabled }
     }
 
     suspend fun setOnboardingCompleted(completed: Boolean) {
