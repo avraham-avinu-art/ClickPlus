@@ -87,6 +87,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -105,7 +106,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.example.clickplus.data.ActionType
@@ -179,8 +182,9 @@ private fun ClickPlusDashboard() {
         else -> if (dark) darkColorScheme() else lightColorScheme()
     }
 
-    MaterialTheme(colorScheme = scheme) {
-        when (val current = route) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        MaterialTheme(colorScheme = scheme) {
+            when (val current = route) {
             DashboardRoute.Home -> HomeDashboard(
                 mappings = mappings,
                 onAdd = { route = DashboardRoute.Editor(null) },
@@ -278,12 +282,7 @@ private fun HomeDashboard(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text("קליק פלוס", fontWeight = FontWeight.Bold)
-                        Text("מרכז שליטה", style = MaterialTheme.typography.labelSmall)
-                    }
-                },
+                title = {},
                 actions = {
                     IconButton(onClick = onStatus) { Icon(Icons.Outlined.Tune, "מצב השירות") }
                     IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "הגדרות") }
