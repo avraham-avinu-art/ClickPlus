@@ -967,8 +967,10 @@ private fun EditorScreen(
         }
     }
 
-    val x = if (orientation == "landscape" && metadata.landscapeX >= 0f) metadata.landscapeX else if (metadata.portraitX >= 0f) metadata.portraitX else draft.screenTapXRatio.coerceAtLeast(0f)
-    val y = if (orientation == "landscape" && metadata.landscapeY >= 0f) metadata.landscapeY else if (metadata.portraitY >= 0f) metadata.portraitY else draft.screenTapYRatio.coerceAtLeast(0f)
+    val rawX = if (orientation == "landscape" && metadata.landscapeX >= 0f) metadata.landscapeX else if (metadata.portraitX >= 0f) metadata.portraitX else draft.screenTapXRatio.coerceAtLeast(0f)
+    val rawY = if (orientation == "landscape" && metadata.landscapeY >= 0f) metadata.landscapeY else if (metadata.portraitY >= 0f) metadata.portraitY else draft.screenTapYRatio.coerceAtLeast(0f)
+    val x = rawX.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
+    val y = rawY.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
 
     Scaffold(
         topBar = {
@@ -1143,13 +1145,20 @@ private fun EditorScreen(
                         FilterChip(selected = draft.actionType == ActionType.APP, onClick = { draft = draft.copy(actionType = ActionType.APP) }, label = { Text("אפליקציה", maxLines = 1) })
                     }
                     if (draft.actionType == ActionType.SYSTEM) {
-                        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).height(220.dp)) {
+                        Column(Modifier.fillMaxWidth()) {
                             SystemActionPreset.entries.forEach { item ->
                                 Row(
-                                    Modifier.fillMaxWidth().clickable { draft = draft.copy(systemActionId = item.id) }.padding(10.dp),
+                                    Modifier.fillMaxWidth()
+                                        .clickable { draft = draft.copy(systemActionId = item.id) }
+                                        .padding(10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    FilterChip(selected = draft.systemActionId == item.id, onClick = { draft = draft.copy(systemActionId = item.id) }, label = { Text(item.titleHebrew) })
+                                    FilterChip(
+                                        selected = draft.systemActionId == item.id,
+                                        onClick = { draft = draft.copy(systemActionId = item.id) },
+                                        label = { Text(item.titleHebrew, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
                                 }
                             }
                         }
@@ -1246,18 +1255,21 @@ private fun AppPickerDialog(
 ) {
     val context = LocalContext.current
     val apps = remember {
-        context.packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
-            .mapNotNull { info ->
-                val launchIntent = context.packageManager.getLaunchIntentForPackage(info.packageName)
-                    ?: return@mapNotNull null
-                val label = runCatching {
-                    context.packageManager.getApplicationLabel(info).toString()
-                }.getOrDefault(info.packageName)
-                if (launchIntent != null) InstalledApp(info.packageName, label) else null
-            }
-            .filterNot { it.packageName == context.packageName }
-            .distinctBy { it.packageName }
-            .sortedBy { it.label.lowercase() }
+        runCatching {
+            context.packageManager.getInstalledApplications(0)
+                .asSequence()
+                .filter { it.packageName != context.packageName }
+                .mapNotNull { info ->
+                    runCatching {
+                        context.packageManager.getLaunchIntentForPackage(info.packageName) ?: return@runCatching null
+                        val label = context.packageManager.getApplicationLabel(info).toString()
+                        InstalledApp(info.packageName, label)
+                    }.getOrNull()
+                }
+                .distinctBy { it.packageName }
+                .sortedBy { it.label.lowercase(Locale.ROOT) }
+                .toList()
+        }.getOrDefault(emptyList())
     }
     var query by remember { mutableStateOf("") }
     val filtered = apps.filter {
@@ -1336,6 +1348,10 @@ private fun PointEditor(
     toleranceY: Float,
     onChange: (Float, Float) -> Unit,
 ) {
+    val safeX = x.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
+    val safeY = y.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
+    val safeToleranceX = toleranceX.takeIf { it.isFinite() }?.coerceIn(0.01f, 0.25f) ?: 0.08f
+    val safeToleranceY = toleranceY.takeIf { it.isFinite() }?.coerceIn(0.01f, 0.25f) ?: 0.08f
     val primaryColor = MaterialTheme.colorScheme.primary
     val outlineColor = MaterialTheme.colorScheme.outline
     val surfaceColor = MaterialTheme.colorScheme.surfaceVariant
@@ -1350,25 +1366,25 @@ private fun PointEditor(
             Canvas(
                 Modifier.fillMaxSize().padding(14.dp).pointerInput(Unit) {
                     detectDragGestures { change, _ ->
-                        val nx = (change.position.x / size.width).coerceIn(0f, 1f)
-                        val ny = (change.position.y / size.height).coerceIn(0f, 1f)
+                        val nx = if (size.width > 0f) (change.position.x / size.width).coerceIn(0f, 1f) else safeX
+                        val ny = if (size.height > 0f) (change.position.y / size.height).coerceIn(0f, 1f) else safeY
                         onChange(nx, ny)
                         change.consume()
                     }
                 }
             ) {
-                val px = x * size.width
-                val py = y * size.height
+                val px = safeX * size.width
+                val py = safeY * size.height
                 drawRect(
                     color = outlineColor.copy(alpha = 0.35f),
                     style = Stroke(2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f))),
                 )
                 drawRect(
                     color = primaryColor.copy(alpha = 0.16f),
-                    topLeft = Offset((x - toleranceX).coerceAtLeast(0f) * size.width, (y - toleranceY).coerceAtLeast(0f) * size.height),
+                    topLeft = Offset((safeX - safeToleranceX).coerceAtLeast(0f) * size.width, (safeY - safeToleranceY).coerceAtLeast(0f) * size.height),
                     size = androidx.compose.ui.geometry.Size(
-                        ((toleranceX * 2f).coerceAtMost(1f)) * size.width,
-                        ((toleranceY * 2f).coerceAtMost(1f)) * size.height,
+                        ((safeToleranceX * 2f).coerceAtMost(1f)) * size.width,
+                        ((safeToleranceY * 2f).coerceAtMost(1f)) * size.height,
                     ),
                 )
                 drawCircle(primaryColor.copy(alpha = 0.18f), radius = 32f, center = Offset(px, py))
