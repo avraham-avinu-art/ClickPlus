@@ -20,6 +20,8 @@ data class RuleAdvancedMetadata(
     val portraitY: Float = -1f,
     val landscapeX: Float = -1f,
     val landscapeY: Float = -1f,
+    val toleranceXRatio: Float = 0.08f,
+    val toleranceYRatio: Float = 0.08f,
 )
 
 data class ClickPlusProfile(
@@ -47,29 +49,24 @@ class AdvancedRuleRepository(private val context: Context) {
             }.getOrDefault(AppMode.FULL)
 
         fun setMode(context: Context, mode: AppMode) {
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(MODE, mode.name).apply()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(MODE, mode.name).apply()
         }
 
         fun lastExternalPackage(context: Context): String =
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getString(LAST_PACKAGE, "").orEmpty()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LAST_PACKAGE, "").orEmpty()
 
         fun setLastExternalPackage(context: Context, packageName: String) {
             if (packageName.isBlank()) return
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(LAST_PACKAGE, packageName).apply()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LAST_PACKAGE, packageName).apply()
         }
 
         fun logs(context: Context): List<ActivityLog> =
             runCatching {
-                val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                    .getString(LOGS, "[]") ?: "[]"
+                val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LOGS, "[]") ?: "[]"
                 val array = JSONArray(raw)
                 buildList {
                     for (i in 0 until array.length()) {
-                        val o = array.optJSONObject(i) ?: continue
-                        add(ActivityLog.fromJson(o))
+                        array.optJSONObject(i)?.let { add(ActivityLog.fromJson(it)) }
                     }
                 }.sortedByDescending { it.timestamp }
             }.getOrDefault(emptyList())
@@ -79,22 +76,17 @@ class AdvancedRuleRepository(private val context: Context) {
             current.add(0, log)
             val array = JSONArray()
             current.take(120).forEach { array.put(it.toJson()) }
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(LOGS, array.toString()).apply()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, array.toString()).apply()
         }
 
         fun clearLogs(context: Context) {
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(LOGS, "[]").apply()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, "[]").apply()
         }
     }
 
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun getRuleMetadata(ruleId: String): RuleAdvancedMetadata {
-        val o = loadMetadata()[ruleId] ?: return RuleAdvancedMetadata()
-        return fromJson(o)
-    }
+    fun getRuleMetadata(ruleId: String): RuleAdvancedMetadata = loadMetadata()[ruleId]?.let(::fromJson) ?: RuleAdvancedMetadata()
 
     fun saveRuleMetadata(ruleId: String, metadata: RuleAdvancedMetadata) {
         val root = loadMetadata()
@@ -118,33 +110,33 @@ class AdvancedRuleRepository(private val context: Context) {
                     add(ClickPlusProfile(
                         id = o.optString("id", UUID.randomUUID().toString()),
                         name = o.optString("name", "פרופיל"),
-                        enabled = o.optBoolean("enabled", true),
+                        enabled = o.optBoolean("enabled", true)
                     ))
                 }
             }
-        }.getOrDefault(emptyList()).ifEmpty { listOf(ClickPlusProfile("default", "כללי", true)) }
+        }.getOrDefault(emptyList()).ifEmpty {
+            listOf(ClickPlusProfile("default", "כללי", true)).also { saveProfiles(it) }
+        }
     }
 
     fun saveProfiles(items: List<ClickPlusProfile>) {
         val array = JSONArray()
-        items.forEach { array.put(JSONObject()
-            .put("id", it.id)
-            .put("name", it.name)
-            .put("enabled", it.enabled)) }
+        items.forEach {
+            array.put(JSONObject().put("id", it.id).put("name", it.name).put("enabled", it.enabled))
+        }
         prefs.edit().putString(PROFILES, array.toString()).apply()
     }
 
     fun themeMode(): String = prefs.getString(THEME, "system").orEmpty()
     fun saveThemeMode(mode: String) { prefs.edit().putString(THEME, mode).apply() }
-
     fun clearAllRuleMetadata() { prefs.edit().remove(META).apply() }
 
     fun exportJson(baseMappingsJson: String, baseSettings: JSONObject): String {
         val bundle = JSONObject()
             .put("version", 2)
             .put("mappings", JSONArray(baseMappingsJson))
-            .put("profiles", JSONArray().also { a -> profiles().forEach {
-                a.put(JSONObject().put("id",it.id).put("name",it.name).put("enabled",it.enabled))
+            .put("profiles", JSONArray().also { a -> profiles().forEach { p ->
+                a.put(JSONObject().put("id", p.id).put("name", p.name).put("enabled", p.enabled))
             }})
             .put("ruleMetadata", loadMetadata())
             .put("settings", baseSettings)
@@ -152,7 +144,24 @@ class AdvancedRuleRepository(private val context: Context) {
         return bundle.toString(2)
     }
 
-    fun importJson(json: String): JSONObject = JSONObject(json)
+    fun importBundle(root: JSONObject) {
+        val profileArray = root.optJSONArray("profiles")
+        if (profileArray != null) {
+            val list = buildList {
+                for (i in 0 until profileArray.length()) {
+                    val o = profileArray.optJSONObject(i) ?: continue
+                    add(ClickPlusProfile(
+                        o.optString("id", UUID.randomUUID().toString()),
+                        o.optString("name", "פרופיל"),
+                        o.optBoolean("enabled", true)
+                    ))
+                }
+            }
+            if (list.isNotEmpty()) saveProfiles(list)
+        }
+        val metadata = root.optJSONObject("ruleMetadata")
+        if (metadata != null) prefs.edit().putString(META, metadata.toString()).apply()
+    }
 
     private fun loadMetadata(): JSONObject =
         runCatching { JSONObject(prefs.getString(META, "{}") ?: "{}") }.getOrDefault(JSONObject())
@@ -167,6 +176,8 @@ class AdvancedRuleRepository(private val context: Context) {
         .put("portraitY", m.portraitY)
         .put("landscapeX", m.landscapeX)
         .put("landscapeY", m.landscapeY)
+        .put("toleranceXRatio", m.toleranceXRatio)
+        .put("toleranceYRatio", m.toleranceYRatio)
 
     private fun fromJson(o: JSONObject) = RuleAdvancedMetadata(
         profileId = o.optString("profileId", "default"),
@@ -178,6 +189,8 @@ class AdvancedRuleRepository(private val context: Context) {
         portraitY = o.optDouble("portraitY", -1.0).toFloat(),
         landscapeX = o.optDouble("landscapeX", -1.0).toFloat(),
         landscapeY = o.optDouble("landscapeY", -1.0).toFloat(),
+        toleranceXRatio = o.optDouble("toleranceXRatio", 0.08).toFloat().coerceIn(0.01f, 0.25f),
+        toleranceYRatio = o.optDouble("toleranceYRatio", 0.08).toFloat().coerceIn(0.01f, 0.25f),
     )
 }
 
