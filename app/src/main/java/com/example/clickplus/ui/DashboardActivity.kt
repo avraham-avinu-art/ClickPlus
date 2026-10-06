@@ -310,14 +310,43 @@ private fun HomeDashboard(
         bottomBar = {
             Surface(shadowElevation = 8.dp) {
                 Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Button(onClick = onAdd, Modifier.weight(1f).height(54.dp)) {
-                        Icon(Icons.Outlined.Add, null); Spacer(Modifier.width(8.dp)); Text("הוספת פעולה")
+                    Button(
+                        onClick = onAdd,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(60.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "הוספת פעולה",
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
-                    OutlinedButton(onClick = onTest, Modifier.weight(1f).height(54.dp)) {
-                        Icon(Icons.Outlined.History, null); Spacer(Modifier.width(8.dp)); Text("יומן")
+                    OutlinedButton(
+                        onClick = onTest,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(60.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Icon(Icons.Outlined.History, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "יומן",
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
