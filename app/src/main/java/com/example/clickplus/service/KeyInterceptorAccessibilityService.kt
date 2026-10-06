@@ -99,7 +99,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN && tapDetector.processKeyEvent(event.keyCode)) {
+        if (tapDetector.processKeyEvent(event)) {
             return true
         }
         return super.onKeyEvent(event)
