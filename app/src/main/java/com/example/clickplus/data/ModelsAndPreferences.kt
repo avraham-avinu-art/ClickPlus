@@ -4,7 +4,6 @@ import android.content.Context
 import android.view.KeyEvent
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -15,224 +14,155 @@ import org.json.JSONObject
 
 val Context.dataStore by preferencesDataStore(name = "clickplus_settings")
 
-enum class OperationMode(val titleHebrew: String) {
-    MODE_A_MULTI_TAP("ריבוי לחיצות"),
-    MODE_B_CONFIRMATION("לחיצה עם אישור")
-}
-
 enum class ActionType(val titleHebrew: String) {
-    LAUNCH_APP("פתיחת אפליקציה"),
-    SYSTEM_KEY("פעולת מערכת"),
-    CLICK_NODE_BY_ID("לחיצה על רכיב לפי מזהה"),
-    CLICK_NODE_BY_TEXT("לחיצה על רכיב לפי טקסט"),
-    SEND_INTENT("מתקדם — פקודת Intent")
+    SYSTEM("פעולת מערכת"),
+    APP("פתיחת אפליקציה"),
 }
 
-enum class HudStyle(val titleHebrew: String) {
-    SHORT_TEXT("טקסט קצר"),
-    NUMBER_ONLY("מספר בלבד"),
-    SILENT("ללא חיווי")
+enum class ContextConditionType(val titleHebrew: String) {
+    ANY("בכל מצב"),
+    APP("אפליקציה"),
+    MUSIC("מוזיקה פועלת"),
+    MUTED("שמע מושתק"),
+    RINGING("הטלפון מצלצל"),
+    RADIO("רדיו פועל"),
 }
 
-enum class ThemeOption(val titleHebrew: String) {
-    AUTO("אוטומטי"),
-    LIGHT("בהיר"),
-    DARK("כהה"),
-    DARK_OLED("שחור OLED")
-}
-
-enum class SystemActionPreset(val id: String, val titleHebrew: String, val legacyKeyCode: Int = 0) {
-    HOME("home", "בית", KeyEvent.KEYCODE_HOME),
-    BACK("back", "חזרה", KeyEvent.KEYCODE_BACK),
-    RECENTS("recents", "יישומים אחרונים", KeyEvent.KEYCODE_APP_SWITCH),
-    NOTIFICATIONS("notifications", "פתיחת התראות", KeyEvent.KEYCODE_NOTIFICATION),
-    MEDIA_PLAY_PAUSE("media_play_pause", "נגן / השהה מדיה", KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE),
-    MEDIA_NEXT("media_next", "רצועה הבאה"),
-    MEDIA_PREVIOUS("media_previous", "רצועה קודמת"),
-    VOLUME_UP("volume_up", "הגברת ווליום", KeyEvent.KEYCODE_VOLUME_UP),
-    VOLUME_DOWN("volume_down", "הנמכת ווליום", KeyEvent.KEYCODE_VOLUME_DOWN),
-    WIFI_SETTINGS("wifi_settings", "פתיחת הגדרות Wi‑Fi"),
-    SETTINGS("settings", "פתיחת הגדרות"),
+enum class SystemActionPreset(val id: String, val titleHebrew: String) {
+    HOME("home", "בית"),
+    BACK("back", "חזרה"),
+    RECENTS("recents", "יישומים אחרונים"),
+    NOTIFICATIONS("notifications", "פתיחת התראות"),
+    MEDIA_PLAY_PAUSE("media_play_pause", "נגן / השהה"),
+    MEDIA_NEXT("media_next", "השיר הבא"),
+    MEDIA_PREVIOUS("media_previous", "השיר הקודם"),
+    VOLUME_UP("volume_up", "הגברת ווליום"),
+    VOLUME_DOWN("volume_down", "הנמכת ווליום"),
+    SETTINGS("settings", "הגדרות"),
     DIALER("dialer", "פתיחת חייגן"),
-    FLASHLIGHT("flashlight", "הדלקה / כיבוי פנס")
-}
-
-fun systemActionTitle(id: String, legacyKeyCode: Int = 0): String {
-    return SystemActionPreset.entries.firstOrNull { it.id == id }?.titleHebrew
-        ?: SystemActionPreset.entries.firstOrNull { it.legacyKeyCode == legacyKeyCode }?.titleHebrew
-        ?: "פעולת מערכת"
-}
-
-fun actionSummaryHebrew(config: KeyActionConfig): String {
-    return when (config.actionType) {
-        ActionType.LAUNCH_APP ->
-            "פתיחת ${config.targetAppName.ifBlank { config.targetPackage.ifBlank { "אפליקציה" } }}"
-        ActionType.SYSTEM_KEY ->
-            systemActionTitle(config.systemActionId, config.systemKeyCode)
-        ActionType.CLICK_NODE_BY_ID ->
-            "רכיב לפי מזהה: ${config.nodeIdentifier}"
-        ActionType.CLICK_NODE_BY_TEXT ->
-            "לחיצה על: ${config.nodeIdentifier}"
-        ActionType.SEND_INTENT ->
-            "פקודה מותאמת"
-    }
 }
 
 data class KeyActionConfig(
     val id: String = java.util.UUID.randomUUID().toString(),
-    val customLabel: String = "",
-    val iconName: String = "ic_default",
-    val triggerKeyCode: Int,
-    val keyNameHebrew: String = "מקש $triggerKeyCode",
-    val tapCount: Int = 1,
-    val actionType: ActionType = ActionType.SYSTEM_KEY,
+    val name: String = "",
+    val pressCount: Int = 1,
+    val actionType: ActionType = ActionType.SYSTEM,
+    val systemActionId: String = SystemActionPreset.HOME.id,
     val targetPackage: String = "",
     val targetAppName: String = "",
-    val targetClassOrIntent: String = "",
-    val nodeIdentifier: String = "",
-    val systemActionId: String = SystemActionPreset.HOME.id,
-    val systemKeyCode: Int = KeyEvent.KEYCODE_HOME,
-    val profileName: String = "DEFAULT",
-    val isEnabled: Boolean = true
+    val contextConditionType: ContextConditionType = ContextConditionType.ANY,
+    val contextConditionValue: String = "",
+    val contextConditionName: String = "",
+    val enabled: Boolean = true,
 ) {
-    fun pressTypeHebrew(): String {
-        return when (tapCount) {
-            0 -> "לחיצה ארוכה"
-            1 -> "לחיצה בודדת"
-            2 -> "לחיצה כפולה"
-            else -> "$tapCount לחיצות"
+    fun pressSummary(): String = if (pressCount == 1) "כניסה אחת" else "$pressCount כניסות"
+
+    fun actionSummary(): String {
+        return when (actionType) {
+            ActionType.SYSTEM ->
+                SystemActionPreset.entries.firstOrNull { it.id == systemActionId }?.titleHebrew ?: "פעולת מערכת"
+            ActionType.APP ->
+                "פתיחת " + targetAppName.ifBlank { "אפליקציה" }
+        }
+    }
+
+    fun contextSummary(): String {
+        return when (contextConditionType) {
+            ContextConditionType.ANY -> "בכל מצב"
+            ContextConditionType.APP -> "אפליקציה: " + contextConditionName.ifBlank { contextConditionValue }
+            ContextConditionType.MUSIC -> "מוזיקה פועלת"
+            ContextConditionType.MUTED -> "שמע מושתק"
+            ContextConditionType.RINGING -> "הטלפון מצלצל"
+            ContextConditionType.RADIO -> "רדיו: " + contextConditionName.ifBlank { "האפליקציה שנבחרה" }
         }
     }
 
     fun toJson() = JSONObject().apply {
         put("id", id)
-        put("customLabel", customLabel)
-        put("iconName", iconName)
-        put("triggerKeyCode", triggerKeyCode)
-        put("keyNameHebrew", keyNameHebrew)
-        put("tapCount", tapCount)
+        put("name", name)
+        put("pressCount", pressCount)
         put("actionType", actionType.name)
+        put("systemActionId", systemActionId)
         put("targetPackage", targetPackage)
         put("targetAppName", targetAppName)
-        put("targetClassOrIntent", targetClassOrIntent)
-        put("nodeIdentifier", nodeIdentifier)
-        put("systemActionId", systemActionId)
-        put("systemKeyCode", systemKeyCode)
-        put("profileName", profileName)
-        put("isEnabled", isEnabled)
+        put("contextConditionType", contextConditionType.name)
+        put("contextConditionValue", contextConditionValue)
+        put("contextConditionName", contextConditionName)
+        put("enabled", enabled)
     }
 
     companion object {
         fun fromJson(json: JSONObject) = KeyActionConfig(
             id = json.optString("id", java.util.UUID.randomUUID().toString()),
-            customLabel = json.optString("customLabel", ""),
-            iconName = json.optString("iconName", "ic_default"),
-            triggerKeyCode = json.optInt("triggerKeyCode", 0),
-            keyNameHebrew = json.optString("keyNameHebrew", "").ifBlank {
-                "מקש ${json.optInt("triggerKeyCode", 0)}"
-            },
-            tapCount = json.optInt("tapCount", 1),
+            name = json.optString("name", json.optString("customLabel", "")),
+            pressCount = json.optInt("pressCount", json.optInt("tapCount", 1)).coerceIn(1, 10),
             actionType = runCatching {
-                ActionType.valueOf(json.optString("actionType", ActionType.SYSTEM_KEY.name))
-            }.getOrDefault(ActionType.SYSTEM_KEY),
+                ActionType.valueOf(
+                    json.optString(
+                        "actionType",
+                        if (json.has("targetPackage")) ActionType.APP.name else ActionType.SYSTEM.name,
+                    ),
+                )
+            }.getOrDefault(ActionType.SYSTEM),
+            systemActionId = json.optString("systemActionId", SystemActionPreset.HOME.id),
             targetPackage = json.optString("targetPackage", ""),
             targetAppName = json.optString("targetAppName", ""),
-            targetClassOrIntent = json.optString("targetClassOrIntent", ""),
-            nodeIdentifier = json.optString("nodeIdentifier", ""),
-            systemActionId = json.optString(
-                "systemActionId",
-                SystemActionPreset.entries.firstOrNull {
-                    it.legacyKeyCode == json.optInt("systemKeyCode", KeyEvent.KEYCODE_HOME)
-                }?.id ?: SystemActionPreset.HOME.id
-            ),
-            systemKeyCode = json.optInt("systemKeyCode", KeyEvent.KEYCODE_HOME),
-            profileName = json.optString("profileName", "DEFAULT"),
-            isEnabled = json.optBoolean("isEnabled", true)
+            contextConditionType = runCatching {
+                ContextConditionType.valueOf(
+                    json.optString("contextConditionType", ContextConditionType.ANY.name),
+                )
+            }.getOrDefault(ContextConditionType.ANY),
+            contextConditionValue = json.optString("contextConditionValue", ""),
+            contextConditionName = json.optString("contextConditionName", ""),
+            enabled = json.optBoolean("enabled", json.optBoolean("isEnabled", true)),
         )
     }
 }
 
 class AppPreferencesRepository(private val context: Context) {
     companion object {
-        val OPERATION_MODE = stringPreferencesKey("operation_mode")
+        val BACKGROUND_ONLY = booleanPreferencesKey("background_only")
         val TAP_TIMEOUT_MS = longPreferencesKey("tap_timeout_ms")
-        val DEBOUNCE_MS = longPreferencesKey("debounce_ms")
-        val CAR_FRIENDLY_UI = booleanPreferencesKey("car_friendly_ui")
-        val THEME_OPTION = stringPreferencesKey("theme_option")
-        val HUD_STYLE = stringPreferencesKey("hud_style")
-        val HUD_POS_X = intPreferencesKey("hud_pos_x")
-        val HUD_POS_Y = intPreferencesKey("hud_pos_y")
         val MAPPINGS_JSON = stringPreferencesKey("mappings_json")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
 
-    val operationModeFlow: Flow<OperationMode> = context.dataStore.data.map {
-        runCatching {
-            OperationMode.valueOf(it[OPERATION_MODE] ?: OperationMode.MODE_A_MULTI_TAP.name)
-        }.getOrDefault(OperationMode.MODE_A_MULTI_TAP)
-    }
+    val backgroundOnlyFlow: Flow<Boolean> =
+        context.dataStore.data.map { it[BACKGROUND_ONLY] ?: false }
 
-    val tapTimeoutFlow: Flow<Long> = context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 450L }
-    val debounceMsFlow: Flow<Long> = context.dataStore.data.map { it[DEBOUNCE_MS] ?: 80L }
-    val carFriendlyUiFlow: Flow<Boolean> = context.dataStore.data.map { it[CAR_FRIENDLY_UI] ?: true }
+    val tapTimeoutFlow: Flow<Long> =
+        context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 650L }
 
-    val themeOptionFlow: Flow<ThemeOption> = context.dataStore.data.map {
-        runCatching {
-            ThemeOption.valueOf(it[THEME_OPTION] ?: ThemeOption.DARK_OLED.name)
-        }.getOrDefault(ThemeOption.DARK_OLED)
-    }
+    val mappingsFlow: Flow<List<KeyActionConfig>> =
+        context.dataStore.data.map { prefs ->
+            val array = runCatching {
+                JSONArray(prefs[MAPPINGS_JSON] ?: "[]")
+            }.getOrDefault(JSONArray())
 
-    val hudStyleFlow: Flow<HudStyle> = context.dataStore.data.map {
-        runCatching {
-            HudStyle.valueOf(it[HUD_STYLE] ?: HudStyle.SHORT_TEXT.name)
-        }.getOrDefault(HudStyle.SHORT_TEXT)
-    }
-
-    val onboardingCompletedFlow =
-        context.dataStore.data.map { it[ONBOARDING_COMPLETED] ?: false }
-
-    val mappingsFlow: Flow<List<KeyActionConfig>> = context.dataStore.data.map { prefs ->
-        val array = runCatching { JSONArray(prefs[MAPPINGS_JSON] ?: "[]") }.getOrDefault(JSONArray())
-        buildList {
-            for (i in 0 until array.length()) {
-                runCatching { add(KeyActionConfig.fromJson(array.getJSONObject(i))) }
+            buildList {
+                for (i in 0 until array.length()) {
+                    runCatching { add(KeyActionConfig.fromJson(array.getJSONObject(i))) }
+                }
             }
         }
+
+    val onboardingCompletedFlow: Flow<Boolean> =
+        context.dataStore.data.map { it[ONBOARDING_COMPLETED] ?: false }
+
+    suspend fun saveBackgroundOnly(enabled: Boolean) {
+        context.dataStore.edit { it[BACKGROUND_ONLY] = enabled }
+        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("background_only", enabled)
+            .apply()
+    }
+
+    suspend fun saveTapTimeout(ms: Long) {
+        context.dataStore.edit { it[TAP_TIMEOUT_MS] = ms.coerceIn(300L, 1200L) }
     }
 
     suspend fun setOnboardingCompleted(completed: Boolean) {
         context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed }
-    }
-
-    suspend fun saveOperationMode(mode: OperationMode) {
-        context.dataStore.edit { it[OPERATION_MODE] = mode.name }
-    }
-
-    suspend fun saveTapTimeout(ms: Long) {
-        context.dataStore.edit { it[TAP_TIMEOUT_MS] = ms.coerceIn(200L, 1000L) }
-    }
-
-    suspend fun saveDebounce(ms: Long) {
-        context.dataStore.edit { it[DEBOUNCE_MS] = ms.coerceIn(0L, 300L) }
-    }
-
-    suspend fun saveCarFriendlyUi(enabled: Boolean) {
-        context.dataStore.edit { it[CAR_FRIENDLY_UI] = enabled }
-    }
-
-    suspend fun saveThemeOption(option: ThemeOption) {
-        context.dataStore.edit { it[THEME_OPTION] = option.name }
-    }
-
-    suspend fun saveHudStyle(style: HudStyle) {
-        context.dataStore.edit { it[HUD_STYLE] = style.name }
-    }
-
-    suspend fun saveHudPosition(x: Int, y: Int) {
-        context.dataStore.edit {
-            it[HUD_POS_X] = x
-            it[HUD_POS_Y] = y
-        }
     }
 
     suspend fun saveMappings(mappings: List<KeyActionConfig>) {
