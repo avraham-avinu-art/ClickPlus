@@ -93,7 +93,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -106,6 +108,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
@@ -128,6 +131,8 @@ import com.example.clickplus.service.BasicActionPerformer
 import com.example.clickplus.service.KeyInterceptorAccessibilityService
 import com.example.clickplus.service.RuleExecutionCoordinator
 import kotlinx.coroutines.launch
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -447,9 +452,18 @@ private fun StatusScreen(
     onMode: (AppMode) -> Unit,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var refreshKey by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) refreshKey++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val mode = AdvancedRuleRepository.currentMode(context)
-    val service = isAccessibilityEnabled(context)
-    val usage = hasUsageAccess(context)
+    val service = remember(refreshKey) { isAccessibilityEnabled(context) }
+    val usage = remember(refreshKey) { hasUsageAccess(context) }
     val screenRules = mappings.count { it.triggerType == TriggerType.SCREEN_TAP && it.enabled }
     Scaffold(topBar = { SimpleTopBar("מצב השירות", onBack) }) { padding ->
         LazyColumn(
@@ -516,18 +530,38 @@ private fun StatusScreen(
 
 @Composable
 private fun StatusCard(title: String, ok: Boolean, detail: String, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(20.dp)) {
-        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
-                contentDescription = null,
-                tint = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(30.dp),
-            )
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Bold)
-                Text(detail, style = MaterialTheme.typography.bodySmall)
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+        Column(
+            Modifier.fillMaxWidth().padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
+                    contentDescription = null,
+                    tint = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(30.dp),
+                )
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title, fontWeight = FontWeight.Bold)
+                    Text(detail, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            if (!ok) {
+                Button(
+                    onClick = onClick,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("פתיחת הגדרות ומתן הרשאה")
+                }
+                Text(
+                    "Android יפתח את „גישה לנתוני שימוש”. יש להפעיל שם את ClickPlus.",
+                    style = MaterialTheme.typography.labelSmall,
+                )
             }
         }
     }
