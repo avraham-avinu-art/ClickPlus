@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -397,7 +396,10 @@ private fun EditorScreen(
     var showApps by remember { mutableStateOf(false) }
 
     val phonePermission =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_PHONE_STATE,
+        ) == PackageManager.PERMISSION_GRANTED
 
     val actionValid = actionType == ActionType.SYSTEM || packageName.isNotBlank()
     val conditionValid = when (contextType) {
@@ -419,9 +421,15 @@ private fun EditorScreen(
         },
     ) { padding ->
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 16.dp, bottom = 24.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = 16.dp,
+                bottom = 24.dp,
+            ),
         ) {
             item {
                 OutlinedTextField(
@@ -435,61 +443,77 @@ private fun EditorScreen(
 
             item {
                 OutlinedCard {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("כמה כניסות?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    Column(
+                        Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(9.dp),
                     ) {
-                        (1..10).forEach { count ->
-                            FilterChip(
-                                selected = pressCount == count,
-                                onClick = { pressCount = count },
-                                label = { Text(count.toString()) },
-                                modifier = Modifier.width(48.dp),
-                            )
-                        }
-                    }
-                    Text("כל כניסה רצופה של המולטימדיה לאפליקציה נספרת פעם אחת.")
-                }
-            }
-
-            item {
-                OutlinedCard {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                        Text("מה לבצע?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(
-                            selected = actionType == ActionType.SYSTEM,
-                            onClick = { actionType = ActionType.SYSTEM },
-                            label = { Text("פעולת מערכת") },
+                        Text(
+                            "כמה כניסות?",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
                         )
-                        FilterChip(
-                            selected = actionType == ActionType.APP,
-                            onClick = { actionType = ActionType.APP },
-                            label = { Text("פתיחת אפליקציה") },
-                        )
-                    }
-
-                    if (actionType == ActionType.SYSTEM) {
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            SystemActionPreset.entries.forEach { option ->
+                            (1..10).forEach { count ->
                                 FilterChip(
-                                    selected = systemAction == option.id,
-                                    onClick = { systemAction = option.id },
-                                    label = { Text(option.titleHebrew) },
+                                    selected = pressCount == count,
+                                    onClick = { pressCount = count },
+                                    label = { Text(count.toString()) },
+                                    modifier = Modifier.width(48.dp),
                                 )
                             }
                         }
-                    } else {
-                        OutlinedButton(
-                            onClick = { showApps = true },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(if (appName.isBlank()) "בחר אפליקציה" else appName)
+                        Text("כל כניסה רצופה של המולטימדיה לאפליקציה נספרת פעם אחת.")
+                    }
+                }
+            }
+
+            item {
+                OutlinedCard {
+                    Column(
+                        Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(9.dp),
+                    ) {
+                        Text(
+                            "מה לבצע?",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilterChip(
+                                selected = actionType == ActionType.SYSTEM,
+                                onClick = { actionType = ActionType.SYSTEM },
+                                label = { Text("פעולת מערכת") },
+                            )
+                            FilterChip(
+                                selected = actionType == ActionType.APP,
+                                onClick = { actionType = ActionType.APP },
+                                label = { Text("פתיחת אפליקציה") },
+                            )
+                        }
+
+                        if (actionType == ActionType.SYSTEM) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                SystemActionPreset.entries.forEach { option ->
+                                    FilterChip(
+                                        selected = systemAction == option.id,
+                                        onClick = { systemAction = option.id },
+                                        label = { Text(option.titleHebrew) },
+                                    )
+                                }
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { showApps = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(if (appName.isBlank()) "בחר אפליקציה" else appName)
+                            }
                         }
                     }
                 }
@@ -497,106 +521,136 @@ private fun EditorScreen(
 
             item {
                 OutlinedCard {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                        Text("מצב", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    Column(
+                        Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(9.dp),
                     ) {
-                        ContextConditionType.entries.forEach { option ->
-                            FilterChip(
-                                selected = contextType == option,
-                                onClick = {
-                                    contextType = option
-                                    if (option != ContextConditionType.APP && option != ContextConditionType.RADIO) {
-                                        contextValue = ""
-                                        contextName = ""
-                                    }
-                                },
-                                label = { Text(option.titleHebrew) },
-                            )
-                        }
-                    }
-
-                    when (contextType) {
-                        ContextConditionType.APP -> {
-                            OutlinedButton(onClick = { showApps = true }, modifier = Modifier.fillMaxWidth()) {
-                                Text(if (contextName.isBlank()) "בחר אפליקציה" else contextName)
-                            }
-                        }
-
-                        ContextConditionType.RADIO -> {
-                            OutlinedButton(onClick = { showApps = true }, modifier = Modifier.fillMaxWidth()) {
-                                Text(if (contextName.isBlank()) "בחר אפליקציית רדיו" else contextName)
-                            }
-                        }
-
-                        ContextConditionType.RINGING -> {
-                            if (phonePermission) {
-                                Text("זיהוי צלצול פעיל.")
-                            } else {
-                                Text("נדרשת הרשאה לזיהוי צלצול.")
-                                Button(
+                        Text(
+                            "מצב",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            ContextConditionType.entries.forEach { option ->
+                                FilterChip(
+                                    selected = contextType == option,
                                     onClick = {
-                                        (context as? Activity)?.requestPermissions(
-                                            arrayOf(Manifest.permission.READ_PHONE_STATE),
-                                            4201,
-                                        )
+                                        contextType = option
+                                        if (
+                                            option != ContextConditionType.APP &&
+                                            option != ContextConditionType.RADIO
+                                        ) {
+                                            contextValue = ""
+                                            contextName = ""
+                                        }
                                     },
+                                    label = { Text(option.titleHebrew) },
+                                )
+                            }
+                        }
+
+                        when (contextType) {
+                            ContextConditionType.APP -> {
+                                OutlinedButton(
+                                    onClick = { showApps = true },
+                                    modifier = Modifier.fillMaxWidth(),
                                 ) {
-                                    Text("אפשר זיהוי צלצול")
+                                    Text(
+                                        if (contextName.isBlank()) {
+                                            "בחר אפליקציה"
+                                        } else {
+                                            contextName
+                                        },
+                                    )
                                 }
                             }
+
+                            ContextConditionType.RADIO -> {
+                                OutlinedButton(
+                                    onClick = { showApps = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(
+                                        if (contextName.isBlank()) {
+                                            "בחר אפליקציית רדיו"
+                                        } else {
+                                            contextName
+                                        },
+                                    )
+                                }
+                            }
+
+                            ContextConditionType.RINGING -> {
+                                if (phonePermission) {
+                                    Text("זיהוי צלצול פעיל.")
+                                } else {
+                                    Text("נדרשת הרשאה לזיהוי צלצול.")
+                                    Button(
+                                        onClick = {
+                                            (context as? Activity)?.requestPermissions(
+                                                arrayOf(Manifest.permission.READ_PHONE_STATE),
+                                                4201,
+                                            )
+                                        },
+                                    ) {
+                                        Text("אפשר זיהוי צלצול")
+                                    }
+                                }
+                            }
+
+                            ContextConditionType.MUSIC ->
+                                Text("הפעולה תפעל כשהמכשיר מנגן מוזיקה.")
+
+                            ContextConditionType.MUTED ->
+                                Text("הפעולה תפעל כשהשמע מושתק.")
+
+                            ContextConditionType.ANY ->
+                                Text("הפעולה תשמש כברירת מחדל.")
                         }
-
-                        ContextConditionType.MUSIC ->
-                            Text("הפעולה תפעל כשהמכשיר מנגן מוזיקה.")
-
-                        ContextConditionType.MUTED ->
-                            Text("הפעולה תפעל כשהשמע מושתק.")
-
-                        ContextConditionType.ANY ->
-                            Text("הפעולה תשמש כברירת מחדל.")
                     }
                 }
             }
 
             item {
                 Row(
-                    Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                if (existing != null) {
-                    OutlinedButton(
-                        onClick = { onDelete(existing) },
+                    if (existing != null) {
+                        OutlinedButton(
+                            onClick = { onDelete(existing) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("מחיקה")
+                        }
+                    }
+
+                    Button(
+                        enabled = actionValid && conditionValid,
+                        onClick = {
+                            onSave(
+                                KeyActionConfig(
+                                    id = existing?.id ?: java.util.UUID.randomUUID().toString(),
+                                    name = name.trim(),
+                                    pressCount = pressCount,
+                                    actionType = actionType,
+                                    systemActionId = systemAction,
+                                    targetPackage = packageName,
+                                    targetAppName = appName,
+                                    contextConditionType = contextType,
+                                    contextConditionValue = contextValue,
+                                    contextConditionName = contextName,
+                                    enabled = existing?.enabled ?: true,
+                                ),
+                            )
+                        },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text("מחיקה")
+                        Text("שמור")
                     }
-                }
-
-                Button(
-                    enabled = actionValid && conditionValid,
-                    onClick = {
-                        onSave(
-                            KeyActionConfig(
-                                id = existing?.id ?: java.util.UUID.randomUUID().toString(),
-                                name = name.trim(),
-                                pressCount = pressCount,
-                                actionType = actionType,
-                                systemActionId = systemAction,
-                                targetPackage = packageName,
-                                targetAppName = appName,
-                                contextConditionType = contextType,
-                                contextConditionValue = contextValue,
-                                contextConditionName = contextName,
-                                enabled = existing?.enabled ?: true,
-                            ),
-                        )
-                    },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("שמור")
                 }
             }
         }
@@ -606,7 +660,10 @@ private fun EditorScreen(
         AppPickerDialog(
             onDismiss = { showApps = false },
             onSelect = { pkg, label ->
-                if (contextType == ContextConditionType.APP || contextType == ContextConditionType.RADIO) {
+                if (
+                    contextType == ContextConditionType.APP ||
+                    contextType == ContextConditionType.RADIO
+                ) {
                     contextValue = pkg
                     contextName = label
                 } else {
