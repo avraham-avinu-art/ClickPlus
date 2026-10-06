@@ -7,7 +7,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
@@ -22,13 +21,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -133,14 +130,6 @@ private fun ClickPlusScreen(prefs: AppPreferencesRepository) {
             },
             onAccessibility = {
                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            },
-            onAppSettings = {
-                context.startActivity(
-                    Intent(
-                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:" + context.packageName),
-                    ),
-                )
             },
         )
 
@@ -260,7 +249,6 @@ private fun HomeScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(42.dp))
                             Text("עדיין אין פעולות", style = MaterialTheme.typography.titleMedium)
                             Text("הוסף פעולה ובחר כמה כניסות רצופות יפעילו אותה.")
                         }
@@ -315,7 +303,6 @@ private fun SettingsScreen(
     onBackgroundOnly: (Boolean) -> Unit,
     onTimeout: (Long) -> Unit,
     onAccessibility: () -> Unit,
-    onAppSettings: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -337,8 +324,6 @@ private fun SettingsScreen(
                 OutlinedCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Info, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
                             Text("עבודה ברקע", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         }
                         Row(
@@ -376,11 +361,9 @@ private fun SettingsScreen(
 
             item {
                 OutlinedCard {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                        Text("הגדרות נוספות", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        OutlinedButton(onClick = onAppSettings, modifier = Modifier.fillMaxWidth()) {
-                            Text("הגדרות נוספות באפליקציה")
-                        }
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("כניסה נוספת להגדרות", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("אפשר להיכנס גם דרך הגדרות Android > אפליקציות > קליק פלוס > פתיחה.")
                     }
                 }
             }
@@ -435,19 +418,23 @@ private fun EditorScreen(
             )
         },
     ) { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).padding(16.dp),
+        LazyColumn(
+            Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 16.dp, bottom = 24.dp),
         ) {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("שם הפעולה (לא חובה)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            item {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("שם הפעולה (לא חובה)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
-            OutlinedCard {
+            item {
+                OutlinedCard {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text("כמה כניסות?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     FlowRow(
@@ -459,6 +446,7 @@ private fun EditorScreen(
                                 selected = pressCount == count,
                                 onClick = { pressCount = count },
                                 label = { Text(count.toString()) },
+                                modifier = Modifier.width(48.dp),
                             )
                         }
                     }
@@ -466,9 +454,10 @@ private fun EditorScreen(
                 }
             }
 
-            OutlinedCard {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("מה לבצע?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            item {
+                OutlinedCard {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                        Text("מה לבצע?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         FilterChip(
                             selected = actionType == ActionType.SYSTEM,
@@ -506,9 +495,10 @@ private fun EditorScreen(
                 }
             }
 
-            OutlinedCard {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("מצב", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            item {
+                OutlinedCard {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                        Text("מצב", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -571,12 +561,11 @@ private fun EditorScreen(
                 }
             }
 
-            Spacer(Modifier.weight(1f))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            item {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                 if (existing != null) {
                     OutlinedButton(
                         onClick = { onDelete(existing) },
