@@ -283,7 +283,12 @@ private fun HomeDashboard(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {},
+                title = {
+                    Column {
+                        Text("קליק פלוס", fontWeight = FontWeight.Bold)
+                        Text("מרכז שליטה", style = MaterialTheme.typography.labelSmall)
+                    }
+                },
                 actions = {
                     IconButton(onClick = onStatus) { Icon(Icons.Outlined.Tune, "מצב השירות") }
                     IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "הגדרות") }
