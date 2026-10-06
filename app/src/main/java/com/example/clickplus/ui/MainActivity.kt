@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -1070,7 +1071,7 @@ private fun AppPickerDialog(
         title = { Text("בחירת אפליקציה") },
         text = {
             LazyColumn(
-                Modifier.height(430.dp),
+                Modifier.heightIn(max = 330.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(apps, key = { it.packageName }) { app ->
@@ -1188,10 +1189,8 @@ private fun SettingsDialog(
 
                 item {
                     Text("סגנון חיווי", style = MaterialTheme.typography.titleMedium)
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
+                    Spacer(Modifier.height(6.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(
                             HudStyle.SHORT_TEXT,
                             HudStyle.NUMBER_ONLY,
@@ -1200,23 +1199,30 @@ private fun SettingsDialog(
                             FilterChip(
                                 selected = localHud == option,
                                 onClick = { localHud = option },
-                                label = { Text(option.titleHebrew) },
-                                modifier = Modifier.weight(1f)
+                                label = { Text(option.titleHebrew, maxLines = 1) },
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
                 }
 
                 item {
-                    Switch(
-                        checked = big,
-                        onCheckedChange = {
-                            scope.launch { prefsRepo.saveCarFriendlyUi(it) }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Switch(
+                            checked = big,
+                            onCheckedChange = {
+                                scope.launch { prefsRepo.saveCarFriendlyUi(it) }
+                            }
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("ממשק מוגדל", fontWeight = FontWeight.Bold)
+                            Text("כפתורים וטקסט גדולים יותר לשימוש נוח.")
                         }
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("ממשק מוגדל", fontWeight = FontWeight.Bold)
-                    Text("כפתורים וטקסט גדולים יותר לשימוש נוח.")
+                    }
                 }
             }
         },
