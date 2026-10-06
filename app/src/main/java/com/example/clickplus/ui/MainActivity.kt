@@ -643,10 +643,10 @@ private fun AddMappingDialog(
                         ) || target.isNotBlank()
                     ),
                 onClick = {
-                    val safeKey = keyCode ?: return@Button
+                    val safeKey = keyCode
                     val safeTaps = taps.toIntOrNull()?.coerceIn(1, 20) ?: 1
 
-                    onSave(
+                    if (safeKey != null) onSave(
                         KeyActionConfig(
                             customLabel = label.trim(),
                             triggerKeyCode = safeKey,
