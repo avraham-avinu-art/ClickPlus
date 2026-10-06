@@ -3,51 +3,26 @@ package com.example.clickplus.ui
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import com.example.clickplus.data.AppPreferencesRepository
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 
 class LauncherActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
-        val backgroundOnly = if (prefs.contains("background_only")) {
-            prefs.getBoolean("background_only", false)
+        prefs.edit().putBoolean("background_only", true).apply()
+
+        val service = com.example.clickplus.service.KeyInterceptorAccessibilityService.instance
+        if (service != null) {
+            // גם כשהשירות כבר מחובר, הכניסה מהלאנצ'ר היא טריגר רגיל.
+            service.onLauncherEntry()
         } else {
-            runBlocking {
-                AppPreferencesRepository(applicationContext).backgroundOnlyFlow.first()
-            }.also {
-                prefs.edit().putBoolean("background_only", it).apply()
-            }
+            // אם התהליך של השירות נסגר, נשמור את הכניסה ונעבד אותה כשהשירות יחזור.
+            val pending = prefs.getInt("pending_activation_launches", 0)
+            prefs.edit()
+                .putInt("pending_activation_launches", (pending + 1).coerceAtMost(10))
+                .apply()
         }
 
-        if (backgroundOnly) {
-            val service = com.example.clickplus.service.KeyInterceptorAccessibilityService.instance
-
-            if (service != null) {
-                // כשהשירות חי, עצם הכניסה לאפליקציה היא אות ההפעלה.
-                service.onLauncherEntry()
-            } else {
-                // גם אם התהליך נסגר לחלוטין, הכניסה לאפליקציה נשמרת כאות.
-                // השירות יאחזר את הכניסה כאשר Android יפעיל אותו מחדש.
-                val pending = prefs.getInt("pending_activation_launches", 0)
-                prefs.edit()
-                    .putInt("pending_activation_launches", (pending + 1).coerceAtMost(10))
-                    .apply()
-            }
-
-            // במצב עבודה שקטה לעולם לא מציגים את ממשק האפליקציה בלחיצה על הסמל.
-            finish()
-            overridePendingTransition(0, 0)
-            return
-        }
-
-        startActivity(
-            Intent(this, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            },
-        )
         finish()
         overridePendingTransition(0, 0)
     }
