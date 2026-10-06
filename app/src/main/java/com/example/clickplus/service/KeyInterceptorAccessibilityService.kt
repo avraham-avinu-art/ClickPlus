@@ -58,6 +58,19 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         serviceScope.launch { prefsRepository.mappingsFlow.collectLatest { tapDetector.updateMappings(it) } }
     }
 
+    override fun onStartCommand(intent: android.content.Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == "com.example.clickplus.TEST_MAPPING") {
+            intent.getStringExtra("config_json")?.let { json ->
+                runCatching { com.example.clickplus.data.KeyActionConfig.fromJson(org.json.JSONObject(json)) }
+                    .onSuccess { config ->
+                        actionExecutor.execute(config)
+                        overlayManager.showPill("Test", config.customLabel)
+                    }
+            }
+        }
+        return START_STICKY
+    }
+
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN && tapDetector.processKeyEvent(event.keyCode)) return true
         return super.onKeyEvent(event)
