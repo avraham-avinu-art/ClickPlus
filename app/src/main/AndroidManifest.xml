@@ -27,18 +27,6 @@
             android:name=".ui.MainActivity"
             android:exported="false" />
 
-        <activity
-            android:name=".ui.SettingsLauncherActivity"
-            android:exported="true"
-            android:label="הגדרות קליק פלוס"
-            android:theme="@style/Theme.ClickPlus.Launcher"
-            android:excludeFromRecents="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
         <service
             android:name=".service.KeyInterceptorAccessibilityService"
             android:exported="true"
