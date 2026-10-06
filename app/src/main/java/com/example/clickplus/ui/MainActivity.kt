@@ -478,7 +478,7 @@ private fun NumberChoice(
         contentColor = if (selected) {
             MaterialTheme.colorScheme.onPrimary
         } else {
-            MaterialTheme.colorScheme.onSurface,
+            MaterialTheme.colorScheme.onSurface
         },
         border = BorderStroke(
             1.dp,
