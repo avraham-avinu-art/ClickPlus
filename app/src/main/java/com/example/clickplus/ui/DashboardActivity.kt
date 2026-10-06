@@ -173,7 +173,7 @@ private fun ClickPlusDashboard() {
         } else if (dark) darkColorScheme() else lightColorScheme()
         "dark" -> darkColorScheme()
         "light" -> lightColorScheme()
-        else -> MaterialTheme.colorScheme
+        else -> if (dark) darkColorScheme() else lightColorScheme()
     }
 
     MaterialTheme(colorScheme = scheme) {
@@ -747,7 +747,7 @@ private fun BackupScreen(
     val advanced = remember { AdvancedRuleRepository(context) }
     val basePrefs = remember { AppPreferencesRepository(context) }
     var message by remember { mutableStateOf("") }
-    var importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
