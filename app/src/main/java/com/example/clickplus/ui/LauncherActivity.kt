@@ -19,7 +19,6 @@ class LauncherActivity : Activity() {
         val firstLaunch = !prefs.getBoolean("first_ui_opened", false)
         if (firstLaunch) {
             prefs.edit()
-                .putBoolean("first_ui_opened", true)
                 .putBoolean("background_only", false)
                 .apply()
 
