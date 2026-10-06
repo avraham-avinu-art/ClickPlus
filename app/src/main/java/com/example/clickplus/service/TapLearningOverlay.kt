@@ -19,6 +19,7 @@ class TapLearningOverlay(private val context: Context) {
         if (root != null) return
         val density = context.resources.displayMetrics.density
         val container = LinearLayout(context).apply {
+            layoutDirection = ViewGroup.LAYOUT_DIRECTION_RTL
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding((16 * density).toInt(), (10 * density).toInt(), (16 * density).toInt(), (10 * density).toInt())
