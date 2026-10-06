@@ -26,14 +26,20 @@ class LauncherActivity : Activity() {
             val service = com.example.clickplus.service.KeyInterceptorAccessibilityService.instance
 
             if (service != null) {
+                // כשהשירות חי, עצם הכניסה לאפליקציה היא אות ההפעלה.
                 service.onLauncherEntry()
-            } else {
-                val pending = prefs.getInt("pending_activation_launches", 0) + 1
-                prefs.edit()
-                    .putInt("pending_activation_launches", pending)
-                    .apply()
+                finish()
+                overridePendingTransition(0, 0)
+                return
             }
 
+            // אם האפליקציה והשירות נסגרו לחלוטין, אסור להישאר בלי דרך חזרה:
+            // פתיחת סמל האפליקציה מציגה את הממשק כדי שאפשר יהיה להפעיל מחדש את השירות.
+            startActivity(
+                Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                },
+            )
             finish()
             overridePendingTransition(0, 0)
             return
