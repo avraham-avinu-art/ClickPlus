@@ -8,6 +8,7 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import androidx.core.app.NotificationCompat
 import com.example.clickplus.data.AppPreferencesRepository
+import com.example.clickplus.data.KeyActionConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,6 +18,12 @@ import kotlinx.coroutines.launch
 
 class KeyInterceptorAccessibilityService : AccessibilityService() {
 
+    companion object {
+        @Volatile
+        var instance: KeyInterceptorAccessibilityService? = null
+            private set
+    }
+
     private lateinit var actionExecutor: ActionExecutor
     private lateinit var overlayManager: OverlayManager
     private lateinit var tapDetector: TapDetector
@@ -25,6 +32,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         startAsForeground()
         actionExecutor = ActionExecutor(this)
         overlayManager = OverlayManager(this)
@@ -33,8 +41,14 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         observePreferences()
     }
 
+    fun testMapping(config: KeyActionConfig) {
+        actionExecutor.execute(config)
+        overlayManager.showPill("בוצע", config.customLabel.ifBlank { config.keyNameHebrew })
+    }
+
     private fun startAsForeground() {
         val channelId = "clickplus_service_channel"
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
                 NotificationChannel(
@@ -44,6 +58,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
                 )
             )
         }
+
         startForeground(
             1001,
             NotificationCompat.Builder(this, channelId)
@@ -84,6 +99,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         if (::overlayManager.isInitialized) overlayManager.dismiss()
         serviceScope.cancel()
         super.onDestroy()
