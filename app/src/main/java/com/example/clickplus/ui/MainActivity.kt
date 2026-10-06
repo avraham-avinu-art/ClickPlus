@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Settings
@@ -61,6 +63,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -373,7 +376,7 @@ private fun SettingsScreen(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
-                    Text("\$timeout אלפיות השנייה")
+                    Text("$timeout אלפיות השנייה")
                     Slider(
                         value = timeout.toFloat(),
                         onValueChange = { onTimeout(it.toLong()) },
@@ -855,10 +858,10 @@ private fun EditorScreen(
 
                         if (screenTapXRatio >= 0f && screenTapYRatio >= 0f) {
                             Text(
-                                "מיקום שנלמד: X \${(screenTapXRatio * 100f).toInt()}% · Y \${(screenTapYRatio * 100f).toInt()}%",
+                                "מיקום שנלמד: X ${(screenTapXRatio * 100f).toInt()}% · Y ${(screenTapYRatio * 100f).toInt()}%",
                                 fontWeight = FontWeight.Bold,
                             )
-                            Text("סטייה מותרת: \${(screenTapToleranceRatio * 100f).toInt()}%")
+                            Text("סטייה מותרת: ${(screenTapToleranceRatio * 100f).toInt()}%")
                             Slider(
                                 value = screenTapToleranceRatio,
                                 onValueChange = {
