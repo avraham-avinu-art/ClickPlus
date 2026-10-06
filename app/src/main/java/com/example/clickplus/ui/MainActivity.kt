@@ -138,7 +138,7 @@ private fun StepBlock(title: String, body: String, button: String, onClick: () -
     Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(64.dp)) { Text(button) }
 }
 
-@androidx.compose.material3.ExperimentalMaterial3Api
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun MainDashboard(prefsRepo: AppPreferencesRepository) {
     val scope = rememberCoroutineScope()
