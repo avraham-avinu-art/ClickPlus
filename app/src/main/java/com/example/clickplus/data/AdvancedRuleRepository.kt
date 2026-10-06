@@ -86,7 +86,7 @@ class AdvancedRuleRepository(private val context: Context) {
 
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun getRuleMetadata(ruleId: String): RuleAdvancedMetadata = loadMetadata()[ruleId]?.let(::fromJson) ?: RuleAdvancedMetadata()
+    fun getRuleMetadata(ruleId: String): RuleAdvancedMetadata {\n        val obj = loadMetadata().optJSONObject(ruleId) ?: return RuleAdvancedMetadata()\n        return fromJson(obj)\n    }
 
     fun saveRuleMetadata(ruleId: String, metadata: RuleAdvancedMetadata) {
         val root = loadMetadata()
