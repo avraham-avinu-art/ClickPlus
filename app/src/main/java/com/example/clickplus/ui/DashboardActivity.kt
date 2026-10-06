@@ -24,6 +24,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.animateContentSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -70,6 +71,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -387,7 +389,7 @@ private fun StatCard(title: String, value: String, modifier: Modifier) {
 private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit) {
     val meta = AdvancedRuleRepository(LocalContext.current).getRuleMetadata(item.id)
     OutlinedCard(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit),
+        modifier = Modifier.fillMaxWidth().animateContentSize().clickable(onClick = onEdit),
         shape = RoundedCornerShape(20.dp),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1128,48 +1130,78 @@ private fun EditorScreen(
 private data class InstalledApp(val packageName: String, val label: String)
 
 @Composable
-private fun AppPickerDialog(title: String, onDismiss: () -> Unit, onSelect: (InstalledApp) -> Unit) {
+private fun AppPickerDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    onSelect: (InstalledApp) -> Unit,
+) {
     val context = LocalContext.current
     val apps = remember {
         context.packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
             .mapNotNull { info ->
-                val intent = context.packageManager.getLaunchIntentForPackage(info.packageName) ?: return@mapNotNull null
-                val label = runCatching { context.packageManager.getApplicationLabel(info).toString() }.getOrDefault(info.packageName)
-                if (intent != null) InstalledApp(info.packageName, label) else null
+                val launchIntent = context.packageManager.getLaunchIntentForPackage(info.packageName)
+                    ?: return@mapNotNull null
+                val label = runCatching {
+                    context.packageManager.getApplicationLabel(info).toString()
+                }.getOrDefault(info.packageName)
+                if (launchIntent != null) InstalledApp(info.packageName, label) else null
             }
             .filterNot { it.packageName == context.packageName }
             .distinctBy { it.packageName }
             .sortedBy { it.label.lowercase() }
     }
     var query by remember { mutableStateOf("") }
-    val filtered = apps.filter { it.label.contains(query, true) || it.packageName.contains(query, true) }
+    val filtered = apps.filter {
+        it.label.contains(query, true) || it.packageName.contains(query, true)
+    }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column {
-                OutlinedTextField(value = query, onValueChange = { query = it }, singleLine = true, label = { Text("חיפוש") }, leadingIcon = { Icon(Icons.Outlined.Search, null) })
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(Modifier.height(360.dp)) {
-                    items(filtered) { app ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable { onSelect(app) }.padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("חיפוש אפליקציה") },
+                leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            )
+            LazyColumn(
+                Modifier.fillMaxWidth().height(460.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+            ) {
+                items(filtered, key = { it.packageName }) { app ->
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clickable { onSelect(app) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Surface(
+                            Modifier.size(42.dp),
+                            CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                         ) {
-                            Icon(Icons.Outlined.Apps, null)
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text(app.label, fontWeight = FontWeight.Bold)
-                                Text(app.packageName, style = MaterialTheme.typography.labelSmall)
-                            }
+                            Icon(Icons.Outlined.Apps, null, Modifier.padding(9.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(app.label, fontWeight = FontWeight.Bold)
+                            Text(
+                                app.packageName,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("סגור") } },
-    )
+        }
+    }
 }
 
 @Composable
