@@ -18,6 +18,9 @@ import kotlinx.coroutines.launch
 
 class KeyInterceptorAccessibilityService : AccessibilityService() {
 
+    @Volatile
+    private var tapCountOverlayEnabled = false
+
     companion object {
         @Volatile
         var instance: KeyInterceptorAccessibilityService? = null
@@ -27,6 +30,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     private lateinit var actionExecutor: ActionExecutor
     private lateinit var tapDetector: TapDetector
     private lateinit var prefsRepository: AppPreferencesRepository
+    private lateinit var tapCountOverlay: TapCountOverlay
     private val serviceScope = CoroutineScope(Dispatchers.Main.immediate + Job())
 
     override fun onCreate() {
@@ -34,7 +38,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         instance = this
 
         actionExecutor = ActionExecutor(this)
-        tapDetector = TapDetector(applicationContext, actionExecutor)
+        tapCountOverlay = TapCountOverlay(this)
+        tapDetector = TapDetector(applicationContext, actionExecutor) { count ->
+            if (tapCountOverlayEnabled && ::tapCountOverlay.isInitialized) {
+                tapCountOverlay.show(count)
+            }
+        }
         prefsRepository = AppPreferencesRepository(applicationContext)
 
         startAsForeground()
@@ -101,7 +110,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             NotificationCompat.Builder(this, channelId)
                 .setContentTitle("קליק פלוס פעיל")
                 .setContentText("עובד ברקע וממתין לכניסה לאפליקציה")
-                .setSmallIcon(android.R.drawable.ic_menu_manage)
+                .setSmallIcon(com.example.clickplus.R.drawable.ic_notification_transparent)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .build(),
@@ -112,6 +121,15 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             prefsRepository.tapTimeoutFlow.collectLatest {
                 tapDetector.tapTimeoutMs = it
+            }
+        }
+
+        serviceScope.launch {
+            prefsRepository.showTapCountFlow.collectLatest { enabled ->
+                tapCountOverlayEnabled = enabled
+                if (!enabled && ::tapCountOverlay.isInitialized) {
+                    tapCountOverlay.hide()
+                }
             }
         }
 
@@ -138,6 +156,9 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        if (::tapCountOverlay.isInitialized) {
+            tapCountOverlay.destroy()
+        }
         if (instance === this) instance = null
         serviceScope.cancel()
         super.onDestroy()
