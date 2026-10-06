@@ -95,8 +95,10 @@ data class KeyActionConfig(
             triggerType = runCatching { TriggerType.valueOf(json.optString("triggerType", TriggerType.APP_ENTRY.name)) }.getOrDefault(TriggerType.APP_ENTRY),
             screenTapPackage = json.optString("screenTapPackage", ""),
             screenTapAppName = json.optString("screenTapAppName", ""),
-            screenTapXRatio = json.optDouble("screenTapXRatio", -1.0).toFloat(),
-            screenTapYRatio = json.optDouble("screenTapYRatio", -1.0).toFloat(),
+            screenTapXRatio = json.optDouble("screenTapXRatio", -1.0).toFloat()
+                .takeIf { it.isFinite() }?.coerceIn(-1f, 1f) ?: -1f,
+            screenTapYRatio = json.optDouble("screenTapYRatio", -1.0).toFloat()
+                .takeIf { it.isFinite() }?.coerceIn(-1f, 1f) ?: -1f,
             screenTapToleranceRatio = json.optDouble("screenTapToleranceRatio", 0.08).toFloat().coerceIn(0.01f, 0.25f)
         )
     }
