@@ -182,19 +182,28 @@ class AdvancedRuleRepository(private val context: Context) {
         .put("toleranceXRatio", m.toleranceXRatio)
         .put("toleranceYRatio", m.toleranceYRatio)
 
-    private fun fromJson(o: JSONObject) = RuleAdvancedMetadata(
-        profileId = o.optString("profileId", "default"),
-        priority = o.optInt("priority", 0),
-        cooldownMs = o.optLong("cooldownMs", 0L).coerceIn(0L, 60_000L),
-        delayMs = o.optLong("delayMs", 0L).coerceIn(0L, 10_000L),
-        retries = o.optInt("retries", 1).coerceIn(1, 3),
-        portraitX = o.optDouble("portraitX", -1.0).toFloat(),
-        portraitY = o.optDouble("portraitY", -1.0).toFloat(),
-        landscapeX = o.optDouble("landscapeX", -1.0).toFloat(),
-        landscapeY = o.optDouble("landscapeY", -1.0).toFloat(),
-        toleranceXRatio = o.optDouble("toleranceXRatio", 0.08).toFloat().coerceIn(0.01f, 0.25f),
-        toleranceYRatio = o.optDouble("toleranceYRatio", 0.08).toFloat().coerceIn(0.01f, 0.25f),
-    )
+    private fun fromJson(o: JSONObject): RuleAdvancedMetadata {
+        fun ratio(name: String, default: Float = -1f): Float =
+            o.optDouble(name, default.toDouble()).toFloat()
+                .takeIf { it.isFinite() }?.coerceIn(-1f, 1f) ?: default
+        fun tolerance(name: String): Float =
+            o.optDouble(name, 0.08).toFloat()
+                .takeIf { it.isFinite() }?.coerceIn(0.01f, 0.25f) ?: 0.08f
+
+        return RuleAdvancedMetadata(
+            profileId = o.optString("profileId", "default").ifBlank { "default" },
+            priority = o.optInt("priority", 0).coerceIn(0, 10),
+            cooldownMs = o.optLong("cooldownMs", 0L).coerceIn(0L, 60_000L),
+            delayMs = o.optLong("delayMs", 0L).coerceIn(0L, 10_000L),
+            retries = o.optInt("retries", 1).coerceIn(1, 3),
+            portraitX = ratio("portraitX"),
+            portraitY = ratio("portraitY"),
+            landscapeX = ratio("landscapeX"),
+            landscapeY = ratio("landscapeY"),
+            toleranceXRatio = tolerance("toleranceXRatio"),
+            toleranceYRatio = tolerance("toleranceYRatio"),
+        )
+    }
 }
 
 data class ActivityLog(
