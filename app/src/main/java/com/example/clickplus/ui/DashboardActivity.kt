@@ -750,40 +750,43 @@ private fun BackupScreen(
     val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            runCatching {
-                val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                    ?: error("קובץ ריק")
-                val root = JSONObject(json)
-                val array = root.optJSONArray("mappings") ?: JSONArray()
-                val imported = buildList {
-                    for (i in 0 until array.length()) {
-                        array.optJSONObject(i)?.let { add(KeyActionConfig.fromJson(it)) }
+        uri?.let { selected ->
+            scope.launch {
+                runCatching {
+                    val json = context.contentResolver.openInputStream(selected)?.bufferedReader()?.use { it.readText() }
+                        ?: error("קובץ ריק")
+                    val root = JSONObject(json)
+                    val array = root.optJSONArray("mappings") ?: JSONArray()
+                    val imported = buildList {
+                        for (i in 0 until array.length()) {
+                            array.optJSONObject(i)?.let { add(KeyActionConfig.fromJson(it)) }
+                        }
                     }
-                }
-                basePrefs.saveMappings(imported)
-                root.optJSONObject("settings")?.let {
-                    if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 650L))
-                    if (it.has("showTapCount")) basePrefs.saveShowTapCount(it.optBoolean("showTapCount", false))
-                }
-                advanced.importBundle(root)
-                message = "הגיבוי יובא בהצלחה."
-            }.onFailure { message = "הייבוא נכשל: " + (it.message ?: "שגיאה") }
+                    basePrefs.saveMappings(imported)
+                    root.optJSONObject("settings")?.let {
+                        if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 650L))
+                        if (it.has("showTapCount")) basePrefs.saveShowTapCount(it.optBoolean("showTapCount", false))
+                    }
+                    advanced.importBundle(root)
+                    message = "הגיבוי יובא בהצלחה."
+                }.onFailure { message = "הייבוא נכשל: " + (it.message ?: "שגיאה") }
+            }
         }
-    )
+    }
+
     val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val json = advanced.exportJson(
-            JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
-            JSONObject().put("tapTimeoutMs", timeout).put("showTapCount", showTapCount),
-        )
-        runCatching {
-            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json) }
-            message = "הגיבוי נשמר בהצלחה."
-        }.onFailure { message = "שמירת הגיבוי נכשלה." }
+        uri?.let { selected ->
+            val json = advanced.exportJson(
+                JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
+                JSONObject().put("tapTimeoutMs", timeout).put("showTapCount", showTapCount)
+            )
+            runCatching {
+                context.contentResolver.openOutputStream(selected)?.bufferedWriter()?.use { it.write(json) }
+                message = "הגיבוי נשמר בהצלחה."
+            }.onFailure { message = "שמירת הגיבוי נכשלה." }
+        }
     }
 
     Scaffold(topBar = { SimpleTopBar("גיבוי והעברה", onBack) }) { padding ->
