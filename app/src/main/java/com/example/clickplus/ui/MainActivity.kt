@@ -29,7 +29,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -261,7 +260,7 @@ private fun HomeScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Icon(Icons.Outlined.Keyboard, contentDescription = null, modifier = Modifier.size(42.dp))
+                            Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(42.dp))
                             Text("עדיין אין פעולות", style = MaterialTheme.typography.titleMedium)
                             Text("הוסף פעולה ובחר כמה כניסות רצופות יפעילו אותה.")
                         }
@@ -355,7 +354,7 @@ private fun SettingsScreen(
                         Text("זמן לספירת כניסות: " + timeout + " אלפיות השנייה")
                         Slider(
                             value = timeout.toFloat(),
-                            onValueChange = onTimeout,
+                            onValueChange = { onTimeout(it.toLong()) },
                             valueRange = 300f..1200f,
                             steps = 8,
                         )
