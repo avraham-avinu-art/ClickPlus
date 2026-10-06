@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class KeyInterceptorAccessibilityService : AccessibilityService() {
+
     private lateinit var actionExecutor: ActionExecutor
     private lateinit var overlayManager: OverlayManager
     private lateinit var tapDetector: TapDetector
@@ -36,14 +37,18 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         val channelId = "clickplus_service_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(channelId, "Click+ Key Engine", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(
+                    channelId,
+                    "שירות Click+",
+                    NotificationManager.IMPORTANCE_LOW
+                )
             )
         }
         startForeground(
             1001,
             NotificationCompat.Builder(this, channelId)
-                .setContentTitle("Click+ Active")
-                .setContentText("Monitoring hardware key presses")
+                .setContentTitle("Click+ פעיל")
+                .setContentText("מנוע המיפוי מאזין למקשי חומרה")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setOngoing(true)
                 .build()
@@ -51,28 +56,27 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     }
 
     private fun observePreferences() {
-        serviceScope.launch { prefsRepository.operationModeFlow.collectLatest { tapDetector.currentMode = it } }
-        serviceScope.launch { prefsRepository.tapTimeoutFlow.collectLatest { tapDetector.tapTimeoutMs = it } }
-        serviceScope.launch { prefsRepository.debounceMsFlow.collectLatest { tapDetector.debounceMs = it } }
-        serviceScope.launch { prefsRepository.hudStyleFlow.collectLatest { overlayManager.hudStyle = it } }
-        serviceScope.launch { prefsRepository.mappingsFlow.collectLatest { tapDetector.updateMappings(it) } }
-    }
-
-    override fun onStartCommand(intent: android.content.Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "com.example.clickplus.TEST_MAPPING") {
-            intent.getStringExtra("config_json")?.let { json ->
-                runCatching { com.example.clickplus.data.KeyActionConfig.fromJson(org.json.JSONObject(json)) }
-                    .onSuccess { config ->
-                        actionExecutor.execute(config)
-                        overlayManager.showPill("Test", config.customLabel)
-                    }
-            }
+        serviceScope.launch {
+            prefsRepository.operationModeFlow.collectLatest { tapDetector.currentMode = it }
         }
-        return START_STICKY
+        serviceScope.launch {
+            prefsRepository.tapTimeoutFlow.collectLatest { tapDetector.tapTimeoutMs = it }
+        }
+        serviceScope.launch {
+            prefsRepository.debounceMsFlow.collectLatest { tapDetector.debounceMs = it }
+        }
+        serviceScope.launch {
+            prefsRepository.hudStyleFlow.collectLatest { overlayManager.hudStyle = it }
+        }
+        serviceScope.launch {
+            prefsRepository.mappingsFlow.collectLatest { tapDetector.updateMappings(it) }
+        }
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN && tapDetector.processKeyEvent(event.keyCode)) return true
+        if (event.action == KeyEvent.ACTION_DOWN && tapDetector.processKeyEvent(event.keyCode)) {
+            return true
+        }
         return super.onKeyEvent(event)
     }
 
