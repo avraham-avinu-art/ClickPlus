@@ -1,186 +1,120 @@
 package com.example.clickplus.service
 
+import android.content.Context
+import android.media.AudioManager
+import android.telephony.TelephonyManager
 import android.os.Handler
 import android.os.Looper
-import android.view.KeyEvent
+import com.example.clickplus.data.ContextConditionType
 import com.example.clickplus.data.KeyActionConfig
-import com.example.clickplus.data.OperationMode
 
 class TapDetector(
+    private val context: Context,
     private val actionExecutor: ActionExecutor,
-    private val overlayManager: OverlayManager
 ) {
-    companion object {
-        const val LONG_PRESS_MS = 600L
-    }
-
-    var currentMode = OperationMode.MODE_A_MULTI_TAP
-    var tapTimeoutMs = 450L
-    var debounceMs = 80L
-    var activeProfile = "DEFAULT"
+    var tapTimeoutMs = 650L
 
     private var tapCount = 0
-    private var activeKeyCode = -1
-    private var lastKeyPressTime = 0L
-    private var keyDownTime = 0L
-    private var longPressTriggered = false
-
+    private var lastLaunchTime = 0L
     private val handler = Handler(Looper.getMainLooper())
-    private var mappings = emptyList<KeyActionConfig>()
-
-    private val tapTimeoutRunnable = Runnable { resolveTapSequence() }
-    private val longPressRunnable = Runnable { resolveLongPress() }
-
-    fun updateMappings(newMappings: List<KeyActionConfig>) {
-        mappings = newMappings.filter { it.isEnabled }
-    }
-
-    fun processKeyEvent(event: KeyEvent): Boolean {
-        val keyCode = event.keyCode
-        val now = System.currentTimeMillis()
-        val activeMappings = mappings.filter {
-            it.profileName == activeProfile || it.profileName == "DEFAULT"
-        }
-
-        val keyIsMapped = activeMappings.any { it.triggerKeyCode == keyCode }
-        if (!keyIsMapped) return false
-
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            if (now - lastKeyPressTime < debounceMs) return true
-
-            lastKeyPressTime = now
-            activeKeyCode = keyCode
-            keyDownTime = now
-            longPressTriggered = false
-
-            val hasLong = activeMappings.any {
-                it.triggerKeyCode == keyCode && it.tapCount == 0
-            }
-
-            handler.removeCallbacks(longPressRunnable)
-            if (hasLong) {
-                handler.postDelayed(longPressRunnable, LONG_PRESS_MS)
-            }
-
-            if (hasLong) {
-                overlayManager.showPill("לחיצה", "ממתין…")
-            }
-            return true
-        }
-
-        if (event.action == KeyEvent.ACTION_UP) {
-            if (keyCode != activeKeyCode) return true
-
-            handler.removeCallbacks(longPressRunnable)
-
-            if (longPressTriggered) {
-                reset()
-                return true
-            }
-
-            val duration = now - keyDownTime
-            if (duration < LONG_PRESS_MS) {
-                registerTap(activeMappings, keyCode)
-            }
-            return true
-        }
-
-        return true
-    }
-
-    private fun registerTap(activeMappings: List<KeyActionConfig>, keyCode: Int) {
-        if (keyCode != activeKeyCode && tapCount > 0) {
-            tapCount = 0
-        }
-
-        activeKeyCode = keyCode
-        tapCount += 1
-
-        val matching = activeMappings.firstOrNull {
-            it.triggerKeyCode == keyCode && it.tapCount == tapCount
-        }
-
-        overlayManager.showPill(
-            "לחיצה #$tapCount",
-            matching?.customLabel.orEmpty()
-        )
-
-        handler.removeCallbacks(tapTimeoutRunnable)
-
-        if (matching != null || activeMappings.any {
-                it.triggerKeyCode == keyCode && it.tapCount == 1
-            }) {
-            handler.postDelayed(tapTimeoutRunnable, tapTimeoutMs)
-        }
-    }
-
-    private fun resolveTapSequence() {
-        val activeMappings = mappings.filter {
-            it.profileName == activeProfile || it.profileName == "DEFAULT"
-        }
-
-        val config = activeMappings.firstOrNull {
-            it.triggerKeyCode == activeKeyCode &&
-                it.tapCount == tapCount &&
-                it.tapCount > 0 &&
-                it.isEnabled
-        }
-
-        if (config != null) {
-            if (currentMode == OperationMode.MODE_B_CONFIRMATION) {
-                overlayManager.showPill(
-                    "נדרש אישור",
-                    config.customLabel.ifBlank { config.keyNameHebrew }
-                )
-                handler.postDelayed({
-                    actionExecutor.execute(config)
-                    overlayManager.showPill(
-                        "בוצע",
-                        config.customLabel.ifBlank { config.keyNameHebrew }
-                    )
-                }, 250L)
-            } else {
-                actionExecutor.execute(config)
-                overlayManager.showPill(
-                    "בוצע",
-                    config.customLabel.ifBlank { config.keyNameHebrew }
-                )
-            }
-        }
-
-        reset()
-    }
-
-    private fun resolveLongPress() {
-        val activeMappings = mappings.filter {
-            it.profileName == activeProfile || it.profileName == "DEFAULT"
-        }
-
-        val config = activeMappings.firstOrNull {
-            it.triggerKeyCode == activeKeyCode &&
-                it.tapCount == 0 &&
-                it.isEnabled
-        } ?: return
-
-        longPressTriggered = true
-        handler.removeCallbacks(tapTimeoutRunnable)
-        overlayManager.showPill(
-            "לחיצה ארוכה",
-            config.customLabel.ifBlank { config.keyNameHebrew }
-        )
-        actionExecutor.execute(config)
-        overlayManager.showPill(
-            "בוצע",
-            config.customLabel.ifBlank { config.keyNameHebrew }
-        )
-    }
-
-    private fun reset() {
-        handler.removeCallbacks(tapTimeoutRunnable)
-        handler.removeCallbacks(longPressRunnable)
+    private val resetRunnable = Runnable {
         tapCount = 0
-        activeKeyCode = -1
-        keyDownTime = 0L
-        longPressTriggered = false
+    }
+
+    private var profiles = emptyList<KeyActionConfig>()
+
+    fun updateProfiles(newProfiles: List<KeyActionConfig>) {
+        profiles = newProfiles.filter { it.enabled }
+    }
+
+    fun processActivationLaunch() {
+        val all = profiles
+        if (all.isEmpty()) {
+            KeyInterceptorAccessibilityService.instance?.openMainInterface()
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        if (now - lastLaunchTime < 100L) return
+        lastLaunchTime = now
+
+        tapCount += 1
+        handler.removeCallbacks(resetRunnable)
+
+        val current = selectProfile(all, tapCount)
+        if (current != null) {
+            actionExecutor.execute(current)
+        }
+
+        handler.postDelayed(resetRunnable, tapTimeoutMs.coerceIn(300L, 1500L))
+    }
+
+    private fun selectProfile(
+        all: List<KeyActionConfig>,
+        count: Int,
+    ): KeyActionConfig? {
+        val matchingCount = all.filter { it.pressCount == count }
+        if (matchingCount.isEmpty()) return null
+
+        val specific = matchingCount
+            .asSequence()
+            .filter { it.contextConditionType != ContextConditionType.ANY }
+            .filter { contextMatches(it) }
+            .firstOrNull()
+
+        return specific ?: matchingCount.firstOrNull {
+            it.contextConditionType == ContextConditionType.ANY
+        }
+    }
+
+    private fun contextMatches(config: KeyActionConfig): Boolean {
+        val service = KeyInterceptorAccessibilityService.instance ?: return false
+
+        return when (config.contextConditionType) {
+            ContextConditionType.ANY -> true
+
+            ContextConditionType.APP -> {
+                val currentPackage =
+                    service.rootInActiveWindow?.packageName?.toString().orEmpty()
+                currentPackage.isNotBlank() &&
+                    currentPackage == config.contextConditionValue
+            }
+
+            ContextConditionType.MUSIC -> {
+                val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                audio?.isMusicActive == true
+            }
+
+            ContextConditionType.MUTED -> {
+                val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                audio?.let {
+                    it.ringerMode == AudioManager.RINGER_MODE_SILENT ||
+                        it.getStreamVolume(AudioManager.STREAM_MUSIC) == 0
+                } == true
+            }
+
+            ContextConditionType.RINGING -> {
+                val telephony =
+                    context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+                runCatching {
+                    telephony?.callState == TelephonyManager.CALL_STATE_RINGING
+                }.getOrDefault(false)
+            }
+
+            ContextConditionType.RADIO -> {
+                val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                val currentPackage =
+                    service.rootInActiveWindow?.packageName?.toString().orEmpty()
+                audio?.isMusicActive == true &&
+                    if (config.contextConditionValue.isBlank()) {
+                        currentPackage.lowercase().let {
+                            it.contains("radio") || it.contains("fm") ||
+                                it.contains("dab") || it.contains("tuner")
+                        }
+                    } else {
+                        currentPackage == config.contextConditionValue
+                    }
+            }
+        }
     }
 }
