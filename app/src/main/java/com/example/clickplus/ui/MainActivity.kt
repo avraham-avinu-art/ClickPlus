@@ -106,6 +106,21 @@ class MainActivity : ComponentActivity() {
                 onBeginCapture = {
                     capturedKeyCode.value = null
                     keyCaptureActive.value = true
+                    val service = KeyInterceptorAccessibilityService.instance
+                    if (service != null) {
+                        service.startKeyCapture { code, name ->
+                            runOnUiThread {
+                                capturedKeyCode.value = code
+                                keyCaptureActive.value = false
+                            }
+                        }
+                    } else {
+                        android.widget.Toast.makeText(
+                            this@MainActivity,
+                            "שירות הנגישות אינו פעיל. אפשר אותו כדי ללכוד מקשי שלט וחומרה.",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
                 },
                 onCancelCapture = {
                     keyCaptureActive.value = false
@@ -434,8 +449,7 @@ private fun MainDashboard(
                 item { EmptyStateCard { showAdd = true } }
             } else {
                 items(mappings, key = { it.id }) { item ->
-                    item {
-                        MappingCard(
+                    MappingCard(
                             item = item,
                             bigUi = bigUi,
                             onClick = { editing = item },
@@ -651,6 +665,8 @@ private fun MappingDialog(
     var sampling by remember { mutableStateOf(false) }
     var sampleMessage by remember { mutableStateOf<String?>(null) }
 
+    val maxDialogHeight = (LocalConfiguration.current.screenHeightDp * 0.72f).dp
+
     LaunchedEffect(detectedKey) {
         if (captureActive && detectedKey != null) {
             keyCode = detectedKey
@@ -678,7 +694,9 @@ private fun MappingDialog(
             when (step) {
                 1 -> {
                     Column(
-                        Modifier.verticalScroll(rememberScrollState()),
+                        Modifier
+                            .heightIn(max = maxDialogHeight)
+                            .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         OutlinedTextField(
@@ -716,7 +734,9 @@ private fun MappingDialog(
 
                 2 -> {
                     Column(
-                        Modifier.verticalScroll(rememberScrollState()),
+                        Modifier
+                            .heightIn(max = maxDialogHeight)
+                            .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text("איך תרצה שהמקש יתנהג?", style = MaterialTheme.typography.titleMedium)
@@ -744,7 +764,9 @@ private fun MappingDialog(
 
                 3 -> {
                     Column(
-                        Modifier.verticalScroll(rememberScrollState()),
+                        Modifier
+                            .heightIn(max = maxDialogHeight)
+                            .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Box(Modifier.fillMaxWidth()) {
@@ -1157,25 +1179,37 @@ private fun SettingsDialog(
                         ThemeCard(
                             ThemeOption.LIGHT,
                             localTheme == ThemeOption.LIGHT,
-                            { localTheme = ThemeOption.LIGHT },
+                            {
+                                localTheme = ThemeOption.LIGHT
+                                scope.launch { prefsRepo.saveThemeOption(ThemeOption.LIGHT) }
+                            },
                             Modifier.weight(1f)
                         )
                         ThemeCard(
                             ThemeOption.DARK,
                             localTheme == ThemeOption.DARK,
-                            { localTheme = ThemeOption.DARK },
+                            {
+                                localTheme = ThemeOption.DARK
+                                scope.launch { prefsRepo.saveThemeOption(ThemeOption.DARK) }
+                            },
                             Modifier.weight(1f)
                         )
                         ThemeCard(
                             ThemeOption.DARK_OLED,
                             localTheme == ThemeOption.DARK_OLED,
-                            { localTheme = ThemeOption.DARK_OLED },
+                            {
+                                localTheme = ThemeOption.DARK_OLED
+                                scope.launch { prefsRepo.saveThemeOption(ThemeOption.DARK_OLED) }
+                            },
                             Modifier.weight(1f)
                         )
                     }
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
-                        onClick = { localTheme = ThemeOption.AUTO },
+                        onClick = {
+                            localTheme = ThemeOption.AUTO
+                            scope.launch { prefsRepo.saveThemeOption(ThemeOption.AUTO) }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(if (localTheme == ThemeOption.AUTO) "✓ אוטומטי" else "אוטומטי")
