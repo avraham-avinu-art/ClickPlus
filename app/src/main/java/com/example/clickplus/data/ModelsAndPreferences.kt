@@ -23,15 +23,15 @@ enum class OperationMode(val titleHebrew: String) {
 enum class ActionType(val titleHebrew: String) {
     LAUNCH_APP("פתיחת אפליקציה"),
     SYSTEM_KEY("פעולת מערכת"),
-    CLICK_NODE_BY_ID("לחיצה לפי מזהה רכיב"),
-    CLICK_NODE_BY_TEXT("לחיצה לפי טקסט במסך"),
-    SEND_INTENT("שליחת פקודת מערכת")
+    CLICK_NODE_BY_ID("לחיצה על רכיב לפי מזהה"),
+    CLICK_NODE_BY_TEXT("לחיצה על רכיב לפי טקסט"),
+    SEND_INTENT("מתקדם — פקודת Intent")
 }
 
 enum class HudStyle(val titleHebrew: String) {
-    NUMBER_ONLY("מספר לחיצה בלבד"),
     SHORT_TEXT("טקסט קצר"),
-    ICON_WITH_TEXT("אייקון עם תיאור")
+    NUMBER_ONLY("מספר בלבד"),
+    SILENT("ללא חיווי")
 }
 
 enum class ThemeOption(val titleHebrew: String) {
@@ -57,35 +57,25 @@ enum class SystemActionPreset(val id: String, val titleHebrew: String, val legac
     FLASHLIGHT("flashlight", "הדלקה / כיבוי פנס")
 }
 
-fun systemActionTitle(id: String, legacyKeyCode: Int = 0): String =
-    SystemActionPreset.entries.firstOrNull { it.id == id }?.titleHebrew
+fun systemActionTitle(id: String, legacyKeyCode: Int = 0): String {
+    return SystemActionPreset.entries.firstOrNull { it.id == id }?.titleHebrew
         ?: SystemActionPreset.entries.firstOrNull { it.legacyKeyCode == legacyKeyCode }?.titleHebrew
         ?: "פעולת מערכת"
-
-enum class SystemActionPreset(val titleHebrew: String, val keyCode: Int) {
-    HOME("בית", KeyEvent.KEYCODE_HOME),
-    BACK("חזרה", KeyEvent.KEYCODE_BACK),
-    RECENTS("יישומים אחרונים", KeyEvent.KEYCODE_APP_SWITCH),
-    NOTIFICATIONS("פתיחת התראות", KeyEvent.KEYCODE_NOTIFICATION),
-    MEDIA_PLAY_PAUSE("נגן / השהה מדיה", KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE),
-    VOLUME_UP("הגברת ווליום", KeyEvent.KEYCODE_VOLUME_UP),
-    VOLUME_DOWN("הנמכת ווליום", KeyEvent.KEYCODE_VOLUME_DOWN)
 }
 
-fun keyCodeTitleHebrew(keyCode: Int): String =
-    SystemActionPreset.entries.firstOrNull { it.keyCode == keyCode }?.titleHebrew ?: "מקש $keyCode"
-
-fun actionSummaryHebrew(config: KeyActionConfig): String = when (config.actionType) {
-    ActionType.LAUNCH_APP ->
-        "פתיחת ${config.targetAppName.ifBlank { config.targetPackage.ifBlank { "אפליקציה" } }}"
-    ActionType.SYSTEM_KEY ->
-        keyCodeTitleHebrew(config.systemKeyCode)
-    ActionType.CLICK_NODE_BY_ID ->
-        "לחיצה לפי ID: ${config.nodeIdentifier}"
-    ActionType.CLICK_NODE_BY_TEXT ->
-        "לחיצה על: ${config.nodeIdentifier}"
-    ActionType.SEND_INTENT ->
-        "Intent: ${config.targetClassOrIntent}"
+fun actionSummaryHebrew(config: KeyActionConfig): String {
+    return when (config.actionType) {
+        ActionType.LAUNCH_APP ->
+            "פתיחת ${config.targetAppName.ifBlank { config.targetPackage.ifBlank { "אפליקציה" } }}"
+        ActionType.SYSTEM_KEY ->
+            systemActionTitle(config.systemActionId, config.systemKeyCode)
+        ActionType.CLICK_NODE_BY_ID ->
+            "רכיב לפי מזהה: ${config.nodeIdentifier}"
+        ActionType.CLICK_NODE_BY_TEXT ->
+            "לחיצה על: ${config.nodeIdentifier}"
+        ActionType.SEND_INTENT ->
+            "פקודה מותאמת"
+    }
 }
 
 data class KeyActionConfig(
@@ -100,10 +90,20 @@ data class KeyActionConfig(
     val targetAppName: String = "",
     val targetClassOrIntent: String = "",
     val nodeIdentifier: String = "",
+    val systemActionId: String = SystemActionPreset.HOME.id,
     val systemKeyCode: Int = KeyEvent.KEYCODE_HOME,
     val profileName: String = "DEFAULT",
     val isEnabled: Boolean = true
 ) {
+    fun pressTypeHebrew(): String {
+        return when (tapCount) {
+            0 -> "לחיצה ארוכה"
+            1 -> "לחיצה בודדת"
+            2 -> "לחיצה כפולה"
+            else -> "$tapCount לחיצות"
+        }
+    }
+
     fun toJson() = JSONObject().apply {
         put("id", id)
         put("customLabel", customLabel)
@@ -116,6 +116,7 @@ data class KeyActionConfig(
         put("targetAppName", targetAppName)
         put("targetClassOrIntent", targetClassOrIntent)
         put("nodeIdentifier", nodeIdentifier)
+        put("systemActionId", systemActionId)
         put("systemKeyCode", systemKeyCode)
         put("profileName", profileName)
         put("isEnabled", isEnabled)
@@ -130,7 +131,7 @@ data class KeyActionConfig(
             keyNameHebrew = json.optString("keyNameHebrew", "").ifBlank {
                 "מקש ${json.optInt("triggerKeyCode", 0)}"
             },
-            tapCount = json.optInt("tapCount", 1).coerceAtLeast(1),
+            tapCount = json.optInt("tapCount", 1),
             actionType = runCatching {
                 ActionType.valueOf(json.optString("actionType", ActionType.SYSTEM_KEY.name))
             }.getOrDefault(ActionType.SYSTEM_KEY),
@@ -138,6 +139,12 @@ data class KeyActionConfig(
             targetAppName = json.optString("targetAppName", ""),
             targetClassOrIntent = json.optString("targetClassOrIntent", ""),
             nodeIdentifier = json.optString("nodeIdentifier", ""),
+            systemActionId = json.optString(
+                "systemActionId",
+                SystemActionPreset.entries.firstOrNull {
+                    it.legacyKeyCode == json.optInt("systemKeyCode", KeyEvent.KEYCODE_HOME)
+                }?.id ?: SystemActionPreset.HOME.id
+            ),
             systemKeyCode = json.optInt("systemKeyCode", KeyEvent.KEYCODE_HOME),
             profileName = json.optString("profileName", "DEFAULT"),
             isEnabled = json.optBoolean("isEnabled", true)
@@ -181,7 +188,7 @@ class AppPreferencesRepository(private val context: Context) {
         }.getOrDefault(HudStyle.SHORT_TEXT)
     }
 
-    val onboardingCompletedFlow: Flow<Boolean> =
+    val onboardingCompletedFlow =
         context.dataStore.data.map { it[ONBOARDING_COMPLETED] ?: false }
 
     val mappingsFlow: Flow<List<KeyActionConfig>> = context.dataStore.data.map { prefs ->
@@ -202,11 +209,11 @@ class AppPreferencesRepository(private val context: Context) {
     }
 
     suspend fun saveTapTimeout(ms: Long) {
-        context.dataStore.edit { it[TAP_TIMEOUT_MS] = ms.coerceIn(100L, 2000L) }
+        context.dataStore.edit { it[TAP_TIMEOUT_MS] = ms.coerceIn(200L, 1000L) }
     }
 
     suspend fun saveDebounce(ms: Long) {
-        context.dataStore.edit { it[DEBOUNCE_MS] = ms.coerceIn(20L, 500L) }
+        context.dataStore.edit { it[DEBOUNCE_MS] = ms.coerceIn(0L, 300L) }
     }
 
     suspend fun saveCarFriendlyUi(enabled: Boolean) {
