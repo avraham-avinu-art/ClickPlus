@@ -28,18 +28,16 @@ class LauncherActivity : Activity() {
             if (service != null) {
                 // כשהשירות חי, עצם הכניסה לאפליקציה היא אות ההפעלה.
                 service.onLauncherEntry()
-                finish()
-                overridePendingTransition(0, 0)
-                return
+            } else {
+                // גם אם התהליך נסגר לחלוטין, הכניסה לאפליקציה נשמרת כאות.
+                // השירות יאחזר את הכניסה כאשר Android יפעיל אותו מחדש.
+                val pending = prefs.getInt("pending_activation_launches", 0)
+                prefs.edit()
+                    .putInt("pending_activation_launches", (pending + 1).coerceAtMost(10))
+                    .apply()
             }
 
-            // אם האפליקציה והשירות נסגרו לחלוטין, אסור להישאר בלי דרך חזרה:
-            // פתיחת סמל האפליקציה מציגה את הממשק כדי שאפשר יהיה להפעיל מחדש את השירות.
-            startActivity(
-                Intent(this, MainActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-                },
-            )
+            // במצב עבודה שקטה לעולם לא מציגים את ממשק האפליקציה בלחיצה על הסמל.
             finish()
             overridePendingTransition(0, 0)
             return
