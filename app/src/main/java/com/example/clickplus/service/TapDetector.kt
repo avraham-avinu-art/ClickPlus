@@ -11,6 +11,7 @@ import com.example.clickplus.data.KeyActionConfig
 class TapDetector(
     private val context: Context,
     private val actionExecutor: ActionExecutor,
+    private val onTapCount: (Int) -> Unit = {},
 ) {
     var tapTimeoutMs = 650L
 
@@ -35,8 +36,9 @@ class TapDetector(
         if (now - lastLaunchTime < 100L) return
         lastLaunchTime = now
 
-        tapCount += 1
+        tapCount = (tapCount + 1).coerceAtMost(10)
         handler.removeCallbacks(resetRunnable)
+        onTapCount(tapCount)
 
         val current = selectProfile(all, tapCount)
         if (current != null) {
