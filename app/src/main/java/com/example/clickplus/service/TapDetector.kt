@@ -36,7 +36,6 @@ class TapDetector(
     fun processActivationLaunch(previousForegroundPackage: String) {
         val all = profiles.filter { it.triggerType == TriggerType.APP_ENTRY }
         if (all.isEmpty()) return
-
         val now = System.currentTimeMillis()
         if (now - lastLaunchTime < 100L) return
         lastLaunchTime = now
@@ -45,18 +44,19 @@ class TapDetector(
         handler.removeCallbacks(resetRunnable)
         onTapCount(tapCount)
 
-        val matching = all.filter { it.pressCount == tapCount && contextMatches(it, previousForegroundPackage) }
+        val matchingSpecific = all
+            .filter { it.pressCount == tapCount && it.contextConditionType != ContextConditionType.ANY }
+            .filter { contextMatches(it, previousForegroundPackage) }
             .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
 
-        val chosen = matching.firstOrNull { it.contextConditionType != ContextConditionType.ANY }
-            ?: all.filter { it.pressCount == tapCount && it.contextConditionType == ContextConditionType.ANY }
-                .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
-                .firstOrNull()
+        val chosen = matchingSpecific.firstOrNull() ?: all
+            .filter { it.pressCount == tapCount && it.contextConditionType == ContextConditionType.ANY }
+            .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
+            .firstOrNull()
 
         if (chosen != null) {
             actionExecutor.execute(chosen, previousForegroundPackage, "כניסה ל-ClickPlus")
         }
-
         handler.postDelayed(resetRunnable, tapTimeoutMs.coerceIn(300L, 1500L))
     }
 
@@ -74,46 +74,46 @@ class TapDetector(
         val xRatio = (bounds.centerX() / width).coerceIn(0f, 1f)
         val yRatio = (bounds.centerY() / height).coerceIn(0f, 1f)
 
-        val matches = all
-            .filter { it.screenTapPackage.isBlank() || it.screenTapPackage == packageName }
+        all.filter { it.screenTapPackage.isBlank() || it.screenTapPackage == packageName }
             .filter { tapLocationMatches(it, xRatio, yRatio) }
             .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
+            .forEach { config ->
+                val count = (screenTapCounts[config.id] ?: 0) + 1
+                screenTapCounts[config.id] = count
+                onTapCount(count)
+                screenReset[config.id]?.let(handler::removeCallbacks)
+                val reset = Runnable {
+                    screenTapCounts.remove(config.id)
+                    screenReset.remove(config.id)
+                }
+                screenReset[config.id] = reset
+                handler.postDelayed(reset, tapTimeoutMs.coerceIn(300L, 1500L))
 
-        matches.forEach { config ->
-            val count = (screenTapCounts[config.id] ?: 0) + 1
-            screenTapCounts[config.id] = count
-            onTapCount(count)
-            screenReset[config.id]?.let(handler::removeCallbacks)
-
-            val reset = Runnable {
-                screenTapCounts.remove(config.id)
-                screenReset.remove(config.id)
+                if (count >= config.pressCount) {
+                    screenTapCounts.remove(config.id)
+                    screenReset.remove(config.id)
+                    handler.removeCallbacks(reset)
+                    actionExecutor.execute(config, packageName, "לחיצה במיקום במסך")
+                }
             }
-            screenReset[config.id] = reset
-            handler.postDelayed(reset, tapTimeoutMs.coerceIn(300L, 1500L))
-
-            if (count >= config.pressCount) {
-                screenTapCounts.remove(config.id)
-                screenReset.remove(config.id)
-                handler.removeCallbacks(reset)
-                actionExecutor.execute(config, packageName, "לחיצה במיקום במסך")
-            }
-        }
     }
 
     private fun tapLocationMatches(config: KeyActionConfig, xRatio: Float, yRatio: Float): Boolean {
         if (config.screenTapXRatio < 0f || config.screenTapYRatio < 0f) return false
         val meta = advanced.getRuleMetadata(config.id)
-        val orientation = context.resources.configuration.orientation
-        val targetX = if (orientation == Configuration.ORIENTATION_LANDSCAPE && meta.landscapeX >= 0f) meta.landscapeX
-        else if (orientation != Configuration.ORIENTATION_LANDSCAPE && meta.portraitX >= 0f) meta.portraitX
+        val landscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val targetX = if (landscape && meta.landscapeX >= 0f) meta.landscapeX
+        else if (!landscape && meta.portraitX >= 0f) meta.portraitX
         else config.screenTapXRatio
-        val targetY = if (orientation == Configuration.ORIENTATION_LANDSCAPE && meta.landscapeY >= 0f) meta.landscapeY
-        else if (orientation != Configuration.ORIENTATION_LANDSCAPE && meta.portraitY >= 0f) meta.portraitY
+        val targetY = if (landscape && meta.landscapeY >= 0f) meta.landscapeY
+        else if (!landscape && meta.portraitY >= 0f) meta.portraitY
         else config.screenTapYRatio
-        val dx = xRatio - targetX
-        val dy = yRatio - targetY
-        return sqrt(dx * dx + dy * dy) <= config.screenTapToleranceRatio.coerceIn(0.01f, 0.25f)
+
+        val tx = meta.toleranceXRatio.coerceIn(0.01f, 0.25f)
+        val ty = meta.toleranceYRatio.coerceIn(0.01f, 0.25f)
+        val dx = (xRatio - targetX) / tx
+        val dy = (yRatio - targetY) / ty
+        return sqrt(dx * dx + dy * dy) <= 1f
     }
 
     private fun contextMatches(config: KeyActionConfig, foregroundPackage: String): Boolean {
