@@ -46,6 +46,16 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         overlayManager.showPill("בוצע", config.customLabel.ifBlank { config.keyNameHebrew })
     }
 
+    fun sampleNode(onResult: (text: String, viewId: String) -> Unit) {
+        overlayManager.startNodeSampler { sampled ->
+            onResult(sampled?.text.orEmpty(), sampled?.viewId.orEmpty())
+        }
+    }
+
+    fun stopNodeSampling() {
+        overlayManager.stopNodeSampler()
+    }
+
     private fun startAsForeground() {
         val channelId = "clickplus_service_channel"
 
