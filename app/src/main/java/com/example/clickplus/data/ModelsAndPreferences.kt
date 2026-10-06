@@ -1,7 +1,6 @@
 package com.example.clickplus.data
 
 import android.content.Context
-import android.view.KeyEvent
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -14,37 +13,20 @@ import org.json.JSONObject
 
 val Context.dataStore by preferencesDataStore(name = "clickplus_settings")
 
-enum class ActionType(val titleHebrew: String) {
-    SYSTEM("פעולת מערכת"),
-    APP("פתיחת אפליקציה"),
-}
-
-enum class TriggerType(val titleHebrew: String) {
-    APP_ENTRY("כניסה לאפליקציה"),
-    SCREEN_TAP("לחיצה במיקום במסך"),
-}
+enum class ActionType(val titleHebrew: String) { SYSTEM("פעולת מערכת"), APP("פתיחת אפליקציה") }
+enum class TriggerType(val titleHebrew: String) { APP_ENTRY("כניסה לאפליקציה"), SCREEN_TAP("לחיצה במיקום במסך") }
 
 enum class ContextConditionType(val titleHebrew: String) {
-    ANY("בכל מצב"),
-    APP("אפליקציה"),
-    MUSIC("מוזיקה פועלת"),
-    MUTED("שמע מושתק"),
-    RINGING("הטלפון מצלצל"),
-    RADIO("רדיו פועל"),
+    ANY("בכל מצב"), APP("אפליקציה"), MUSIC("מוזיקה פועלת"), MUTED("שמע מושתק"),
+    RINGING("הטלפון מצלצל"), RADIO("רדיו פועל")
 }
 
 enum class SystemActionPreset(val id: String, val titleHebrew: String) {
-    HOME("home", "בית"),
-    BACK("back", "חזרה"),
-    RECENTS("recents", "יישומים אחרונים"),
-    NOTIFICATIONS("notifications", "פתיחת התראות"),
-    MEDIA_PLAY_PAUSE("media_play_pause", "נגן / השהה"),
-    MEDIA_NEXT("media_next", "השיר הבא"),
-    MEDIA_PREVIOUS("media_previous", "השיר הקודם"),
-    VOLUME_UP("volume_up", "הגברת ווליום"),
-    VOLUME_DOWN("volume_down", "הנמכת ווליום"),
-    SETTINGS("settings", "הגדרות"),
-    DIALER("dialer", "פתיחת חייגן"),
+    HOME("home", "בית"), BACK("back", "חזרה"), RECENTS("recents", "יישומים אחרונים"),
+    NOTIFICATIONS("notifications", "פתיחת התראות"), MEDIA_PLAY_PAUSE("media_play_pause", "נגן / השהה"),
+    MEDIA_NEXT("media_next", "השיר הבא"), MEDIA_PREVIOUS("media_previous", "השיר הקודם"),
+    VOLUME_UP("volume_up", "הגברת ווליום"), VOLUME_DOWN("volume_down", "הנמכת ווליום"),
+    SETTINGS("settings", "הגדרות"), DIALER("dialer", "פתיחת חייגן")
 }
 
 data class KeyActionConfig(
@@ -64,25 +46,18 @@ data class KeyActionConfig(
     val screenTapAppName: String = "",
     val screenTapXRatio: Float = -1f,
     val screenTapYRatio: Float = -1f,
-    val screenTapToleranceRatio: Float = 0.08f,
+    val screenTapToleranceRatio: Float = 0.08f
 ) {
-    fun pressSummary(): String = if (pressCount == 1) "כניסה אחת" else "$pressCount כניסות"
-
-    fun actionSummary(): String {
-        return when (actionType) {
-            ActionType.SYSTEM ->
-                SystemActionPreset.entries.firstOrNull { it.id == systemActionId }?.titleHebrew ?: "פעולת מערכת"
-            ActionType.APP ->
-                "פתיחת " + targetAppName.ifBlank { "אפליקציה" }
-        }
+    fun pressSummary(): String = if (pressCount == 1) "כניסה אחת" else pressCount.toString() + " כניסות"
+    fun actionSummary(): String = when (actionType) {
+        ActionType.SYSTEM -> SystemActionPreset.entries.firstOrNull { it.id == systemActionId }?.titleHebrew ?: "פעולת מערכת"
+        ActionType.APP -> "פתיחת " + targetAppName.ifBlank { "אפליקציה" }
     }
-
     fun contextSummary(): String {
         if (triggerType == TriggerType.SCREEN_TAP) {
-            val x = if (screenTapXRatio >= 0f) "${(screenTapXRatio * 100f).toInt()}%" else "לא הוגדר"
-            val y = if (screenTapYRatio >= 0f) "${(screenTapYRatio * 100f).toInt()}%" else "לא הוגדר"
-            val appLabel = screenTapAppName.ifBlank { "אפליקציה" }
-            return "לחיצה ב-$appLabel · X $x · Y $y"
+            val x = if (screenTapXRatio >= 0f) (screenTapXRatio * 100f).toInt().toString() + "%" else "לא הוגדר"
+            val y = if (screenTapYRatio >= 0f) (screenTapYRatio * 100f).toInt().toString() + "%" else "לא הוגדר"
+            return "לחיצה ב-" + screenTapAppName.ifBlank { "אפליקציה" } + " · X " + x + " · Y " + y
         }
         return when (contextConditionType) {
             ContextConditionType.ANY -> "בכל מצב"
@@ -93,62 +68,36 @@ data class KeyActionConfig(
             ContextConditionType.RADIO -> "רדיו: " + contextConditionName.ifBlank { "האפליקציה שנבחרה" }
         }
     }
-
     fun toJson() = JSONObject().apply {
-        put("id", id)
-        put("name", name)
-        put("pressCount", pressCount)
-        put("actionType", actionType.name)
-        put("systemActionId", systemActionId)
-        put("targetPackage", targetPackage)
-        put("targetAppName", targetAppName)
+        put("id", id); put("name", name); put("pressCount", pressCount)
+        put("actionType", actionType.name); put("systemActionId", systemActionId)
+        put("targetPackage", targetPackage); put("targetAppName", targetAppName)
         put("contextConditionType", contextConditionType.name)
-        put("contextConditionValue", contextConditionValue)
-        put("contextConditionName", contextConditionName)
-        put("enabled", enabled)
-        put("triggerType", triggerType.name)
-        put("screenTapPackage", screenTapPackage)
-        put("screenTapAppName", screenTapAppName)
-        put("screenTapXRatio", screenTapXRatio)
-        put("screenTapYRatio", screenTapYRatio)
+        put("contextConditionValue", contextConditionValue); put("contextConditionName", contextConditionName)
+        put("enabled", enabled); put("triggerType", triggerType.name)
+        put("screenTapPackage", screenTapPackage); put("screenTapAppName", screenTapAppName)
+        put("screenTapXRatio", screenTapXRatio); put("screenTapYRatio", screenTapYRatio)
         put("screenTapToleranceRatio", screenTapToleranceRatio)
     }
-
     companion object {
         fun fromJson(json: JSONObject) = KeyActionConfig(
             id = json.optString("id", java.util.UUID.randomUUID().toString()),
             name = json.optString("name", json.optString("customLabel", "")),
             pressCount = json.optInt("pressCount", json.optInt("tapCount", 1)).coerceIn(1, 10),
-            actionType = runCatching {
-                ActionType.valueOf(
-                    json.optString(
-                        "actionType",
-                        if (json.has("targetPackage")) ActionType.APP.name else ActionType.SYSTEM.name,
-                    ),
-                )
-            }.getOrDefault(ActionType.SYSTEM),
+            actionType = runCatching { ActionType.valueOf(json.optString("actionType", ActionType.SYSTEM.name)) }.getOrDefault(ActionType.SYSTEM),
             systemActionId = json.optString("systemActionId", SystemActionPreset.HOME.id),
             targetPackage = json.optString("targetPackage", ""),
             targetAppName = json.optString("targetAppName", ""),
-            contextConditionType = runCatching {
-                ContextConditionType.valueOf(
-                    json.optString("contextConditionType", ContextConditionType.ANY.name),
-                )
-            }.getOrDefault(ContextConditionType.ANY),
+            contextConditionType = runCatching { ContextConditionType.valueOf(json.optString("contextConditionType", ContextConditionType.ANY.name)) }.getOrDefault(ContextConditionType.ANY),
             contextConditionValue = json.optString("contextConditionValue", ""),
             contextConditionName = json.optString("contextConditionName", ""),
             enabled = json.optBoolean("enabled", json.optBoolean("isEnabled", true)),
-            triggerType = runCatching {
-                TriggerType.valueOf(
-                    json.optString("triggerType", TriggerType.APP_ENTRY.name),
-                )
-            }.getOrDefault(TriggerType.APP_ENTRY),
+            triggerType = runCatching { TriggerType.valueOf(json.optString("triggerType", TriggerType.APP_ENTRY.name)) }.getOrDefault(TriggerType.APP_ENTRY),
             screenTapPackage = json.optString("screenTapPackage", ""),
             screenTapAppName = json.optString("screenTapAppName", ""),
             screenTapXRatio = json.optDouble("screenTapXRatio", -1.0).toFloat(),
             screenTapYRatio = json.optDouble("screenTapYRatio", -1.0).toFloat(),
-            screenTapToleranceRatio =
-                json.optDouble("screenTapToleranceRatio", 0.08).toFloat().coerceIn(0.01f, 0.25f),
+            screenTapToleranceRatio = json.optDouble("screenTapToleranceRatio", 0.08).toFloat().coerceIn(0.01f, 0.25f)
         )
     }
 }
@@ -160,57 +109,46 @@ class AppPreferencesRepository(private val context: Context) {
         val SHOW_TAP_COUNT = booleanPreferencesKey("show_tap_count")
         val MAPPINGS_JSON = stringPreferencesKey("mappings_json")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+
+        fun mappingsSnapshot(context: Context): List<KeyActionConfig> {
+            val raw = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                .getString("mappings_json", "[]") ?: "[]"
+            return runCatching {
+                val array = JSONArray(raw)
+                buildList {
+                    for (i in 0 until array.length()) {
+                        array.optJSONObject(i)?.let { add(KeyActionConfig.fromJson(it)) }
+                    }
+                }
+            }.getOrDefault(emptyList())
+        }
     }
 
-    val backgroundOnlyFlow: Flow<Boolean> =
-        context.dataStore.data.map { it[BACKGROUND_ONLY] ?: true }
-
-    val tapTimeoutFlow: Flow<Long> =
-        context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 650L }
-
-    val showTapCountFlow: Flow<Boolean> =
-        context.dataStore.data.map { it[SHOW_TAP_COUNT] ?: false }
-
-    val mappingsFlow: Flow<List<KeyActionConfig>> =
-        context.dataStore.data.map { prefs ->
-            val array = runCatching {
-                JSONArray(prefs[MAPPINGS_JSON] ?: "[]")
-            }.getOrDefault(JSONArray())
-
-            buildList {
-                for (i in 0 until array.length()) {
-                    runCatching { add(KeyActionConfig.fromJson(array.getJSONObject(i))) }
-                }
+    val backgroundOnlyFlow: Flow<Boolean> = context.dataStore.data.map { it[BACKGROUND_ONLY] ?: true }
+    val tapTimeoutFlow: Flow<Long> = context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 650L }
+    val showTapCountFlow: Flow<Boolean> = context.dataStore.data.map { it[SHOW_TAP_COUNT] ?: false }
+    val mappingsFlow: Flow<List<KeyActionConfig>> = context.dataStore.data.map { prefs ->
+        val array = runCatching { JSONArray(prefs[MAPPINGS_JSON] ?: "[]") }.getOrDefault(JSONArray())
+        buildList {
+            for (i in 0 until array.length()) {
+                runCatching { array.getJSONObject(i) }.getOrNull()?.let { add(KeyActionConfig.fromJson(it)) }
             }
         }
-
-    val onboardingCompletedFlow: Flow<Boolean> =
-        context.dataStore.data.map { it[ONBOARDING_COMPLETED] ?: false }
+    }
+    val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { it[ONBOARDING_COMPLETED] ?: false }
 
     suspend fun saveBackgroundOnly(enabled: Boolean) {
-        val alwaysOn = true
-        context.dataStore.edit { it[BACKGROUND_ONLY] = alwaysOn }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean("background_only", alwaysOn)
-            .apply()
+        context.dataStore.edit { it[BACKGROUND_ONLY] = true }
+        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE).edit().putBoolean("background_only", true).apply()
     }
-
-    suspend fun saveTapTimeout(ms: Long) {
-        context.dataStore.edit { it[TAP_TIMEOUT_MS] = ms.coerceIn(300L, 1200L) }
-    }
-
-    suspend fun saveShowTapCount(enabled: Boolean) {
-        context.dataStore.edit { it[SHOW_TAP_COUNT] = enabled }
-    }
-
-    suspend fun setOnboardingCompleted(completed: Boolean) {
-        context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed }
-    }
-
+    suspend fun saveTapTimeout(ms: Long) { context.dataStore.edit { it[TAP_TIMEOUT_MS] = ms.coerceIn(300L, 1500L) } }
+    suspend fun saveShowTapCount(enabled: Boolean) { context.dataStore.edit { it[SHOW_TAP_COUNT] = enabled } }
+    suspend fun setOnboardingCompleted(completed: Boolean) { context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed } }
     suspend fun saveMappings(mappings: List<KeyActionConfig>) {
         val array = JSONArray()
         mappings.forEach { array.put(it.toJson()) }
-        context.dataStore.edit { it[MAPPINGS_JSON] = array.toString() }
+        val raw = array.toString()
+        context.dataStore.edit { it[MAPPINGS_JSON] = raw }
+        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE).edit().putString("mappings_json", raw).apply()
     }
 }
