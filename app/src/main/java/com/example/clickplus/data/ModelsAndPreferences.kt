@@ -36,9 +36,31 @@ enum class HudStyle(val titleHebrew: String) {
 
 enum class ThemeOption(val titleHebrew: String) {
     AUTO("אוטומטי"),
-    DARK_OLED("שחור OLED"),
-    LIGHT("בהיר")
+    LIGHT("בהיר"),
+    DARK("כהה"),
+    DARK_OLED("שחור OLED")
 }
+
+enum class SystemActionPreset(val id: String, val titleHebrew: String, val legacyKeyCode: Int = 0) {
+    HOME("home", "בית", KeyEvent.KEYCODE_HOME),
+    BACK("back", "חזרה", KeyEvent.KEYCODE_BACK),
+    RECENTS("recents", "יישומים אחרונים", KeyEvent.KEYCODE_APP_SWITCH),
+    NOTIFICATIONS("notifications", "פתיחת התראות", KeyEvent.KEYCODE_NOTIFICATION),
+    MEDIA_PLAY_PAUSE("media_play_pause", "נגן / השהה מדיה", KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE),
+    MEDIA_NEXT("media_next", "רצועה הבאה"),
+    MEDIA_PREVIOUS("media_previous", "רצועה קודמת"),
+    VOLUME_UP("volume_up", "הגברת ווליום", KeyEvent.KEYCODE_VOLUME_UP),
+    VOLUME_DOWN("volume_down", "הנמכת ווליום", KeyEvent.KEYCODE_VOLUME_DOWN),
+    WIFI_SETTINGS("wifi_settings", "פתיחת הגדרות Wi‑Fi"),
+    SETTINGS("settings", "פתיחת הגדרות"),
+    DIALER("dialer", "פתיחת חייגן"),
+    FLASHLIGHT("flashlight", "הדלקה / כיבוי פנס")
+}
+
+fun systemActionTitle(id: String, legacyKeyCode: Int = 0): String =
+    SystemActionPreset.entries.firstOrNull { it.id == id }?.titleHebrew
+        ?: SystemActionPreset.entries.firstOrNull { it.legacyKeyCode == legacyKeyCode }?.titleHebrew
+        ?: "פעולת מערכת"
 
 enum class SystemActionPreset(val titleHebrew: String, val keyCode: Int) {
     HOME("בית", KeyEvent.KEYCODE_HOME),
