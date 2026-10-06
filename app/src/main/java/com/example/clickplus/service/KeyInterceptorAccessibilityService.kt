@@ -122,9 +122,20 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         }
     }
 
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        instance = this
+        consumePendingLaunches()
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
 
     override fun onInterrupt() = Unit
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        // מבקש מ-Android לחבר מחדש את שירות הנגישות אם החיבור נותק.
+        return true
+    }
 
     override fun onDestroy() {
         if (instance === this) instance = null
