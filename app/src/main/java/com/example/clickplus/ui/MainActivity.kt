@@ -482,8 +482,11 @@ private fun NumberChoice(
         },
         border = BorderStroke(
             1.dp,
-            if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.outline,
+            if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outline
+            },
         ),
         tonalElevation = if (selected) 2.dp else 0.dp,
     ) {
