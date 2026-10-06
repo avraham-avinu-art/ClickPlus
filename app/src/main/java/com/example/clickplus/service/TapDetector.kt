@@ -29,10 +29,7 @@ class TapDetector(
 
     fun processActivationLaunch() {
         val all = profiles
-        if (all.isEmpty()) {
-            KeyInterceptorAccessibilityService.instance?.openMainInterface()
-            return
-        }
+        if (all.isEmpty()) return
 
         val now = System.currentTimeMillis()
         if (now - lastLaunchTime < 100L) return
