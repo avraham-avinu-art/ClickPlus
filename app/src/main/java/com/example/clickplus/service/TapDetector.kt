@@ -1,35 +1,33 @@
 package com.example.clickplus.service
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Rect
 import android.media.AudioManager
 import android.telephony.TelephonyManager
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
+import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.ContextConditionType
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.TriggerType
+import kotlin.math.sqrt
 
 class TapDetector(
     private val context: Context,
-    private val actionExecutor: ActionExecutor,
+    private val actionExecutor: RuleExecutionCoordinator,
     private val onTapCount: (Int) -> Unit = {},
 ) {
     var tapTimeoutMs = 650L
-
     private var tapCount = 0
     private var lastLaunchTime = 0L
     private val handler = Handler(Looper.getMainLooper())
-    private val resetRunnable = Runnable {
-        tapCount = 0
-    }
-
+    private val resetRunnable = Runnable { tapCount = 0 }
     private val screenTapCounts = mutableMapOf<String, Int>()
-    private val screenTapResetRunnables = mutableMapOf<String, Runnable>()
-    private val screenTapLastEventTimes = mutableMapOf<String, Long>()
-
+    private val screenReset = mutableMapOf<String, Runnable>()
     private var profiles = emptyList<KeyActionConfig>()
+    private val advanced = AdvancedRuleRepository(context)
 
     fun updateProfiles(newProfiles: List<KeyActionConfig>) {
         profiles = newProfiles.filter { it.enabled }
@@ -47,9 +45,16 @@ class TapDetector(
         handler.removeCallbacks(resetRunnable)
         onTapCount(tapCount)
 
-        val current = selectProfile(all, tapCount, previousForegroundPackage)
-        if (current != null) {
-            actionExecutor.execute(current)
+        val matching = all.filter { it.pressCount == tapCount && contextMatches(it, previousForegroundPackage) }
+            .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
+
+        val chosen = matching.firstOrNull { it.contextConditionType != ContextConditionType.ANY }
+            ?: all.filter { it.pressCount == tapCount && it.contextConditionType == ContextConditionType.ANY }
+                .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
+                .firstOrNull()
+
+        if (chosen != null) {
+            actionExecutor.execute(chosen, previousForegroundPackage, "כניסה ל-ClickPlus")
         }
 
         handler.postDelayed(resetRunnable, tapTimeoutMs.coerceIn(300L, 1500L))
@@ -58,105 +63,66 @@ class TapDetector(
     fun processViewClicked(event: AccessibilityEvent) {
         val all = profiles.filter { it.triggerType == TriggerType.SCREEN_TAP }
         if (all.isEmpty()) return
-
+        val packageName = event.packageName?.toString().orEmpty()
         val source = event.source ?: return
         val bounds = Rect()
-        runCatching { source.getBoundsInScreen(bounds) }.getOrNull()
+        runCatching { source.getBoundsInScreen(bounds) }.getOrNull() ?: return
         if (bounds.isEmpty) return
 
-        val eventPackage = event.packageName?.toString().orEmpty()
-        val metrics = context.resources.displayMetrics
-        val width = metrics.widthPixels.coerceAtLeast(1).toFloat()
-        val height = metrics.heightPixels.coerceAtLeast(1).toFloat()
-        val centerXRatio = (bounds.centerX() / width).coerceIn(0f, 1f)
-        val centerYRatio = (bounds.centerY() / height).coerceIn(0f, 1f)
+        val width = context.resources.displayMetrics.widthPixels.coerceAtLeast(1).toFloat()
+        val height = context.resources.displayMetrics.heightPixels.coerceAtLeast(1).toFloat()
+        val xRatio = (bounds.centerX() / width).coerceIn(0f, 1f)
+        val yRatio = (bounds.centerY() / height).coerceIn(0f, 1f)
 
-        val now = System.currentTimeMillis()
-        all.forEach { config ->
-            if (config.screenTapPackage.isNotBlank() &&
-                config.screenTapPackage != eventPackage
-            ) {
-                return@forEach
-            }
+        val matches = all
+            .filter { it.screenTapPackage.isBlank() || it.screenTapPackage == packageName }
+            .filter { tapLocationMatches(it, xRatio, yRatio) }
+            .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
 
-            if (!tapLocationMatches(config, centerXRatio, centerYRatio)) {
-                return@forEach
-            }
-
-            val lastEvent = screenTapLastEventTimes[config.id] ?: 0L
-            if (now - lastEvent < 120L) return@forEach
-            screenTapLastEventTimes[config.id] = now
-
+        matches.forEach { config ->
             val count = (screenTapCounts[config.id] ?: 0) + 1
             screenTapCounts[config.id] = count
             onTapCount(count)
+            screenReset[config.id]?.let(handler::removeCallbacks)
 
-            val reset = screenTapResetRunnables[config.id]
-            if (reset != null) handler.removeCallbacks(reset)
-
-            val newReset = Runnable {
+            val reset = Runnable {
                 screenTapCounts.remove(config.id)
-                screenTapResetRunnables.remove(config.id)
+                screenReset.remove(config.id)
             }
-            screenTapResetRunnables[config.id] = newReset
-            handler.postDelayed(newReset, tapTimeoutMs.coerceIn(300L, 1500L))
+            screenReset[config.id] = reset
+            handler.postDelayed(reset, tapTimeoutMs.coerceIn(300L, 1500L))
 
             if (count >= config.pressCount) {
                 screenTapCounts.remove(config.id)
-                screenTapResetRunnables.remove(config.id)
-                handler.removeCallbacks(newReset)
-                actionExecutor.execute(config)
+                screenReset.remove(config.id)
+                handler.removeCallbacks(reset)
+                actionExecutor.execute(config, packageName, "לחיצה במיקום במסך")
             }
         }
     }
 
-    private fun tapLocationMatches(
-        config: KeyActionConfig,
-        xRatio: Float,
-        yRatio: Float,
-    ): Boolean {
+    private fun tapLocationMatches(config: KeyActionConfig, xRatio: Float, yRatio: Float): Boolean {
         if (config.screenTapXRatio < 0f || config.screenTapYRatio < 0f) return false
-        val dx = xRatio - config.screenTapXRatio
-        val dy = yRatio - config.screenTapYRatio
-        val distance = kotlin.math.sqrt(dx * dx + dy * dy)
-        return distance <= config.screenTapToleranceRatio.coerceIn(0.01f, 0.25f)
+        val meta = advanced.getRuleMetadata(config.id)
+        val orientation = context.resources.configuration.orientation
+        val targetX = if (orientation == Configuration.ORIENTATION_LANDSCAPE && meta.landscapeX >= 0f) meta.landscapeX
+        else if (orientation != Configuration.ORIENTATION_LANDSCAPE && meta.portraitX >= 0f) meta.portraitX
+        else config.screenTapXRatio
+        val targetY = if (orientation == Configuration.ORIENTATION_LANDSCAPE && meta.landscapeY >= 0f) meta.landscapeY
+        else if (orientation != Configuration.ORIENTATION_LANDSCAPE && meta.portraitY >= 0f) meta.portraitY
+        else config.screenTapYRatio
+        val dx = xRatio - targetX
+        val dy = yRatio - targetY
+        return sqrt(dx * dx + dy * dy) <= config.screenTapToleranceRatio.coerceIn(0.01f, 0.25f)
     }
 
-    private fun selectProfile(
-        all: List<KeyActionConfig>,
-        count: Int,
-        foregroundPackage: String,
-    ): KeyActionConfig? {
-        val matchingCount = all.filter { it.pressCount == count }
-        if (matchingCount.isEmpty()) return null
-
-        val specific = matchingCount
-            .asSequence()
-            .filter { it.contextConditionType != ContextConditionType.ANY }
-            .filter { contextMatches(it, foregroundPackage) }
-            .firstOrNull()
-
-        return specific ?: matchingCount.firstOrNull {
-            it.contextConditionType == ContextConditionType.ANY
-        }
-    }
-
-    private fun contextMatches(
-        config: KeyActionConfig,
-        foregroundPackage: String,
-    ): Boolean {
+    private fun contextMatches(config: KeyActionConfig, foregroundPackage: String): Boolean {
         return when (config.contextConditionType) {
             ContextConditionType.ANY -> true
-
             ContextConditionType.APP ->
-                foregroundPackage.isNotBlank() &&
-                    foregroundPackage == config.contextConditionValue
-
-            ContextConditionType.MUSIC -> {
-                val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                audio?.isMusicActive == true
-            }
-
+                foregroundPackage.isNotBlank() && foregroundPackage == config.contextConditionValue
+            ContextConditionType.MUSIC ->
+                (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.isMusicActive == true
             ContextConditionType.MUTED -> {
                 val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
                 audio?.let {
@@ -164,27 +130,17 @@ class TapDetector(
                         it.getStreamVolume(AudioManager.STREAM_MUSIC) == 0
                 } == true
             }
-
             ContextConditionType.RINGING -> {
-                val telephony =
-                    context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
-                runCatching {
-                    telephony?.callState == TelephonyManager.CALL_STATE_RINGING
-                }.getOrDefault(false)
+                val telephony = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+                runCatching { telephony?.callState == TelephonyManager.CALL_STATE_RINGING }.getOrDefault(false)
             }
-
             ContextConditionType.RADIO -> {
                 val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                val currentPackage = foregroundPackage
+                val value = foregroundPackage.lowercase()
                 audio?.isMusicActive == true &&
                     if (config.contextConditionValue.isBlank()) {
-                        currentPackage.lowercase().let {
-                            it.contains("radio") || it.contains("fm") ||
-                                it.contains("dab") || it.contains("tuner")
-                        }
-                    } else {
-                        currentPackage == config.contextConditionValue
-                    }
+                        value.contains("radio") || value.contains("fm") || value.contains("dab") || value.contains("tuner")
+                    } else foregroundPackage == config.contextConditionValue
             }
         }
     }
