@@ -2,6 +2,7 @@ package com.example.clickplus.service
 
 import android.os.Handler
 import android.os.Looper
+import android.view.KeyEvent
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.OperationMode
 
@@ -9,70 +10,100 @@ class TapDetector(
     private val actionExecutor: ActionExecutor,
     private val overlayManager: OverlayManager
 ) {
+    companion object {
+        const val LONG_PRESS_MS = 600L
+    }
+
     var currentMode = OperationMode.MODE_A_MULTI_TAP
     var tapTimeoutMs = 450L
     var debounceMs = 80L
     var activeProfile = "DEFAULT"
 
     private var tapCount = 0
+    private var activeKeyCode = -1
     private var lastKeyPressTime = 0L
-    private var lastKeyCode = -1
-    private val handler = Handler(Looper.getMainLooper())
-    private var mappings = mutableListOf<KeyActionConfig>()
+    private var keyDownTime = 0L
+    private var longPressTriggered = false
 
-    private val timeoutRunnable = Runnable { executeCurrentTapAction() }
+    private val handler = Handler(Looper.getMainLooper())
+    private var mappings = emptyList<KeyActionConfig>()
+
+    private val tapTimeoutRunnable = Runnable { resolveTapSequence() }
+    private val longPressRunnable = Runnable { resolveLongPress() }
 
     fun updateMappings(newMappings: List<KeyActionConfig>) {
-        mappings = newMappings.filter { it.isEnabled }.toMutableList()
+        mappings = newMappings.filter { it.isEnabled }
     }
 
-    fun processKeyEvent(keyCode: Int): Boolean {
+    fun processKeyEvent(event: KeyEvent): Boolean {
+        val keyCode = event.keyCode
         val now = System.currentTimeMillis()
-
-        if (now - lastKeyPressTime < debounceMs) {
-            return true
-        }
-
         val activeMappings = mappings.filter {
             it.profileName == activeProfile || it.profileName == "DEFAULT"
         }
 
-        if (activeMappings.none { it.triggerKeyCode == keyCode }) {
-            return false
-        }
+        val keyIsMapped = activeMappings.any { it.triggerKeyCode == keyCode }
+        if (!keyIsMapped) return false
 
-        if (keyCode != lastKeyCode && tapCount > 0) {
-            tapCount = 0
-        }
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (now - lastKeyPressTime < debounceMs) return true
 
-        lastKeyCode = keyCode
-        lastKeyPressTime = now
+            lastKeyPressTime = now
+            activeKeyCode = keyCode
+            keyDownTime = now
+            longPressTriggered = false
 
-        if (currentMode == OperationMode.MODE_B_CONFIRMATION) {
-            val config = activeMappings.firstOrNull {
-                it.triggerKeyCode == keyCode && it.tapCount == 1
+            val hasLong = activeMappings.any {
+                it.triggerKeyCode == keyCode && it.tapCount == 0
             }
 
-            if (config != null) {
-                overlayManager.showPill(
-                    "נדרש אישור",
-                    config.customLabel.ifBlank { config.keyNameHebrew }
-                )
-                handler.removeCallbacks(timeoutRunnable)
-                handler.postDelayed({
-                    actionExecutor.execute(config)
-                    overlayManager.showPill(
-                        "בוצע",
-                        config.customLabel.ifBlank { config.keyNameHebrew }
-                    )
-                }, 250L)
+            handler.removeCallbacks(longPressRunnable)
+            if (hasLong) {
+                handler.postDelayed(longPressRunnable, LONG_PRESS_MS)
             }
 
+            if (!hasLong) {
+                registerTap(activeMappings, keyCode)
+            } else {
+                overlayManager.showPill("לחיצה", "ממתין…")
+            }
             return true
         }
 
-        handler.removeCallbacks(timeoutRunnable)
-        tapCount++
+        if (event.action == KeyEvent.ACTION_UP) {
+            if (keyCode != activeKeyCode) return true
+
+            handler.removeCallbacks(longPressRunnable)
+
+            if (longPressTriggered) {
+                reset()
+                return true
+            }
+
+            val duration = now - keyDownTime
+            if (duration < LONG_PRESS_MS) {
+                if (activeMappings.any {
+                        it.triggerKeyCode == keyCode && it.tapCount == 1
+                    } || activeMappings.any {
+                        it.triggerKeyCode == keyCode && it.tapCount == 2
+                    }
+                ) {
+                    registerTap(activeMappings, keyCode)
+                }
+            }
+            return true
+        }
+
+        return true
+    }
+
+    private fun registerTap(activeMappings: List<KeyActionConfig>, keyCode: Int) {
+        if (keyCode != activeKeyCode && tapCount > 0) {
+            tapCount = 0
+        }
+
+        activeKeyCode = keyCode
+        tapCount += 1
 
         val matching = activeMappings.firstOrNull {
             it.triggerKeyCode == keyCode && it.tapCount == tapCount
@@ -80,30 +111,85 @@ class TapDetector(
 
         overlayManager.showPill(
             "לחיצה #$tapCount",
-            matching?.customLabel ?: ""
+            matching?.customLabel.orEmpty()
         )
 
-        handler.postDelayed(timeoutRunnable, tapTimeoutMs)
-        return true
+        handler.removeCallbacks(tapTimeoutRunnable)
+
+        if (matching != null || activeMappings.any {
+                it.triggerKeyCode == keyCode && it.tapCount == 1
+            }) {
+            handler.postDelayed(tapTimeoutRunnable, tapTimeoutMs)
+        }
     }
 
-    private fun executeCurrentTapAction() {
-        val config = mappings.firstOrNull {
-            (it.profileName == activeProfile || it.profileName == "DEFAULT") &&
-                it.triggerKeyCode == lastKeyCode &&
+    private fun resolveTapSequence() {
+        val activeMappings = mappings.filter {
+            it.profileName == activeProfile || it.profileName == "DEFAULT"
+        }
+
+        val config = activeMappings.firstOrNull {
+            it.triggerKeyCode == activeKeyCode &&
                 it.tapCount == tapCount &&
+                it.tapCount > 0 &&
                 it.isEnabled
         }
 
         if (config != null) {
-            actionExecutor.execute(config)
-            overlayManager.showPill(
-                "בוצע",
-                config.customLabel.ifBlank { config.keyNameHebrew }
-            )
+            if (currentMode == OperationMode.MODE_B_CONFIRMATION) {
+                overlayManager.showPill(
+                    "נדרש אישור",
+                    config.customLabel.ifBlank { config.keyNameHebrew }
+                )
+                handler.postDelayed({
+                    actionExecutor.execute(config)
+                    overlayManager.showPill(
+                        "בוצע",
+                        config.customLabel.ifBlank { config.keyNameHebrew }
+                    )
+                }, 250L)
+            } else {
+                actionExecutor.execute(config)
+                overlayManager.showPill(
+                    "בוצע",
+                    config.customLabel.ifBlank { config.keyNameHebrew }
+                )
+            }
         }
 
+        reset()
+    }
+
+    private fun resolveLongPress() {
+        val activeMappings = mappings.filter {
+            it.profileName == activeProfile || it.profileName == "DEFAULT"
+        }
+
+        val config = activeMappings.firstOrNull {
+            it.triggerKeyCode == activeKeyCode &&
+                it.tapCount == 0 &&
+                it.isEnabled
+        } ?: return
+
+        longPressTriggered = true
+        handler.removeCallbacks(tapTimeoutRunnable)
+        overlayManager.showPill(
+            "לחיצה ארוכה",
+            config.customLabel.ifBlank { config.keyNameHebrew }
+        )
+        actionExecutor.execute(config)
+        overlayManager.showPill(
+            "בוצע",
+            config.customLabel.ifBlank { config.keyNameHebrew }
+        )
+    }
+
+    private fun reset() {
+        handler.removeCallbacks(tapTimeoutRunnable)
+        handler.removeCallbacks(longPressRunnable)
         tapCount = 0
-        lastKeyCode = -1
+        activeKeyCode = -1
+        keyDownTime = 0L
+        longPressTriggered = false
     }
 }
