@@ -152,6 +152,11 @@ class DashboardActivity : ComponentActivity() {
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 90)
         }
+        getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+            .edit()
+            .putBoolean("first_ui_opened", true)
+            .putBoolean("background_only", false)
+            .apply()
         setContent { ClickPlusDashboard() }
     }
 }
