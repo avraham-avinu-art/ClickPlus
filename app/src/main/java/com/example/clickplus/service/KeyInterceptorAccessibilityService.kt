@@ -101,7 +101,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             NotificationCompat.Builder(this, channelId)
                 .setContentTitle("קליק פלוס פעיל")
                 .setContentText("עובד ברקע וממתין לכניסה לאפליקציה")
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(android.R.drawable.ic_menu_manage)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .build(),
