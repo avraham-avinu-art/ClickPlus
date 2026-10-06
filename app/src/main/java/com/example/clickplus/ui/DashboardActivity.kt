@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -987,13 +988,33 @@ private fun EditorScreen(
             }
             item {
                 SettingCard("מתי להפעיל?", "בחר סוג טריגר ואת מספר הכניסות/לחיצות.") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        FilterChip(selected = draft.triggerType == TriggerType.APP_ENTRY, onClick = { draft = draft.copy(triggerType = TriggerType.APP_ENTRY) }, label = { Text("כניסה") })
-                        FilterChip(selected = draft.triggerType == TriggerType.SCREEN_TAP, onClick = { draft = draft.copy(triggerType = TriggerType.SCREEN_TAP) }, label = { Text("מיקום מסך") })
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterChip(
+                            selected = draft.triggerType == TriggerType.APP_ENTRY,
+                            onClick = { draft = draft.copy(triggerType = TriggerType.APP_ENTRY) },
+                            label = { Text("כניסה", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        )
+                        FilterChip(
+                            selected = draft.triggerType == TriggerType.SCREEN_TAP,
+                            onClick = { draft = draft.copy(triggerType = TriggerType.SCREEN_TAP) },
+                            label = { Text("מיקום מסך", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        )
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         (1..5).forEach { n ->
-                            FilterChip(selected = draft.pressCount == n, onClick = { draft = draft.copy(pressCount = n) }, label = { Text(n.toString()) })
+                            FilterChip(
+                                selected = draft.pressCount == n,
+                                onClick = { draft = draft.copy(pressCount = n) },
+                                label = { Text(n.toString(), maxLines = 1) },
+                            )
                         }
                     }
                 }
@@ -1001,12 +1022,16 @@ private fun EditorScreen(
             if (draft.triggerType == TriggerType.APP_ENTRY) {
                 item {
                     SettingCard("באיזה מצב?", "התאמה לאפליקציה/מצב לפני הכניסה ל־ClickPlus.") {
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             ContextConditionType.entries.forEach { type ->
                                 FilterChip(
                                     selected = draft.contextConditionType == type,
                                     onClick = { draft = draft.copy(contextConditionType = type) },
-                                    label = { Text(type.titleHebrew) },
+                                    label = { Text(type.titleHebrew, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 )
                             }
                         }
@@ -1046,9 +1071,13 @@ private fun EditorScreen(
                             Text(if (draft.screenTapPackage.isBlank()) "בחירת אפליקציה ולימוד" else "למד מיקום לחיצה")
                         }
                         if (learning) Text("שכבת לימוד פעילה: לחץ על היעד באפליקציה שנפתחה.", fontWeight = FontWeight.Bold)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(selected = orientation == "portrait", onClick = { orientation = "portrait" }, label = { Text("אנכי") })
-                            FilterChip(selected = orientation == "landscape", onClick = { orientation = "landscape" }, label = { Text("אופקי") })
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FilterChip(selected = orientation == "portrait", onClick = { orientation = "portrait" }, label = { Text("אנכי", maxLines = 1) })
+                            FilterChip(selected = orientation == "landscape", onClick = { orientation = "landscape" }, label = { Text("אופקי", maxLines = 1) })
                         }
                         if (draft.screenTapPackage.isNotBlank()) {
                             Text(draft.screenTapAppName, fontWeight = FontWeight.Bold)
@@ -1070,9 +1099,13 @@ private fun EditorScreen(
             }
             item {
                 SettingCard("מה לבצע?", "הפעולה עצמה לאחר התאמת הכלל.") {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = draft.actionType == ActionType.SYSTEM, onClick = { draft = draft.copy(actionType = ActionType.SYSTEM) }, label = { Text("מערכת") })
-                        FilterChip(selected = draft.actionType == ActionType.APP, onClick = { draft = draft.copy(actionType = ActionType.APP) }, label = { Text("אפליקציה") })
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterChip(selected = draft.actionType == ActionType.SYSTEM, onClick = { draft = draft.copy(actionType = ActionType.SYSTEM) }, label = { Text("מערכת", maxLines = 1) })
+                        FilterChip(selected = draft.actionType == ActionType.APP, onClick = { draft = draft.copy(actionType = ActionType.APP) }, label = { Text("אפליקציה", maxLines = 1) })
                     }
                     if (draft.actionType == ActionType.SYSTEM) {
                         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).height(220.dp)) {
@@ -1095,18 +1128,18 @@ private fun EditorScreen(
             item {
                 SettingCard("אפשרויות מתקדמות", "התנהגות מדויקת יותר לכלל.") {
                     Text("עדיפות: " + metadata.priority)
-                    Slider(value = metadata.priority.toFloat(), onValueChange = { metadata = metadata.copy(priority = it.toInt()) }, valueRange = 0f..10f, steps = 9)
+                    Slider(value = metadata.priority.coerceIn(0, 10).toFloat(), onValueChange = { metadata = metadata.copy(priority = it.toInt().coerceIn(0, 10)) }, valueRange = 0f..10f, steps = 9)
                     Text("Cooldown: " + metadata.cooldownMs + "ms")
-                    Slider(value = metadata.cooldownMs.toFloat(), onValueChange = { metadata = metadata.copy(cooldownMs = it.toLong()) }, valueRange = 0f..10000f, steps = 9)
+                    Slider(value = metadata.cooldownMs.coerceIn(0L, 10000L).toFloat(), onValueChange = { metadata = metadata.copy(cooldownMs = it.toLong().coerceIn(0L, 60000L)) }, valueRange = 0f..10000f, steps = 9)
                     Text("השהיה לפני פעולה: " + metadata.delayMs + "ms")
-                    Slider(value = metadata.delayMs.toFloat(), onValueChange = { metadata = metadata.copy(delayMs = it.toLong()) }, valueRange = 0f..5000f, steps = 9)
+                    Slider(value = metadata.delayMs.coerceIn(0L, 5000L).toFloat(), onValueChange = { metadata = metadata.copy(delayMs = it.toLong().coerceIn(0L, 10000L)) }, valueRange = 0f..5000f, steps = 9)
                     Text("ניסיונות: " + metadata.retries)
-                    Slider(value = metadata.retries.toFloat(), onValueChange = { metadata = metadata.copy(retries = it.toInt().coerceIn(1,3)) }, valueRange = 1f..3f, steps = 1)
+                    Slider(value = metadata.retries.coerceIn(1, 3).toFloat(), onValueChange = { metadata = metadata.copy(retries = it.toInt().coerceIn(1, 3)) }, valueRange = 1f..3f, steps = 1)
                     if (draft.triggerType == TriggerType.SCREEN_TAP) {
                         Text("רוחב אזור התאמה: " + (metadata.toleranceXRatio * 100f).toInt() + "%")
-                        Slider(value = metadata.toleranceXRatio, onValueChange = { metadata = metadata.copy(toleranceXRatio = it) }, valueRange = 0.01f..0.25f)
+                        Slider(value = metadata.toleranceXRatio.coerceIn(0.01f, 0.25f), onValueChange = { metadata = metadata.copy(toleranceXRatio = it.coerceIn(0.01f, 0.25f)) }, valueRange = 0.01f..0.25f)
                         Text("גובה אזור התאמה: " + (metadata.toleranceYRatio * 100f).toInt() + "%")
-                        Slider(value = metadata.toleranceYRatio, onValueChange = { metadata = metadata.copy(toleranceYRatio = it) }, valueRange = 0.01f..0.25f)
+                        Slider(value = metadata.toleranceYRatio.coerceIn(0.01f, 0.25f), onValueChange = { metadata = metadata.copy(toleranceYRatio = it.coerceIn(0.01f, 0.25f)) }, valueRange = 0.01f..0.25f)
                     }
                     ProfileSelector(
                         profiles = repo.profiles(),
