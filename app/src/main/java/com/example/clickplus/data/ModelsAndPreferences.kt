@@ -79,9 +79,10 @@ data class KeyActionConfig(
 
     fun contextSummary(): String {
         if (triggerType == TriggerType.SCREEN_TAP) {
-            val x = if (screenTapXRatio >= 0f) "\${(screenTapXRatio * 100f).toInt()}%" else "לא הוגדר"
-            val y = if (screenTapYRatio >= 0f) "\${(screenTapYRatio * 100f).toInt()}%" else "לא הוגדר"
-            return "לחיצה ב-\${screenTapAppName.ifBlank { "אפליקציה" }} · X $x · Y $y"
+            val x = if (screenTapXRatio >= 0f) "${(screenTapXRatio * 100f).toInt()}%" else "לא הוגדר"
+            val y = if (screenTapYRatio >= 0f) "${(screenTapYRatio * 100f).toInt()}%" else "לא הוגדר"
+            val appLabel = screenTapAppName.ifBlank { "אפליקציה" }
+            return "לחיצה ב-$appLabel · X $x · Y $y"
         }
         return when (contextConditionType) {
             ContextConditionType.ANY -> "בכל מצב"
