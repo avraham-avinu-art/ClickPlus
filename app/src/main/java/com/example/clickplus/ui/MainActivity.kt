@@ -1,4 +1,7 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+)
 
 package com.example.clickplus.ui
 
@@ -12,18 +15,21 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Settings
@@ -39,13 +45,16 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +62,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -64,7 +74,9 @@ import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.ContextConditionType
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.SystemActionPreset
+import com.example.clickplus.data.TriggerType
 import com.example.clickplus.service.KeyInterceptorAccessibilityService
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private sealed interface Screen {
@@ -96,7 +108,6 @@ private fun ClickPlusScreen(prefs: AppPreferencesRepository) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val mappings by prefs.mappingsFlow.collectAsState(initial = emptyList())
-    val backgroundOnly by prefs.backgroundOnlyFlow.collectAsState(initial = false)
     val timeout by prefs.tapTimeoutFlow.collectAsState(initial = 650L)
     val showTapCount by prefs.showTapCountFlow.collectAsState(initial = false)
 
@@ -105,7 +116,6 @@ private fun ClickPlusScreen(prefs: AppPreferencesRepository) {
     when (val current = screen) {
         Screen.Home -> HomeScreen(
             mappings = mappings,
-            backgroundOnly = backgroundOnly,
             serviceEnabled = isServiceEnabled(context),
             onAdd = { screen = Screen.Editor(null) },
             onEdit = { screen = Screen.Editor(it) },
@@ -120,19 +130,11 @@ private fun ClickPlusScreen(prefs: AppPreferencesRepository) {
         )
 
         Screen.Settings -> SettingsScreen(
-            backgroundOnly = backgroundOnly,
             timeout = timeout,
             showTapCount = showTapCount,
             onBack = { screen = Screen.Home },
-            onBackgroundOnly = {
-                scope.launch { prefs.saveBackgroundOnly(it) }
-            },
-            onTimeout = {
-                scope.launch { prefs.saveTapTimeout(it) }
-            },
-            onShowTapCount = {
-                scope.launch { prefs.saveShowTapCount(it) }
-            },
+            onTimeout = { scope.launch { prefs.saveTapTimeout(it) } },
+            onShowTapCount = { scope.launch { prefs.saveShowTapCount(it) } },
             onAccessibility = {
                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             },
@@ -165,7 +167,6 @@ private fun ClickPlusScreen(prefs: AppPreferencesRepository) {
 @Composable
 private fun HomeScreen(
     mappings: List<KeyActionConfig>,
-    backgroundOnly: Boolean,
     serviceEnabled: Boolean,
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
@@ -178,7 +179,7 @@ private fun HomeScreen(
                 title = {
                     Column {
                         Text("קליק פלוס", fontWeight = FontWeight.Bold)
-                        Text("פעולות לפי כניסות", style = MaterialTheme.typography.labelSmall)
+                        Text("פעולות לפי כניסות ולחיצות", style = MaterialTheme.typography.labelSmall)
                     }
                 },
                 actions = {
@@ -209,29 +210,38 @@ private fun HomeScreen(
         },
     ) { padding ->
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = 16.dp,
+                bottom = 24.dp,
+            ),
         ) {
             item {
-                Card {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                ) {
                     Column(
                         Modifier.fillMaxWidth().padding(18.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            "הפעלה לפי כניסה לאפליקציה",
+                            "קליק פלוס פעילה תמיד",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
+                        Text("הפעילות נשארת זמינה ברקע. אין מצב כבוי מתוך האפליקציה.")
                         Text(
-                            if (backgroundOnly) {
-                                "עבודה ברקע פעילה. כל כניסה לאפליקציה נספרת כלחיצה."
+                            if (serviceEnabled) {
+                                "שירות הנגישות פעיל והאפליקציה מוכנה."
                             } else {
-                                "במצב רגיל האפליקציה נפתחת. בהפעלת עבודה ברקע, הכניסה לאפליקציה תשמש כטריגר."
+                                "יש להפעיל את שירות הנגישות כדי שהפעולות יעבדו תמיד."
                             },
-                        )
-                        Text(
-                            if (serviceEnabled) "שירות הנגישות פעיל." else "שירות הנגישות עדיין לא פעיל.",
                             fontWeight = FontWeight.Bold,
                         )
                     }
@@ -248,14 +258,14 @@ private fun HomeScreen(
 
             if (mappings.isEmpty()) {
                 item {
-                    OutlinedCard {
+                    OutlinedCard(Modifier.fillMaxWidth()) {
                         Column(
                             Modifier.fillMaxWidth().padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text("עדיין אין פעולות", style = MaterialTheme.typography.titleMedium)
-                            Text("הוסף פעולה ובחר כמה כניסות רצופות יפעילו אותה.")
+                            Text("הוסף פעולה ובחר כניסות או מיקום לחיצה.")
                         }
                     }
                 }
@@ -278,7 +288,10 @@ private fun ActionCard(
     onEdit: () -> Unit,
     onToggle: (Boolean) -> Unit,
 ) {
-    OutlinedCard(onClick = onEdit) {
+    OutlinedCard(
+        onClick = onEdit,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Column(
             Modifier.fillMaxWidth().padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -295,6 +308,13 @@ private fun ActionCard(
                 Switch(checked = item.enabled, onCheckedChange = onToggle)
             }
             Text("פעולה: " + item.actionSummary())
+            Text(
+                "הפעלה: " + if (item.triggerType == TriggerType.SCREEN_TAP) {
+                    "לחיצה לפי מיקום"
+                } else {
+                    "כניסה לאפליקציה"
+                },
+            )
             Text("מצב: " + item.contextSummary())
         }
     }
@@ -302,11 +322,9 @@ private fun ActionCard(
 
 @Composable
 private fun SettingsScreen(
-    backgroundOnly: Boolean,
     timeout: Long,
     showTapCount: Boolean,
     onBack: () -> Unit,
-    onBackgroundOnly: (Boolean) -> Unit,
     onTimeout: (Long) -> Unit,
     onShowTapCount: (Boolean) -> Unit,
     onAccessibility: () -> Unit,
@@ -327,78 +345,48 @@ private fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(horizontal = 16.dp)
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = 16.dp,
+                bottom = 32.dp,
+            ),
         ) {
             item {
-                OutlinedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Text(
-                                "עבודה ברקע",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text("כשפעיל, כניסה לאפליקציה היא אות הפעלה ולא פתיחת מסך.")
-                        }
-                        Switch(
-                            checked = backgroundOnly,
-                            onCheckedChange = onBackgroundOnly,
-                        )
-                    }
+                SettingsCard {
+                    Text(
+                        "הפעלה קבועה",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text("קליק פלוס מוגדרת לפעול תמיד ברקע. האפשרות אינה ניתנת לכיבוי מתוך האפליקציה.")
+                    Spacer(Modifier.height(6.dp))
+                    Text("כדי לעצור את הפעילות יש להשבית את שירות הנגישות של קליק פלוס.")
                 }
             }
 
             item {
-                OutlinedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            "זמן לספירת כניסות",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text("$timeout אלפיות השנייה")
-                        Slider(
-                            value = timeout.toFloat(),
-                            onValueChange = { onTimeout(it.toLong()) },
-                            valueRange = 300f..1200f,
-                            steps = 8,
-                        )
-                    }
+                SettingsCard {
+                    Text(
+                        "זמן לספירת כניסות",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text("\$timeout אלפיות השנייה")
+                    Slider(
+                        value = timeout.toFloat(),
+                        onValueChange = { onTimeout(it.toLong()) },
+                        valueRange = 300f..1200f,
+                        steps = 8,
+                    )
                 }
             }
 
             item {
-                OutlinedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                ) {
+                SettingsCard {
                     Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(
@@ -410,7 +398,7 @@ private fun SettingsScreen(
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                             )
-                            Text("מציג על המסך את מספר הכניסות שנספרו.")
+                            Text("מציג על המסך את מספר הכניסות או הלחיצות שנספרו.")
                         }
                         Switch(
                             checked = showTapCount,
@@ -421,31 +409,18 @@ private fun SettingsScreen(
             }
 
             item {
-                OutlinedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.Center,
+                SettingsCard {
+                    Text(
+                        "שירות נגישות",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text("השירות נדרש לזיהוי האפליקציה הקדמית, זיהוי לחיצות ולביצוע הפעולות.")
+                    Button(
+                        onClick = onAccessibility,
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(
-                            "שירות נגישות",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text("השירות נדרש לביצוע הפעולות ולזיהוי כניסות.")
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Button(
-                            onClick = onAccessibility,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("פתיחת הגדרות נגישות")
-                        }
+                        Text("פתיחת הגדרות נגישות")
                     }
                 }
             }
@@ -453,7 +428,69 @@ private fun SettingsScreen(
     }
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun EditorSection(content: @Composable ColumnScope.() -> Unit) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun NumberChoice(
+    selected: Boolean,
+    count: Int,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        shape = CircleShape,
+        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        contentColor = if (selected) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurface,
+        },
+        border = BorderStroke(
+            1.dp,
+            if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.outline,
+        ),
+        tonalElevation = if (selected) 2.dp else 0.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                count.toString(),
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            )
+        }
+    }
+}
+
 @Composable
 private fun EditorScreen(
     existing: KeyActionConfig?,
@@ -463,9 +500,14 @@ private fun EditorScreen(
 ) {
     val context = LocalContext.current
 
+    var triggerType by remember(existing?.id) {
+        mutableStateOf(existing?.triggerType ?: TriggerType.APP_ENTRY)
+    }
     var name by remember(existing?.id) { mutableStateOf(existing?.name.orEmpty()) }
     var pressCount by remember(existing?.id) { mutableIntStateOf(existing?.pressCount ?: 1) }
-    var actionType by remember(existing?.id) { mutableStateOf(existing?.actionType ?: ActionType.SYSTEM) }
+    var actionType by remember(existing?.id) {
+        mutableStateOf(existing?.actionType ?: ActionType.SYSTEM)
+    }
     var systemAction by remember(existing?.id) {
         mutableStateOf(existing?.systemActionId ?: SystemActionPreset.MEDIA_PLAY_PAUSE.id)
     }
@@ -474,21 +516,82 @@ private fun EditorScreen(
     var contextType by remember(existing?.id) {
         mutableStateOf(existing?.contextConditionType ?: ContextConditionType.ANY)
     }
-    var contextValue by remember(existing?.id) { mutableStateOf(existing?.contextConditionValue.orEmpty()) }
-    var contextName by remember(existing?.id) { mutableStateOf(existing?.contextConditionName.orEmpty()) }
+    var contextValue by remember(existing?.id) {
+        mutableStateOf(existing?.contextConditionValue.orEmpty())
+    }
+    var contextName by remember(existing?.id) {
+        mutableStateOf(existing?.contextConditionName.orEmpty())
+    }
+    var screenTapPackage by remember(existing?.id) {
+        mutableStateOf(existing?.screenTapPackage.orEmpty())
+    }
+    var screenTapAppName by remember(existing?.id) {
+        mutableStateOf(existing?.screenTapAppName.orEmpty())
+    }
+    var screenTapXRatio by remember(existing?.id) {
+        mutableFloatStateOf(existing?.screenTapXRatio ?: -1f)
+    }
+    var screenTapYRatio by remember(existing?.id) {
+        mutableFloatStateOf(existing?.screenTapYRatio ?: -1f)
+    }
+    var screenTapToleranceRatio by remember(existing?.id) {
+        mutableFloatStateOf(existing?.screenTapToleranceRatio ?: 0.08f)
+    }
     var showApps by remember { mutableStateOf(false) }
+    var capturePending by remember { mutableStateOf(false) }
 
+    val serviceEnabled = isServiceEnabled(context)
     val phonePermission =
         ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.READ_PHONE_STATE,
         ) == PackageManager.PERMISSION_GRANTED
 
+    LaunchedEffect(capturePending) {
+        if (!capturePending) return@LaunchedEffect
+        while (capturePending) {
+            val runtime = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+            if (runtime.getBoolean("tap_capture_ready", false)) {
+                screenTapXRatio = runtime.getFloat("tap_capture_x_ratio", -1f)
+                screenTapYRatio = runtime.getFloat("tap_capture_y_ratio", -1f)
+                screenTapPackage = runtime.getString("tap_capture_package", screenTapPackage).orEmpty()
+                screenTapAppName = runtime.getString("tap_capture_app_name", screenTapAppName).orEmpty()
+                runtime.edit().putBoolean("tap_capture_ready", false).apply()
+                capturePending = false
+                break
+            }
+            delay(250L)
+        }
+    }
+
     val actionValid = actionType == ActionType.SYSTEM || packageName.isNotBlank()
-    val conditionValid = when (contextType) {
-        ContextConditionType.APP, ContextConditionType.RADIO -> contextValue.isNotBlank()
-        ContextConditionType.RINGING -> phonePermission
-        else -> true
+    val conditionValid = when (triggerType) {
+        TriggerType.SCREEN_TAP ->
+            screenTapPackage.isNotBlank() &&
+                screenTapXRatio >= 0f &&
+                screenTapYRatio >= 0f
+
+        TriggerType.APP_ENTRY -> when (contextType) {
+            ContextConditionType.APP, ContextConditionType.RADIO -> contextValue.isNotBlank()
+            ContextConditionType.RINGING -> phonePermission
+            else -> true
+        }
+    }
+
+    val startTapLearning = {
+        if (serviceEnabled && screenTapPackage.isNotBlank()) {
+            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("tap_capture_ready", false)
+                .putBoolean("tap_learning", true)
+                .putString("tap_learning_package", screenTapPackage)
+                .apply()
+            capturePending = true
+            context.packageManager.getLaunchIntentForPackage(screenTapPackage)?.let {
+                it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(it)
+            }
+        }
     }
 
     Scaffold(
@@ -507,11 +610,12 @@ private fun EditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 top = 16.dp,
-                bottom = 24.dp,
+                bottom = 32.dp,
             ),
         ) {
             item {
@@ -525,89 +629,105 @@ private fun EditorScreen(
             }
 
             item {
-                OutlinedCard {
-                    Column(
-                        Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(9.dp),
+                EditorSection {
+                    Text(
+                        "סוג ההפעלה",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TriggerType.entries.forEach { option ->
+                            FilterChip(
+                                selected = triggerType == option,
+                                onClick = {
+                                    triggerType = option
+                                    if (option == TriggerType.SCREEN_TAP) {
+                                        contextType = ContextConditionType.ANY
+                                    }
+                                },
+                                label = { Text(option.titleHebrew) },
+                            )
+                        }
+                    }
+
+                    Text(
+                        "כמה כניסות / לחיצות רצופות?",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            "כמה כניסות?",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
+                        (1..10).forEach { count ->
+                            NumberChoice(
+                                selected = pressCount == count,
+                                count = count,
+                                onClick = { pressCount = count },
+                            )
+                        }
+                    }
+                    Text(
+                        if (triggerType == TriggerType.APP_ENTRY) {
+                            "כל כניסה רצופה לאפליקציה נספרת פעם אחת."
+                        } else {
+                            "הלחיצות על המיקום שנלמד נספרות ברצף בתוך זמן הספירה."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+
+            item {
+                EditorSection {
+                    Text(
+                        "מה לבצע?",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterChip(
+                            selected = actionType == ActionType.SYSTEM,
+                            onClick = { actionType = ActionType.SYSTEM },
+                            label = { Text("פעולת מערכת") },
                         )
+                        FilterChip(
+                            selected = actionType == ActionType.APP,
+                            onClick = { actionType = ActionType.APP },
+                            label = { Text("פתיחת אפליקציה") },
+                        )
+                    }
+
+                    if (actionType == ActionType.SYSTEM) {
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            (1..10).forEach { count ->
+                            SystemActionPreset.entries.forEach { option ->
                                 FilterChip(
-                                    selected = pressCount == count,
-                                    onClick = { pressCount = count },
-                                    label = { Text(count.toString()) },
-                                    modifier = Modifier.width(48.dp),
+                                    selected = systemAction == option.id,
+                                    onClick = { systemAction = option.id },
+                                    label = { Text(option.titleHebrew) },
                                 )
                             }
                         }
-                        Text("כל כניסה רצופה של המולטימדיה לאפליקציה נספרת פעם אחת.")
-                    }
-                }
-            }
-
-            item {
-                OutlinedCard {
-                    Column(
-                        Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(9.dp),
-                    ) {
-                        Text(
-                            "מה לבצע?",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            FilterChip(
-                                selected = actionType == ActionType.SYSTEM,
-                                onClick = { actionType = ActionType.SYSTEM },
-                                label = { Text("פעולת מערכת") },
-                            )
-                            FilterChip(
-                                selected = actionType == ActionType.APP,
-                                onClick = { actionType = ActionType.APP },
-                                label = { Text("פתיחת אפליקציה") },
-                            )
-                        }
-
-                        if (actionType == ActionType.SYSTEM) {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                SystemActionPreset.entries.forEach { option ->
-                                    FilterChip(
-                                        selected = systemAction == option.id,
-                                        onClick = { systemAction = option.id },
-                                        label = { Text(option.titleHebrew) },
-                                    )
-                                }
-                            }
-                        } else {
-                            OutlinedButton(
-                                onClick = { showApps = true },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(if (appName.isBlank()) "בחר אפליקציה" else appName)
-                            }
+                    } else {
+                        OutlinedButton(
+                            onClick = { showApps = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(if (appName.isBlank()) "בחר אפליקציה" else appName)
                         }
                     }
                 }
             }
 
             item {
-                OutlinedCard {
-                    Column(
-                        Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(9.dp),
-                    ) {
+                EditorSection {
+                    if (triggerType == TriggerType.APP_ENTRY) {
                         Text(
                             "מצב",
                             style = MaterialTheme.typography.titleLarge,
@@ -641,14 +761,12 @@ private fun EditorScreen(
                                     onClick = { showApps = true },
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
-                                    Text(
-                                        if (contextName.isBlank()) {
-                                            "בחר אפליקציה"
-                                        } else {
-                                            contextName
-                                        },
-                                    )
+                                    Text(if (contextName.isBlank()) "בחר אפליקציה" else contextName)
                                 }
+                                Text(
+                                    "הבדיקה תתבצע מול האפליקציה שהייתה פתוחה לפני הפעלת ClickPlus.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             }
 
                             ContextConditionType.RADIO -> {
@@ -657,11 +775,7 @@ private fun EditorScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     Text(
-                                        if (contextName.isBlank()) {
-                                            "בחר אפליקציית רדיו"
-                                        } else {
-                                            contextName
-                                        },
+                                        if (contextName.isBlank()) "בחר אפליקציית רדיו" else contextName,
                                     )
                                 }
                             }
@@ -691,7 +805,67 @@ private fun EditorScreen(
                                 Text("הפעולה תפעל כשהשמע מושתק.")
 
                             ContextConditionType.ANY ->
-                                Text("הפעולה תשמש כברירת מחדל.")
+                                Text("הפעולה תשמש כברירת מחדל בכל מצב.")
+                        }
+                    } else {
+                        Text(
+                            "מיקום לחיצה בתוך אפליקציה אחרת",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "בחר אפליקציה, לחץ על \"למד מיקום\", ואז בצע לחיצה על הכפתור או האזור הרצוי. ClickPlus תשמור את מיקום הרכיב ותוכל להפעיל ממנו את הפעולה.",
+                        )
+
+                        OutlinedButton(
+                            onClick = { showApps = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                if (screenTapAppName.isBlank()) {
+                                    "בחר אפליקציה שבה הלחיצה תזוהה"
+                                } else {
+                                    screenTapAppName
+                                },
+                            )
+                        }
+
+                        if (!serviceEnabled) {
+                            Text(
+                                "כדי ללמוד ולזהות לחיצות יש להפעיל קודם את שירות הנגישות.",
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Button(
+                                onClick = {
+                                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("הפעלת שירות נגישות")
+                            }
+                        }
+
+                        Button(
+                            onClick = startTapLearning,
+                            enabled = serviceEnabled && screenTapPackage.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(if (capturePending) "ממתין ללחיצה..." else "למד מיקום לחיצה")
+                        }
+
+                        if (screenTapXRatio >= 0f && screenTapYRatio >= 0f) {
+                            Text(
+                                "מיקום שנלמד: X \${(screenTapXRatio * 100f).toInt()}% · Y \${(screenTapYRatio * 100f).toInt()}%",
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text("סטייה מותרת: \${(screenTapToleranceRatio * 100f).toInt()}%")
+                            Slider(
+                                value = screenTapToleranceRatio,
+                                onValueChange = {
+                                    screenTapToleranceRatio = it.coerceIn(0.01f, 0.25f)
+                                },
+                                valueRange = 0.01f..0.25f,
+                            )
                         }
                     }
                 }
@@ -710,7 +884,6 @@ private fun EditorScreen(
                             Text("מחיקה")
                         }
                     }
-
                     Button(
                         enabled = actionValid && conditionValid,
                         onClick = {
@@ -727,6 +900,12 @@ private fun EditorScreen(
                                     contextConditionValue = contextValue,
                                     contextConditionName = contextName,
                                     enabled = existing?.enabled ?: true,
+                                    triggerType = triggerType,
+                                    screenTapPackage = screenTapPackage,
+                                    screenTapAppName = screenTapAppName,
+                                    screenTapXRatio = screenTapXRatio,
+                                    screenTapYRatio = screenTapYRatio,
+                                    screenTapToleranceRatio = screenTapToleranceRatio,
                                 ),
                             )
                         },
@@ -743,15 +922,22 @@ private fun EditorScreen(
         AppPickerDialog(
             onDismiss = { showApps = false },
             onSelect = { pkg, label ->
-                if (
+                when {
+                    triggerType == TriggerType.SCREEN_TAP -> {
+                        screenTapPackage = pkg
+                        screenTapAppName = label
+                    }
+
                     contextType == ContextConditionType.APP ||
-                    contextType == ContextConditionType.RADIO
-                ) {
-                    contextValue = pkg
-                    contextName = label
-                } else {
-                    packageName = pkg
-                    appName = label
+                        contextType == ContextConditionType.RADIO -> {
+                        contextValue = pkg
+                        contextName = label
+                    }
+
+                    else -> {
+                        packageName = pkg
+                        appName = label
+                    }
                 }
                 showApps = false
             },
