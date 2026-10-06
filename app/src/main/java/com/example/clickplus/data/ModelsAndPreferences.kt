@@ -19,6 +19,11 @@ enum class ActionType(val titleHebrew: String) {
     APP("פתיחת אפליקציה"),
 }
 
+enum class TriggerType(val titleHebrew: String) {
+    APP_ENTRY("כניסה לאפליקציה"),
+    SCREEN_TAP("לחיצה במיקום במסך"),
+}
+
 enum class ContextConditionType(val titleHebrew: String) {
     ANY("בכל מצב"),
     APP("אפליקציה"),
@@ -54,6 +59,12 @@ data class KeyActionConfig(
     val contextConditionValue: String = "",
     val contextConditionName: String = "",
     val enabled: Boolean = true,
+    val triggerType: TriggerType = TriggerType.APP_ENTRY,
+    val screenTapPackage: String = "",
+    val screenTapAppName: String = "",
+    val screenTapXRatio: Float = -1f,
+    val screenTapYRatio: Float = -1f,
+    val screenTapToleranceRatio: Float = 0.08f,
 ) {
     fun pressSummary(): String = if (pressCount == 1) "כניסה אחת" else "$pressCount כניסות"
 
@@ -67,6 +78,11 @@ data class KeyActionConfig(
     }
 
     fun contextSummary(): String {
+        if (triggerType == TriggerType.SCREEN_TAP) {
+            val x = if (screenTapXRatio >= 0f) "\${(screenTapXRatio * 100f).toInt()}%" else "לא הוגדר"
+            val y = if (screenTapYRatio >= 0f) "\${(screenTapYRatio * 100f).toInt()}%" else "לא הוגדר"
+            return "לחיצה ב-\${screenTapAppName.ifBlank { "אפליקציה" }} · X $x · Y $y"
+        }
         return when (contextConditionType) {
             ContextConditionType.ANY -> "בכל מצב"
             ContextConditionType.APP -> "אפליקציה: " + contextConditionName.ifBlank { contextConditionValue }
@@ -89,6 +105,12 @@ data class KeyActionConfig(
         put("contextConditionValue", contextConditionValue)
         put("contextConditionName", contextConditionName)
         put("enabled", enabled)
+        put("triggerType", triggerType.name)
+        put("screenTapPackage", screenTapPackage)
+        put("screenTapAppName", screenTapAppName)
+        put("screenTapXRatio", screenTapXRatio)
+        put("screenTapYRatio", screenTapYRatio)
+        put("screenTapToleranceRatio", screenTapToleranceRatio)
     }
 
     companion object {
@@ -115,6 +137,17 @@ data class KeyActionConfig(
             contextConditionValue = json.optString("contextConditionValue", ""),
             contextConditionName = json.optString("contextConditionName", ""),
             enabled = json.optBoolean("enabled", json.optBoolean("isEnabled", true)),
+            triggerType = runCatching {
+                TriggerType.valueOf(
+                    json.optString("triggerType", TriggerType.APP_ENTRY.name),
+                )
+            }.getOrDefault(TriggerType.APP_ENTRY),
+            screenTapPackage = json.optString("screenTapPackage", ""),
+            screenTapAppName = json.optString("screenTapAppName", ""),
+            screenTapXRatio = json.optDouble("screenTapXRatio", -1.0).toFloat(),
+            screenTapYRatio = json.optDouble("screenTapYRatio", -1.0).toFloat(),
+            screenTapToleranceRatio =
+                json.optDouble("screenTapToleranceRatio", 0.08).toFloat().coerceIn(0.01f, 0.25f),
         )
     }
 }
@@ -129,7 +162,7 @@ class AppPreferencesRepository(private val context: Context) {
     }
 
     val backgroundOnlyFlow: Flow<Boolean> =
-        context.dataStore.data.map { it[BACKGROUND_ONLY] ?: false }
+        context.dataStore.data.map { it[BACKGROUND_ONLY] ?: true }
 
     val tapTimeoutFlow: Flow<Long> =
         context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 650L }
@@ -154,10 +187,11 @@ class AppPreferencesRepository(private val context: Context) {
         context.dataStore.data.map { it[ONBOARDING_COMPLETED] ?: false }
 
     suspend fun saveBackgroundOnly(enabled: Boolean) {
-        context.dataStore.edit { it[BACKGROUND_ONLY] = enabled }
+        val alwaysOn = true
+        context.dataStore.edit { it[BACKGROUND_ONLY] = alwaysOn }
         context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
             .edit()
-            .putBoolean("background_only", enabled)
+            .putBoolean("background_only", alwaysOn)
             .apply()
     }
 
