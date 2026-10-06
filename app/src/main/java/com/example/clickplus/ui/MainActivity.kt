@@ -67,6 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -198,8 +199,10 @@ private fun OnboardingWizard(prefsRepo: AppPreferencesRepository) {
     var step by remember { mutableStateOf(1) }
 
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 32.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             Text("+Click", fontSize = 38.sp, fontWeight = FontWeight.Bold)
@@ -211,7 +214,8 @@ private fun OnboardingWizard(prefsRepo: AppPreferencesRepository) {
             )
             Spacer(Modifier.height(24.dp))
 
-            when (step) {
+            Box(Modifier.heightIn(max = maxDialogHeight)) {
+                when (step) {
                 1 -> OnboardingStep(
                     title = "שלב 1 — הרשאת נגישות",
                     body = "אפשר את Click+ בהגדרות הנגישות. כך האפליקציה תזהה לחיצות על מקשי חומרה גם בתוך אפליקציות אחרות.",
@@ -245,6 +249,7 @@ private fun OnboardingWizard(prefsRepo: AppPreferencesRepository) {
             }
         }
 
+        Spacer(Modifier.height(24.dp))
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -363,67 +368,73 @@ private fun MainDashboard(
             )
         }
     ) { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)
+        LazyColumn(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Spacer(Modifier.height(8.dp))
+            item { Spacer(Modifier.height(2.dp)) }
 
-            ServiceStatusCard(
-                enabled = serviceEnabled,
-                onOpenSettings = {
-                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            item {
+                ServiceStatusCard(
+                    enabled = serviceEnabled,
+                    onOpenSettings = {
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    }
+                )
+            }
+
+            item {
+                Text(
+                    "ברירת מחדל למיפוי חדש",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            item {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    FilterChip(
+                        selected = quickPress == 1,
+                        onClick = { quickPress = 1 },
+                        label = { Text("לחיצה בודדת", maxLines = 1) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = quickPress == 2,
+                        onClick = { quickPress = 2 },
+                        label = { Text("לחיצה כפולה", maxLines = 1) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = quickPress == 0,
+                        onClick = { quickPress = 0 },
+                        label = { Text("לחיצה ארוכה", maxLines = 1) },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
-            )
-
-            Spacer(Modifier.height(14.dp))
-
-            Text("ברירת מחדל למיפוי חדש", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
-                FilterChip(
-                    selected = quickPress == 1,
-                    onClick = { quickPress = 1 },
-                    label = { Text("לחיצה בודדת") },
-                    modifier = Modifier.weight(1f)
-                )
-                FilterChip(
-                    selected = quickPress == 2,
-                    onClick = { quickPress = 2 },
-                    label = { Text("לחיצה כפולה") },
-                    modifier = Modifier.weight(1f)
-                )
-                FilterChip(
-                    selected = quickPress == 0,
-                    onClick = { quickPress = 0 },
-                    label = { Text("לחיצה ארוכה") },
-                    modifier = Modifier.weight(1f)
-                )
             }
 
-            Spacer(Modifier.height(16.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("מיפויים", style = MaterialTheme.typography.headlineSmall)
-                Text(mappings.size.toString() + " מוגדרים")
+            item {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("מיפויים", style = MaterialTheme.typography.headlineSmall)
+                    Text(mappings.size.toString() + " מוגדרים")
+                }
             }
 
-            Spacer(Modifier.height(8.dp))
-
-            LazyColumn(
-                Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (mappings.isEmpty()) {
-                    item { EmptyStateCard { showAdd = true } }
-                } else {
-                    items(mappings, key = { it.id }) { item ->
+            if (mappings.isEmpty()) {
+                item { EmptyStateCard { showAdd = true } }
+            } else {
+                items(mappings, key = { it.id }) { item ->
+                    item {
                         MappingCard(
                             item = item,
                             bigUi = bigUi,
@@ -443,16 +454,22 @@ private fun MainDashboard(
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
-
-            Button(
-                onClick = { showAdd = true },
-                modifier = Modifier.fillMaxWidth().height(if (bigUi) 66.dp else 54.dp)
-            ) {
-                Text("+ הוסף מיפוי חדש", fontSize = if (bigUi) 21.sp else 18.sp)
+            item {
+                Button(
+                    onClick = { showAdd = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (bigUi) 66.dp else 54.dp)
+                ) {
+                    Text(
+                        "+ הוסף מיפוי חדש",
+                        fontSize = if (bigUi) 21.sp else 18.sp,
+                        maxLines = 1
+                    )
+                }
             }
 
-            Spacer(Modifier.height(8.dp))
+            item { Spacer(Modifier.height(8.dp)) }
         }
     }
 
@@ -921,6 +938,7 @@ private fun MappingDialog(
                     }
                 }
             }
+            }
         },
         confirmButton = {
             if (step < 3) {
@@ -1124,8 +1142,9 @@ private fun SettingsDialog(
         onDismissRequest = onDismiss,
         title = { Text("הגדרות מתקדמות") },
         text = {
+            val maxDialogHeight = (LocalConfiguration.current.screenHeightDp * 0.72f).dp
             LazyColumn(
-                Modifier.height(520.dp),
+                Modifier.heightIn(max = maxDialogHeight),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
