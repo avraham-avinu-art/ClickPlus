@@ -62,9 +62,7 @@ class TapDetector(
                 handler.postDelayed(longPressRunnable, LONG_PRESS_MS)
             }
 
-            if (!hasLong) {
-                registerTap(activeMappings, keyCode)
-            } else {
+            if (hasLong) {
                 overlayManager.showPill("לחיצה", "ממתין…")
             }
             return true
@@ -82,14 +80,7 @@ class TapDetector(
 
             val duration = now - keyDownTime
             if (duration < LONG_PRESS_MS) {
-                if (activeMappings.any {
-                        it.triggerKeyCode == keyCode && it.tapCount == 1
-                    } || activeMappings.any {
-                        it.triggerKeyCode == keyCode && it.tapCount == 2
-                    }
-                ) {
-                    registerTap(activeMappings, keyCode)
-                }
+                registerTap(activeMappings, keyCode)
             }
             return true
         }
