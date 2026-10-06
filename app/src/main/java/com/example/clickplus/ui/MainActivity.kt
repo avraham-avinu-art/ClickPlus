@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -97,6 +98,7 @@ private fun ClickPlusScreen(prefs: AppPreferencesRepository) {
     val mappings by prefs.mappingsFlow.collectAsState(initial = emptyList())
     val backgroundOnly by prefs.backgroundOnlyFlow.collectAsState(initial = false)
     val timeout by prefs.tapTimeoutFlow.collectAsState(initial = 650L)
+    val showTapCount by prefs.showTapCountFlow.collectAsState(initial = false)
 
     var screen by remember { mutableStateOf<Screen>(Screen.Home) }
 
@@ -120,12 +122,16 @@ private fun ClickPlusScreen(prefs: AppPreferencesRepository) {
         Screen.Settings -> SettingsScreen(
             backgroundOnly = backgroundOnly,
             timeout = timeout,
+            showTapCount = showTapCount,
             onBack = { screen = Screen.Home },
             onBackgroundOnly = {
                 scope.launch { prefs.saveBackgroundOnly(it) }
             },
             onTimeout = {
                 scope.launch { prefs.saveTapTimeout(it) }
+            },
+            onShowTapCount = {
+                scope.launch { prefs.saveShowTapCount(it) }
             },
             onAccessibility = {
                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -298,9 +304,11 @@ private fun ActionCard(
 private fun SettingsScreen(
     backgroundOnly: Boolean,
     timeout: Long,
+    showTapCount: Boolean,
     onBack: () -> Unit,
     onBackgroundOnly: (Boolean) -> Unit,
     onTimeout: (Long) -> Unit,
+    onShowTapCount: (Boolean) -> Unit,
     onAccessibility: () -> Unit,
 ) {
     Scaffold(
@@ -316,26 +324,61 @@ private fun SettingsScreen(
         },
     ) { padding ->
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                OutlinedCard {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("עבודה ברקע", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
+                OutlinedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            Column(Modifier.weight(1f)) {
-                                Text("עבודה שקטה ברקע", fontWeight = FontWeight.Bold)
-                                Text("כשפעיל, כניסה לאפליקציה היא אות הפעלה ולא פתיחת מסך.")
-                            }
-                            Switch(checked = backgroundOnly, onCheckedChange = onBackgroundOnly)
+                            Text(
+                                "עבודה ברקע",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text("כשפעיל, כניסה לאפליקציה היא אות הפעלה ולא פתיחת מסך.")
                         }
-                        Text("זמן לספירת כניסות: " + timeout + " אלפיות השנייה")
+                        Switch(
+                            checked = backgroundOnly,
+                            onCheckedChange = onBackgroundOnly,
+                        )
+                    }
+                }
+            }
+
+            item {
+                OutlinedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            "זמן לספירת כניסות",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text("$timeout אלפיות השנייה")
                         Slider(
                             value = timeout.toFloat(),
                             onValueChange = { onTimeout(it.toLong()) },
@@ -347,22 +390,62 @@ private fun SettingsScreen(
             }
 
             item {
-                OutlinedCard {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                        Text("שירות נגישות", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("השירות חייב להיות פעיל כדי לבצע את הפעולות ולזהות את כניסת האפליקציה.")
-                        Button(onClick = onAccessibility, modifier = Modifier.fillMaxWidth()) {
-                            Text("פתיחת הגדרות נגישות")
+                OutlinedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                "חיווי מספר הלחיצות",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text("מציג על המסך את מספר הכניסות שנספרו.")
                         }
+                        Switch(
+                            checked = showTapCount,
+                            onCheckedChange = onShowTapCount,
+                        )
                     }
                 }
             }
 
             item {
-                OutlinedCard {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("כניסה נוספת להגדרות", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("אפשר להיכנס גם דרך הגדרות Android > אפליקציות > קליק פלוס > פתיחה.")
+                OutlinedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            "שירות נגישות",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text("השירות נדרש לביצוע הפעולות ולזיהוי כניסות.")
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = onAccessibility,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("פתיחת הגדרות נגישות")
+                        }
                     }
                 }
             }
