@@ -1,10 +1,15 @@
 package com.example.clickplus.ui
 
-import android.content.Intent
+import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
+import android.view.accessibility.AccessibilityManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -23,6 +28,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -31,10 +38,14 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -56,20 +67,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.HudStyle
 import com.example.clickplus.data.KeyActionConfig
-import com.example.clickplus.data.OperationMode
 import com.example.clickplus.data.SystemActionPreset
 import com.example.clickplus.data.ThemeOption
 import com.example.clickplus.data.actionSummaryHebrew
 import com.example.clickplus.service.KeyInterceptorAccessibilityService
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 
 class MainActivity : ComponentActivity() {
 
@@ -116,18 +130,20 @@ private fun ClickPlusApp(
     onCancelCapture: () -> Unit
 ) {
     val themeOption by prefsRepo.themeOptionFlow.collectAsState(initial = ThemeOption.DARK_OLED)
-    val systemDark = isSystemInDarkTheme()
-    val useDark = when (themeOption) {
-        ThemeOption.DARK_OLED -> true
+    val dark = when (themeOption) {
+        ThemeOption.DARK_OLED, ThemeOption.DARK -> true
         ThemeOption.LIGHT -> false
-        ThemeOption.AUTO -> systemDark
+        ThemeOption.AUTO -> isSystemInDarkTheme()
     }
 
-    val colors = if (useDark) {
+    val colors = if (dark) {
         darkColorScheme(
             background = Color.Black,
-            surface = Color(0xFF101010),
-            primary = Color(0xFF00E676)
+            surface = Color(0xFF17161B),
+            surfaceVariant = Color(0xFF242129),
+            primary = Color(0xFF00E676),
+            onPrimary = Color(0xFF001B0D),
+            secondary = Color(0xFFB9AFCB)
         )
     } else {
         lightColorScheme()
@@ -139,11 +155,11 @@ private fun ClickPlusApp(
         ) {
             Surface(Modifier.fillMaxSize()) {
                 MainScreen(
-                    prefsRepo = prefsRepo,
-                    detectedKey = detectedKey,
-                    captureActive = captureActive,
-                    onBeginCapture = onBeginCapture,
-                    onCancelCapture = onCancelCapture
+                    prefsRepo,
+                    detectedKey,
+                    captureActive,
+                    onBeginCapture,
+                    onCancelCapture
                 )
             }
         }
@@ -160,79 +176,82 @@ private fun MainScreen(
 ) {
     val completed by prefsRepo.onboardingCompletedFlow.collectAsState(initial = false)
 
-    if (!completed) {
-        OnboardingWizard(prefsRepo)
-    } else {
+    if (completed) {
         MainDashboard(
-            prefsRepo = prefsRepo,
-            detectedKey = detectedKey,
-            captureActive = captureActive,
-            onBeginCapture = onBeginCapture,
-            onCancelCapture = onCancelCapture
+            prefsRepo,
+            detectedKey,
+            captureActive,
+            onBeginCapture,
+            onCancelCapture
         )
+    } else {
+        OnboardingWizard(prefsRepo)
     }
 }
 
 @Composable
 private fun OnboardingWizard(prefsRepo: AppPreferencesRepository) {
-    var step by remember { mutableStateOf(1) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var step by remember { mutableStateOf(1) }
 
     Column(
-        Modifier.fillMaxSize().padding(28.dp),
+        Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Click+", style = MaterialTheme.typography.headlineLarge)
-            Text("מיפוי מקשי חומרה", style = MaterialTheme.typography.titleMedium)
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Text("+Click", fontSize = 38.sp, fontWeight = FontWeight.Bold)
+            Text("מיפוי מקשי חומרה", fontSize = 22.sp)
             Spacer(Modifier.height(26.dp))
+            LinearProgressIndicator(
+                progress = { step / 3f },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(24.dp))
 
             when (step) {
-                1 -> StepBlock(
+                1 -> OnboardingStep(
                     title = "שלב 1 — הרשאת נגישות",
-                    body = "אפשר את Click+ תחת הגדרות נגישות כדי ללכוד מקשי חומרה ולבצע פעולות.",
-                    button = "פתיחת הגדרות נגישות"
-                ) {
-                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                }
-
-                2 -> StepBlock(
-                    title = "שלב 2 — הרשאת תצוגת HUD",
-                    body = "אפשר הצגה מעל אפליקציות כדי לקבל חיווי מיידי על מספר הלחיצות והפעולה.",
-                    button = "פתיחת הרשאת HUD"
-                ) {
-                    context.startActivity(
-                        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                            data = android.net.Uri.parse("package:${context.packageName}")
-                        }
-                    )
-                }
-
-                3 -> {
-                    Text("שלב 3 — יצירת מיפוי", fontSize = 21.sp)
-                    Spacer(Modifier.height(12.dp))
-                    Text("במסך הראשי לחץ על ״הוסף מיפוי חדש״ ולכוד את הכפתור הפיזי בלחיצה אחת.")
-                    Spacer(Modifier.height(12.dp))
-                    Card(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(20.dp)) {
-                            Text("הכול מוכן", style = MaterialTheme.typography.titleLarge)
-                            Spacer(Modifier.height(8.dp))
-                            Text("אין צורך להזין KeyCode ידנית.")
-                        }
+                    body = "אפשר את Click+ בהגדרות הנגישות. כך האפליקציה תזהה לחיצות על מקשי חומרה גם בתוך אפליקציות אחרות.",
+                    button = "פתיחת הגדרות נגישות",
+                    onClick = {
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    }
+                )
+                2 -> OnboardingStep(
+                    title = "שלב 2 — חיווי צף",
+                    body = "אפשר הצגה מעל אפליקציות כדי לקבל חיווי קצר על הלחיצה והפעולה שבוצעה.",
+                    button = "פתיחת הרשאת חיווי",
+                    onClick = {
+                        context.startActivity(
+                            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                                data = android.net.Uri.parse("package:" + context.packageName)
+                            }
+                        )
+                    }
+                )
+                3 -> Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("הכול מוכן", style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "כעת תוכל להוסיף מיפוי חדש, ללחוץ על כפתור פיזי ולבחור פעולה מוכנה.",
+                            fontSize = 18.sp
+                        )
                     }
                 }
             }
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             if (step > 1) {
                 OutlinedButton(onClick = { step-- }) { Text("חזרה") }
             } else {
-                Spacer(Modifier.size(1.dp))
+                Spacer(Modifier.width(1.dp))
             }
 
             if (step < 3) {
@@ -249,18 +268,22 @@ private fun OnboardingWizard(prefsRepo: AppPreferencesRepository) {
 }
 
 @Composable
-private fun StepBlock(
+private fun OnboardingStep(
     title: String,
     body: String,
     button: String,
     onClick: () -> Unit
 ) {
-    Text(title, fontSize = 21.sp)
-    Spacer(Modifier.height(14.dp))
-    Text(body)
-    Spacer(Modifier.height(18.dp))
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(64.dp)) {
-        Text(button)
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(24.dp)) {
+            Text(title, style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(12.dp))
+            Text(body, fontSize = 18.sp)
+            Spacer(Modifier.height(20.dp))
+            Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(60.dp)) {
+                Text(button)
+            }
+        }
     }
 }
 
@@ -273,25 +296,67 @@ private fun MainDashboard(
     onBeginCapture: () -> Unit,
     onCancelCapture: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val mappings by prefsRepo.mappingsFlow.collectAsState(initial = emptyList())
     val bigUi by prefsRepo.carFriendlyUiFlow.collectAsState(initial = true)
-    val mode by prefsRepo.operationModeFlow.collectAsState(initial = OperationMode.MODE_A_MULTI_TAP)
-    var showAdd by remember { mutableStateOf(false) }
+    var serviceEnabled by remember { mutableStateOf(isServiceEnabled(context)) }
+
     var showSettings by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
+    var showBackupRestore by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<KeyActionConfig?>(null) }
+    var showAdd by remember { mutableStateOf(false) }
+    var quickPress by remember { mutableStateOf(1) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            serviceEnabled = isServiceEnabled(context)
+            delay(1000L)
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Click+") },
+                title = { Text("+Click • מיפוי מקשים", maxLines = 1) },
                 actions = {
-                    Text("ממשק מוגדל", modifier = Modifier.padding(end = 8.dp))
-                    Switch(
-                        checked = bigUi,
-                        onCheckedChange = { scope.launch { prefsRepo.saveCarFriendlyUi(it) } },
-                        modifier = Modifier.padding(end = 12.dp)
-                    )
+                    IconButton(onClick = { showSettings = true }) {
+                        Text("⚙", fontSize = 24.sp)
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Text("⋮", fontSize = 30.sp)
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("אודות") },
+                                onClick = {
+                                    showMenu = false
+                                    showAbout = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("גיבוי ושחזור") },
+                                onClick = {
+                                    showMenu = false
+                                    showBackupRestore = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("עזרה") },
+                                onClick = {
+                                    showMenu = false
+                                    showHelp = true
+                                }
+                            )
+                        }
+                    }
                 }
             )
         }
@@ -299,331 +364,556 @@ private fun MainDashboard(
         Column(
             Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)
         ) {
+            Spacer(Modifier.height(8.dp))
+
+            ServiceStatusCard(
+                enabled = serviceEnabled,
+                onOpenSettings = {
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            Text("ברירת מחדל למיפוי חדש", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 FilterChip(
-                    selected = mode == OperationMode.MODE_A_MULTI_TAP,
-                    onClick = {
-                        scope.launch { prefsRepo.saveOperationMode(OperationMode.MODE_A_MULTI_TAP) }
-                    },
-                    label = { Text(OperationMode.MODE_A_MULTI_TAP.titleHebrew) }
+                    selected = quickPress == 1,
+                    onClick = { quickPress = 1 },
+                    label = { Text("לחיצה בודדת") },
+                    modifier = Modifier.weight(1f)
                 )
                 FilterChip(
-                    selected = mode == OperationMode.MODE_B_CONFIRMATION,
-                    onClick = {
-                        scope.launch { prefsRepo.saveOperationMode(OperationMode.MODE_B_CONFIRMATION) }
-                    },
-                    label = { Text(OperationMode.MODE_B_CONFIRMATION.titleHebrew) }
+                    selected = quickPress == 2,
+                    onClick = { quickPress = 2 },
+                    label = { Text("לחיצה כפולה") },
+                    modifier = Modifier.weight(1f)
                 )
-                Spacer(Modifier.weight(1f))
-                OutlinedButton(onClick = { showSettings = true }) { Text("הגדרות") }
+                FilterChip(
+                    selected = quickPress == 0,
+                    onClick = { quickPress = 0 },
+                    label = { Text("לחיצה ארוכה") },
+                    modifier = Modifier.weight(1f)
+                )
             }
 
-            Spacer(Modifier.height(12.dp))
-            Text("מיפויים", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(16.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("מיפויים", style = MaterialTheme.typography.headlineSmall)
+                Text(mappings.size.toString() + " מוגדרים")
+            }
+
             Spacer(Modifier.height(8.dp))
 
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.weight(1f)
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (mappings.isEmpty()) {
-                    item { EmptyState { showAdd = true } }
-                }
-                items(mappings, key = { it.id }) { item ->
-                    MappingRowItem(
-                        item = item,
-                        bigUi = bigUi,
-                        onTest = { testMapping(context, item) },
-                        onToggle = { updated ->
-                            scope.launch {
-                                prefsRepo.saveMappings(
-                                    mappings.map { current ->
-                                        if (current.id == updated.id) updated else current
-                                    }
-                                )
-                            }
-                        }
-                    )
+                    item { EmptyStateCard { showAdd = true } }
+                } else {
+                    items(mappings, key = { it.id }) { item ->
+                        MappingCard(
+                            item = item,
+                            bigUi = bigUi,
+                            onClick = { editing = item },
+                            onToggle = { enabled ->
+                                scope.launch {
+                                    prefsRepo.saveMappings(
+                                        mappings.map {
+                                            if (it.id == item.id) it.copy(isEnabled = enabled) else it
+                                        }
+                                    )
+                                }
+                            },
+                            onTest = { testMapping(context, item) }
+                        )
+                    }
                 }
             }
+
+            Spacer(Modifier.height(10.dp))
 
             Button(
                 onClick = { showAdd = true },
-                modifier = Modifier.fillMaxWidth().height(if (bigUi) 64.dp else 52.dp)
+                modifier = Modifier.fillMaxWidth().height(if (bigUi) 66.dp else 54.dp)
             ) {
-                Text("הוסף מיפוי חדש", fontSize = if (bigUi) 20.sp else 17.sp)
+                Text("+ הוסף מיפוי חדש", fontSize = if (bigUi) 21.sp else 18.sp)
             }
-            Spacer(Modifier.height(12.dp))
+
+            Spacer(Modifier.height(8.dp))
         }
     }
 
-    if (showAdd) {
-        AddMappingDialog(
-            onDismiss = {
-                onCancelCapture()
-                showAdd = false
-            },
+    if (showAdd || editing != null) {
+        MappingDialog(
+            initial = editing,
+            defaultPressCount = quickPress,
             detectedKey = detectedKey,
             captureActive = captureActive,
             onBeginCapture = onBeginCapture,
-            onCancelCapture = onCancelCapture
-        ) { config ->
-            scope.launch { prefsRepo.saveMappings(mappings + config) }
-            showAdd = false
-        }
+            onCancelCapture = onCancelCapture,
+            onDismiss = {
+                onCancelCapture()
+                showAdd = false
+                editing = null
+            },
+            onSave = { config ->
+                scope.launch {
+                    val updated = if (editing != null) {
+                        mappings.map { if (it.id == config.id) config else it }
+                    } else {
+                        mappings + config
+                    }
+                    prefsRepo.saveMappings(updated)
+                }
+                onCancelCapture()
+                showAdd = false
+                editing = null
+            },
+            onDelete = { config ->
+                scope.launch {
+                    prefsRepo.saveMappings(mappings.filterNot { it.id == config.id })
+                }
+                showAdd = false
+                editing = null
+            }
+        )
     }
 
-    if (showSettings) {
-        SettingsDialog(prefsRepo = prefsRepo, onDismiss = { showSettings = false })
+    if (showSettings) SettingsDialog(prefsRepo) { showSettings = false }
+
+    if (showAbout) {
+        InfoDialog(
+            title = "אודות Click+",
+            body = "כלי למיפוי מקשי חומרה. הקצה לכפתורים פיזיים פתיחת אפליקציות, פעולות מערכת, שליטת מדיה ולחיצה על רכיבים במסך.",
+            onDismiss = { showAbout = false }
+        )
+    }
+
+    if (showHelp) {
+        InfoDialog(
+            title = "עזרה",
+            body = "לחץ על ״הוסף מיפוי חדש״. לכוד מקש פיזי, בחר סוג לחיצה ובחר פעולה מוכנה. אפשר לערוך מיפוי קיים בלחיצה עליו.",
+            onDismiss = { showHelp = false }
+        )
+    }
+
+    if (showBackupRestore) {
+        BackupRestoreDialog(mappings, prefsRepo) { showBackupRestore = false }
     }
 }
 
 @Composable
-private fun EmptyState(onAdd: () -> Unit) {
+private fun ServiceStatusCard(enabled: Boolean, onOpenSettings: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("עדיין אין מיפויים", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(10.dp))
-            Text("צור מיפוי ראשון לכפתור פיזי.")
-            Spacer(Modifier.height(12.dp))
-            OutlinedButton(onClick = onAdd) { Text("צור מיפוי ראשון") }
+        Row(
+            Modifier.padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                if (enabled) "●" else "○",
+                color = if (enabled) Color(0xFF00E676) else MaterialTheme.colorScheme.error,
+                fontSize = 28.sp
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (enabled) "שירות הנגישות: פעיל" else "שירות הנגישות: מופסק",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    if (enabled) "Click+ מוכן לקליטת מקשי חומרה."
+                    else "הפעל את השירות כדי שהמיפויים יעבדו."
+                )
+            }
+            if (!enabled) OutlinedButton(onClick = onOpenSettings) { Text("הפעלה") }
         }
     }
 }
 
 @Composable
-private fun MappingRowItem(
+private fun EmptyStateCard(onAdd: () -> Unit) {
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("טרם הוגדרו מקשים", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(8.dp))
+            Text("הוסף מיפוי אחד כדי להתחיל.")
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onAdd) { Text("+ הוסף מיפוי חדש") }
+        }
+    }
+}
+
+@Composable
+private fun MappingCard(
     item: KeyActionConfig,
     bigUi: Boolean,
-    onTest: () -> Unit,
-    onToggle: (KeyActionConfig) -> Unit
+    onClick: () -> Unit,
+    onToggle: (Boolean) -> Unit,
+    onTest: () -> Unit
 ) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(if (bigUi) 20.dp else 12.dp)) {
+    Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Column(Modifier.padding(if (bigUi) 18.dp else 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         item.customLabel.ifBlank { item.keyNameHebrew },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontSize = if (bigUi) 20.sp else 17.sp
+                        style = MaterialTheme.typography.titleLarge
                     )
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        "לחיצות: ${item.tapCount} • ${actionSummaryHebrew(item)}",
-                        fontSize = if (bigUi) 15.sp else 13.sp
-                    )
+                    Text(item.pressTypeHebrew() + "  •  " + actionSummaryHebrew(item))
                 }
-                Switch(
-                    checked = item.isEnabled,
-                    onCheckedChange = { onToggle(item.copy(isEnabled = it)) }
-                )
+                Switch(checked = item.isEnabled, onCheckedChange = onToggle)
             }
-
-            HorizontalDivider(Modifier.padding(vertical = 10.dp))
-
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedButton(onClick = onTest) { Text("בדיקת פעולה") }
-                Text("מקש ${item.triggerKeyCode}", modifier = Modifier.weight(1f))
+                Text("מקש " + item.triggerKeyCode, fontSize = 13.sp)
+                OutlinedButton(onClick = onTest) { Text("בדיקה") }
             }
         }
-    }
-}
-
-private fun testMapping(context: android.content.Context, config: KeyActionConfig) {
-    val service = KeyInterceptorAccessibilityService.instance
-    if (service != null) {
-        service.testMapping(config)
-    } else {
-        android.widget.Toast.makeText(
-            context,
-            "שירות Click+ אינו פעיל. הפעל אותו בהגדרות הנגישות.",
-            android.widget.Toast.LENGTH_LONG
-        ).show()
     }
 }
 
 @Composable
-private fun AddMappingDialog(
-    onDismiss: () -> Unit,
+private fun MappingDialog(
+    initial: KeyActionConfig?,
+    defaultPressCount: Int,
     detectedKey: Int?,
     captureActive: Boolean,
     onBeginCapture: () -> Unit,
     onCancelCapture: () -> Unit,
-    onSave: (KeyActionConfig) -> Unit
+    onDismiss: () -> Unit,
+    onSave: (KeyActionConfig) -> Unit,
+    onDelete: (KeyActionConfig) -> Unit
 ) {
-    var label by remember { mutableStateOf("") }
-    var keyCode by remember { mutableStateOf<Int?>(null) }
-    var keyName by remember { mutableStateOf("לא נלכד מקש עדיין") }
-    var taps by remember { mutableStateOf("1") }
-    var action by remember { mutableStateOf(ActionType.SYSTEM_KEY) }
-    var selectedPreset by remember { mutableStateOf(SystemActionPreset.HOME) }
-    var selectedAppPackage by remember { mutableStateOf("") }
-    var selectedAppName by remember { mutableStateOf("") }
-    var target by remember { mutableStateOf("") }
-    var actionMenuExpanded by remember { mutableStateOf(false) }
-    var systemMenuExpanded by remember { mutableStateOf(false) }
-    var showAppPicker by remember { mutableStateOf(false) }
-    var showCaptureDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val existing = initial
+
+    var step by remember { mutableStateOf(1) }
+    var label by remember { mutableStateOf(existing?.customLabel.orEmpty()) }
+    var keyCode by remember { mutableStateOf(existing?.triggerKeyCode) }
+    var keyName by remember { mutableStateOf(existing?.keyNameHebrew ?: "לחץ כדי לזהות מקש") }
+    var pressCount by remember { mutableStateOf(existing?.tapCount ?: defaultPressCount) }
+    var actionType by remember { mutableStateOf(existing?.actionType ?: ActionType.SYSTEM_KEY) }
+    var systemAction by remember {
+        mutableStateOf(
+            SystemActionPreset.entries.firstOrNull { it.id == existing?.systemActionId }
+                ?: SystemActionPreset.HOME
+        )
+    }
+    var selectedAppPackage by remember { mutableStateOf(existing?.targetPackage.orEmpty()) }
+    var selectedAppName by remember { mutableStateOf(existing?.targetAppName.orEmpty()) }
+    var nodeTarget by remember { mutableStateOf(existing?.nodeIdentifier.orEmpty()) }
+    var customIntent by remember { mutableStateOf(existing?.targetClassOrIntent.orEmpty()) }
+    var showActionMenu by remember { mutableStateOf(false) }
+    var showSystemMenu by remember { mutableStateOf(false) }
+    var showAdvanced by remember { mutableStateOf(false) }
+    var showApps by remember { mutableStateOf(false) }
+    var sampling by remember { mutableStateOf(false) }
+    var sampleMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(detectedKey) {
         if (captureActive && detectedKey != null) {
             keyCode = detectedKey
-            keyName = "מקש שנלכד: ${KeyEvent.keyCodeToString(detectedKey).removePrefix("KEYCODE_")} (${detectedKey})"
-            showCaptureDialog = false
+            keyName =
+                "נלכד בהצלחה: " +
+                    KeyEvent.keyCodeToString(detectedKey).removePrefix("KEYCODE_") +
+                    " (" + detectedKey + ")"
         }
     }
 
     AlertDialog(
-        onDismissRequest = {
-            onCancelCapture()
-            onDismiss()
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(if (existing == null) "הוסף מיפוי מקש" else "עריכת מיפוי")
+                Spacer(Modifier.height(6.dp))
+                Text("שלב " + step + " מתוך 3", style = MaterialTheme.typography.labelLarge)
+                LinearProgressIndicator(
+                    progress = { step / 3f },
+                    modifier = Modifier.fillMaxWidth().padding(top = 7.dp)
+                )
+            }
         },
-        title = { Text("הגדרת מיפוי חדש") },
         text = {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.height(520.dp)
-            ) {
-                item {
-                    OutlinedTextField(
-                        value = label,
-                        onValueChange = { label = it },
-                        label = { Text("שם / תווית לזיהוי") },
-                        supportingText = { Text("אופציונלי") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                }
-
-                item {
-                    Button(
-                        onClick = {
-                            showCaptureDialog = true
-                            onBeginCapture()
-                        },
-                        modifier = Modifier.fillMaxWidth()
+            when (step) {
+                1 -> {
+                    Column(
+                        Modifier.verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(keyName)
+                        OutlinedTextField(
+                            value = label,
+                            onValueChange = { label = it },
+                            label = { Text("שם המיפוי") },
+                            supportingText = { Text("לדוגמה: כפתור ווליום ימני") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        Button(
+                            onClick = onBeginCapture,
+                            modifier = Modifier.fillMaxWidth().height(74.dp)
+                        ) {
+                            Text(
+                                if (captureActive) "ממתין בלחיצה…" else "🔘 " + keyName,
+                                fontSize = 18.sp
+                            )
+                        }
+
+                        if (keyCode != null) {
+                            Card(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(14.dp)) {
+                                    Text("נלכד בהצלחה", fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(keyName)
+                                }
+                            }
+                        }
+
+                        Text("אין צורך להזין KeyCode ידנית.", fontSize = 14.sp)
                     }
                 }
 
-                item {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                2 -> {
+                    Column(
+                        Modifier.verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("מספר לחיצות רצופות")
-                        Spacer(Modifier.width(8.dp))
-                        OutlinedTextField(
-                            value = taps,
-                            onValueChange = { taps = it.filter(Char::isDigit).take(2) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
+                        Text("איך תרצה שהמקש יתנהג?", style = MaterialTheme.typography.titleMedium)
+
+                        PressOption(
+                            title = "לחיצה בודדת",
+                            subtitle = "פעולה אחת בלחיצה רגילה",
+                            selected = pressCount == 1,
+                            onClick = { pressCount = 1 }
+                        )
+                        PressOption(
+                            title = "לחיצה כפולה",
+                            subtitle = "שתי לחיצות מהירות",
+                            selected = pressCount == 2,
+                            onClick = { pressCount = 2 }
+                        )
+                        PressOption(
+                            title = "לחיצה ארוכה",
+                            subtitle = "החזקה של המקש",
+                            selected = pressCount == 0,
+                            onClick = { pressCount = 0 }
                         )
                     }
                 }
 
-                item {
-                    Box(Modifier.fillMaxWidth()) {
-                        OutlinedButton(
-                            onClick = { actionMenuExpanded = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("סוג פעולה: ${action.titleHebrew}")
-                        }
-                        DropdownMenu(
-                            expanded = actionMenuExpanded,
-                            onDismissRequest = { actionMenuExpanded = false }
-                        ) {
-                            ActionType.entries.forEach { candidate ->
-                                DropdownMenuItem(
-                                    text = { Text(candidate.titleHebrew) },
-                                    onClick = {
-                                        action = candidate
-                                        actionMenuExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    when (action) {
-                        ActionType.LAUNCH_APP -> {
+                3 -> {
+                    Column(
+                        Modifier.verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(Modifier.fillMaxWidth()) {
                             OutlinedButton(
-                                onClick = { showAppPicker = true },
-                                modifier = Modifier.fillMaxWidth()
+                                onClick = { showActionMenu = true },
+                                modifier = Modifier.fillMaxWidth().height(58.dp)
                             ) {
                                 Text(
-                                    if (selectedAppName.isBlank()) {
-                                        "בחירת אפליקציה"
-                                    } else {
-                                        "נבחרה: $selectedAppName"
+                                    when (actionType) {
+                                        ActionType.LAUNCH_APP -> "📱 פתיחת אפליקציה"
+                                        ActionType.SYSTEM_KEY -> "⚙ פעולת מערכת"
+                                        ActionType.CLICK_NODE_BY_ID,
+                                        ActionType.CLICK_NODE_BY_TEXT -> "🎯 לחיצה על רכיב במסך"
+                                        ActionType.SEND_INTENT -> "🛠 מתקדם — Intent"
+                                    },
+                                    fontSize = 17.sp
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showActionMenu,
+                                onDismissRequest = { showActionMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("📱 פתיחת אפליקציה") },
+                                    onClick = {
+                                        actionType = ActionType.LAUNCH_APP
+                                        showActionMenu = false
                                     }
                                 )
+                                DropdownMenuItem(
+                                    text = { Text("⚙ פעולת מערכת") },
+                                    onClick = {
+                                        actionType = ActionType.SYSTEM_KEY
+                                        showActionMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("🎯 לחיצה על רכיב במסך") },
+                                    onClick = {
+                                        actionType = ActionType.CLICK_NODE_BY_TEXT
+                                        showActionMenu = false
+                                    }
+                                )
+                                if (showAdvanced) {
+                                    DropdownMenuItem(
+                                        text = { Text("🛠 מתקדם — פקודת Intent") },
+                                        onClick = {
+                                            actionType = ActionType.SEND_INTENT
+                                            showActionMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
 
-                        ActionType.SYSTEM_KEY -> {
-                            Box(Modifier.fillMaxWidth()) {
+                        when (actionType) {
+                            ActionType.LAUNCH_APP -> {
                                 OutlinedButton(
-                                    onClick = { systemMenuExpanded = true },
-                                    modifier = Modifier.fillMaxWidth()
+                                    onClick = { showApps = true },
+                                    modifier = Modifier.fillMaxWidth().height(62.dp)
                                 ) {
-                                    Text("פעולת מערכת: ${selectedPreset.titleHebrew}")
+                                    Text(
+                                        if (selectedAppName.isBlank()) "בחר אפליקציה מהרשימה"
+                                        else "נבחרה: " + selectedAppName
+                                    )
                                 }
-                                DropdownMenu(
-                                    expanded = systemMenuExpanded,
-                                    onDismissRequest = { systemMenuExpanded = false }
-                                ) {
-                                    SystemActionPreset.entries.forEach { preset ->
-                                        DropdownMenuItem(
-                                            text = { Text(preset.titleHebrew) },
-                                            onClick = {
-                                                selectedPreset = preset
-                                                systemMenuExpanded = false
+                            }
+
+                            ActionType.SYSTEM_KEY -> {
+                                Box(Modifier.fillMaxWidth()) {
+                                    OutlinedButton(
+                                        onClick = { showSystemMenu = true },
+                                        modifier = Modifier.fillMaxWidth().height(58.dp)
+                                    ) {
+                                        Text("פעולה: " + systemAction.titleHebrew)
+                                    }
+                                    DropdownMenu(
+                                        expanded = showSystemMenu,
+                                        onDismissRequest = { showSystemMenu = false }
+                                    ) {
+                                        SystemActionPreset.entries.forEach { preset ->
+                                            DropdownMenuItem(
+                                                text = { Text(preset.titleHebrew) },
+                                                onClick = {
+                                                    systemAction = preset
+                                                    showSystemMenu = false
+
+                                                    if (preset == SystemActionPreset.FLASHLIGHT) {
+                                                        val activity = context as? ComponentActivity
+                                                        if (activity != null) {
+                                                            ActivityCompat.requestPermissions(
+                                                                activity,
+                                                                arrayOf(Manifest.permission.CAMERA),
+                                                                2001
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                                Text(
+                                    "פעולות מוכנות: בית, חזרה, אחרונים, התראות, מדיה, ווליום ועוד.",
+                                    fontSize = 14.sp
+                                )
+                            }
+
+                            ActionType.CLICK_NODE_BY_ID,
+                            ActionType.CLICK_NODE_BY_TEXT -> {
+                                OutlinedButton(
+                                    onClick = {
+                                        val service = KeyInterceptorAccessibilityService.instance
+                                        if (service == null) {
+                                            sampleMessage = "הפעל תחילה את שירות הנגישות."
+                                        } else {
+                                            sampling = true
+                                            service.sampleNode { text, viewId ->
+                                                sampling = false
+                                                nodeTarget =
+                                                    if (actionType == ActionType.CLICK_NODE_BY_ID) viewId else text
+                                                sampleMessage =
+                                                    if (nodeTarget.isBlank()) {
+                                                        "לא נמצא מידע זמין ברכיב שנבחר."
+                                                    } else {
+                                                        "הרכיב נדגם בהצלחה."
+                                                    }
                                             }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(62.dp)
+                                ) {
+                                    Text(
+                                        if (sampling) "ממתין לבחירת רכיב…" else "🎯 דגום רכיב מהמסך"
+                                    )
+                                }
+
+                                FilterChip(
+                                    selected = actionType == ActionType.CLICK_NODE_BY_TEXT,
+                                    onClick = { actionType = ActionType.CLICK_NODE_BY_TEXT },
+                                    label = { Text("לפי טקסט") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                FilterChip(
+                                    selected = actionType == ActionType.CLICK_NODE_BY_ID,
+                                    onClick = { actionType = ActionType.CLICK_NODE_BY_ID },
+                                    label = { Text("לפי מזהה רכיב") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                sampleMessage?.let { Text(it) }
+
+                                if (nodeTarget.isNotBlank()) {
+                                    Card(Modifier.fillMaxWidth()) {
+                                        Text(
+                                            nodeTarget,
+                                            modifier = Modifier.padding(14.dp),
+                                            fontSize = 16.sp
                                         )
                                     }
                                 }
                             }
+
+                            ActionType.SEND_INTENT -> {
+                                OutlinedTextField(
+                                    value = customIntent,
+                                    onValueChange = { customIntent = it },
+                                    label = { Text("Intent מותאם אישית") },
+                                    supportingText = { Text("למשתמשים מתקדמים בלבד") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                                OutlinedButton(
+                                    onClick = {
+                                        customIntent = Settings.ACTION_WIFI_SETTINGS
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("הכנס פעולה נפוצה: הגדרות Wi‑Fi")
+                                }
+                            }
                         }
 
-                        ActionType.CLICK_NODE_BY_ID -> {
-                            OutlinedTextField(
-                                value = target,
-                                onValueChange = { target = it },
-                                label = { Text("מזהה רכיב (View ID)") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                        }
-
-                        ActionType.CLICK_NODE_BY_TEXT -> {
-                            OutlinedTextField(
-                                value = target,
-                                onValueChange = { target = it },
-                                label = { Text("הטקסט שמופיע על הכפתור") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                        }
-
-                        ActionType.SEND_INTENT -> {
-                            OutlinedTextField(
-                                value = target,
-                                onValueChange = { target = it },
-                                label = { Text("Action של Intent מותאם") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
+                        TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                            Text(
+                                if (showAdvanced) "הסתר אפשרויות מתקדמות"
+                                else "אפשרויות מתקדמות"
                             )
                         }
                     }
@@ -631,95 +921,117 @@ private fun AddMappingDialog(
             }
         },
         confirmButton = {
-            Button(
-                enabled =
-                    keyCode != null &&
-                    (action != ActionType.LAUNCH_APP || selectedAppPackage.isNotBlank()) &&
-                    (
-                        action !in setOf(
-                            ActionType.CLICK_NODE_BY_ID,
-                            ActionType.CLICK_NODE_BY_TEXT,
-                            ActionType.SEND_INTENT
-                        ) || target.isNotBlank()
-                    ),
-                onClick = {
-                    val safeKey = keyCode
-                    val safeTaps = taps.toIntOrNull()?.coerceIn(1, 20) ?: 1
-
-                    if (safeKey != null) onSave(
-                        KeyActionConfig(
-                            customLabel = label.trim(),
-                            triggerKeyCode = safeKey,
-                            keyNameHebrew = keyName,
-                            tapCount = safeTaps,
-                            actionType = action,
-                            targetPackage = selectedAppPackage,
-                            targetAppName = selectedAppName,
-                            targetClassOrIntent = if (action == ActionType.SEND_INTENT) target.trim() else "",
-                            nodeIdentifier = if (
-                                action == ActionType.CLICK_NODE_BY_ID ||
-                                action == ActionType.CLICK_NODE_BY_TEXT
-                            ) target.trim() else "",
-                            systemKeyCode = if (action == ActionType.SYSTEM_KEY) {
-                                selectedPreset.keyCode
-                            } else {
-                                KeyEvent.KEYCODE_HOME
-                            }
-                        )
-                    )
-                    onCancelCapture()
+            if (step < 3) {
+                Button(
+                    enabled = step != 1 || keyCode != null,
+                    onClick = { step++ }
+                ) {
+                    Text("המשך")
                 }
-            ) {
-                Text("שמור מיפוי")
+            } else {
+                Button(
+                    enabled = isMappingValid(
+                        keyCode,
+                        actionType,
+                        selectedAppPackage,
+                        nodeTarget,
+                        customIntent
+                    ),
+                    onClick = {
+                        val safeKey = keyCode ?: return@Button
+                        onSave(
+                            KeyActionConfig(
+                                id = existing?.id ?: java.util.UUID.randomUUID().toString(),
+                                customLabel = label.trim(),
+                                triggerKeyCode = safeKey,
+                                keyNameHebrew = keyName,
+                                tapCount = pressCount,
+                                actionType = actionType,
+                                targetPackage = selectedAppPackage,
+                                targetAppName = selectedAppName,
+                                targetClassOrIntent = customIntent,
+                                nodeIdentifier = nodeTarget,
+                                systemActionId = systemAction.id,
+                                systemKeyCode = systemAction.legacyKeyCode,
+                                profileName = existing?.profileName ?: "DEFAULT",
+                                isEnabled = existing?.isEnabled ?: true
+                            )
+                        )
+                    }
+                ) {
+                    Text("שמור")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = {
-                onCancelCapture()
-                onDismiss()
-            }) {
-                Text("ביטול")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (existing != null) {
+                    TextButton(onClick = { onDelete(existing) }) { Text("מחק") }
+                }
+                TextButton(
+                    onClick = {
+                        if (step > 1) step-- else onDismiss()
+                    }
+                ) {
+                    Text(if (step > 1) "חזרה" else "ביטול")
+                }
             }
         }
     )
 
-    if (showCaptureDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showCaptureDialog = false
-                onCancelCapture()
-            },
-            title = { Text("לחץ על כפתור") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("לחץ עכשיו על הכפתור הפיזי שברצונך למפות.")
-                    Text(
-                        if (captureActive) "ממתין ללחיצה…" else "הקליטה הסתיימה.",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = {
-                    showCaptureDialog = false
-                    onCancelCapture()
-                }) {
-                    Text("ביטול")
-                }
+    if (showApps) {
+        AppPickerDialog(
+            onDismiss = { showApps = false },
+            onSelect = { pkg, name ->
+                selectedAppPackage = pkg
+                selectedAppName = name
+                showApps = false
             }
         )
     }
+}
 
-    if (showAppPicker) {
-        AppPickerDialog(
-            onDismiss = { showAppPicker = false },
-            onSelect = { packageName, appName ->
-                selectedAppPackage = packageName
-                selectedAppName = appName
-                showAppPicker = false
+private fun isMappingValid(
+    keyCode: Int?,
+    actionType: ActionType,
+    packageName: String,
+    nodeTarget: String,
+    intent: String
+): Boolean {
+    if (keyCode == null) return false
+    return when (actionType) {
+        ActionType.LAUNCH_APP -> packageName.isNotBlank()
+        ActionType.SYSTEM_KEY -> true
+        ActionType.CLICK_NODE_BY_ID,
+        ActionType.CLICK_NODE_BY_TEXT -> nodeTarget.isNotBlank()
+        ActionType.SEND_INTENT -> intent.isNotBlank()
+    }
+}
+
+@Composable
+private fun PressOption(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    OutlinedCard(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                if (selected) "●" else "○",
+                color = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 22.sp
+            )
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(subtitle)
             }
-        )
+        }
     }
 }
 
@@ -745,7 +1057,7 @@ private fun AppPickerDialog(
                 AppInfoItem(
                     label = app.loadLabel(pm).toString(),
                     packageName = app.packageName,
-                    icon = runCatching { app.loadIcon(pm).toBitmap(48, 48) }.getOrNull()
+                    icon = runCatching { app.loadIcon(pm).toBitmap(56, 56) }.getOrNull()
                 )
             }
             .sortedBy { it.label.lowercase() }
@@ -754,44 +1066,38 @@ private fun AppPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("בחר אפליקציה לפתיחה") },
+        title = { Text("בחירת אפליקציה") },
         text = {
-            if (apps.isEmpty()) {
-                Text("לא נמצאו אפליקציות שניתנות להפעלה.")
-            } else {
-                LazyColumn(
-                    modifier = Modifier.height(420.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(apps, key = { it.packageName }) { app ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(app.packageName, app.label) }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (app.icon != null) {
-                                Image(
-                                    bitmap = app.icon.asImageBitmap(),
-                                    contentDescription = app.label,
-                                    modifier = Modifier.size(46.dp)
-                                )
-                                Spacer(Modifier.width(12.dp))
-                            }
-                            Column {
-                                Text(app.label, style = MaterialTheme.typography.titleMedium)
-                                Text(app.packageName, style = MaterialTheme.typography.bodySmall)
-                            }
+            LazyColumn(
+                Modifier.height(430.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(apps, key = { it.packageName }) { app ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(app.packageName, app.label) }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        app.icon?.let {
+                            Image(
+                                bitmap = it.asImageBitmap(),
+                                contentDescription = app.label,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                        }
+                        Column {
+                            Text(app.label, style = MaterialTheme.typography.titleMedium)
+                            Text(app.packageName, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
             }
         },
         confirmButton = {},
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss) { Text("סגור") }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("סגור") } }
     )
 }
 
@@ -801,85 +1107,257 @@ private fun SettingsDialog(
     onDismiss: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val storedTimeout by prefsRepo.tapTimeoutFlow.collectAsState(initial = 450L)
-    val storedDebounce by prefsRepo.debounceMsFlow.collectAsState(initial = 80L)
-    val storedHud by prefsRepo.hudStyleFlow.collectAsState(initial = HudStyle.SHORT_TEXT)
-    val storedTheme by prefsRepo.themeOptionFlow.collectAsState(initial = ThemeOption.DARK_OLED)
+    val timeout by prefsRepo.tapTimeoutFlow.collectAsState(initial = 450L)
+    val debounce by prefsRepo.debounceMsFlow.collectAsState(initial = 80L)
+    val hud by prefsRepo.hudStyleFlow.collectAsState(initial = HudStyle.SHORT_TEXT)
+    val theme by prefsRepo.themeOptionFlow.collectAsState(initial = ThemeOption.DARK_OLED)
+    val big by prefsRepo.carFriendlyUiFlow.collectAsState(initial = true)
 
-    var tapTimeout by remember(storedTimeout) { mutableStateOf(storedTimeout.toString()) }
-    var debounce by remember(storedDebounce) { mutableStateOf(storedDebounce.toString()) }
-    var selectedHud by remember(storedHud) { mutableStateOf(storedHud) }
-    var selectedTheme by remember(storedTheme) { mutableStateOf(storedTheme) }
+    var localTimeout by remember(timeout) { mutableStateOf(timeout.toFloat()) }
+    var localDebounce by remember(debounce) { mutableStateOf(debounce.toFloat()) }
+    var localHud by remember(hud) { mutableStateOf(hud) }
+    var localTheme by remember(theme) { mutableStateOf(theme) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("הגדרות מתקדמות") },
         text = {
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.height(430.dp)
+                Modifier.height(520.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
-                    OutlinedTextField(
-                        value = tapTimeout,
-                        onValueChange = { tapTimeout = it.filter(Char::isDigit) },
-                        label = { Text("זמן חלון לריבוי לחיצות (מילישניות)") },
-                        supportingText = { Text("ברירת מחדל: 450") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    Text("מראה ועיצוב", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ThemeCard(ThemeOption.LIGHT, localTheme == ThemeOption.LIGHT) {
+                            localTheme = ThemeOption.LIGHT
+                        }
+                        ThemeCard(ThemeOption.DARK, localTheme == ThemeOption.DARK) {
+                            localTheme = ThemeOption.DARK
+                        }
+                        ThemeCard(ThemeOption.DARK_OLED, localTheme == ThemeOption.DARK_OLED) {
+                            localTheme = ThemeOption.DARK_OLED
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { localTheme = ThemeOption.AUTO },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (localTheme == ThemeOption.AUTO) "✓ אוטומטי" else "אוטומטי")
+                    }
                 }
+
                 item {
-                    OutlinedTextField(
-                        value = debounce,
-                        onValueChange = { debounce = it.filter(Char::isDigit) },
-                        label = { Text("סינון רעשים (מילישניות)") },
-                        supportingText = { Text("ברירת מחדל: 80") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                    Text("חלון זמן לריבוי לחיצות", style = MaterialTheme.typography.titleMedium)
+                    Text(localTimeout.toInt().toString() + " מילישניות", fontSize = 18.sp)
+                    Slider(
+                        value = localTimeout,
+                        onValueChange = { localTimeout = it },
+                        valueRange = 200f..1000f,
+                        steps = 15
                     )
+                    Text("הזמן המרבי בין לחיצה ללחיצה באותו רצף.")
                 }
+
                 item {
-                    Text("סגנון HUD", style = MaterialTheme.typography.titleMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        HudStyle.entries.forEach { style ->
+                    Text("סינון רעשים", style = MaterialTheme.typography.titleMedium)
+                    Text(localDebounce.toInt().toString() + " מילישניות", fontSize = 18.sp)
+                    Slider(
+                        value = localDebounce,
+                        onValueChange = { localDebounce = it },
+                        valueRange = 0f..300f,
+                        steps = 14
+                    )
+                    Text("מונע לחיצות כפולות שנוצרות מרעשי חומרה.")
+                }
+
+                item {
+                    Text("סגנון חיווי", style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(
+                            HudStyle.SHORT_TEXT,
+                            HudStyle.NUMBER_ONLY,
+                            HudStyle.SILENT
+                        ).forEach { option ->
                             FilterChip(
-                                selected = selectedHud == style,
-                                onClick = { selectedHud = style },
-                                label = { Text(style.titleHebrew) }
+                                selected = localHud == option,
+                                onClick = { localHud = option },
+                                label = { Text(option.titleHebrew) },
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
                 }
+
                 item {
-                    Text("מראה", style = MaterialTheme.typography.titleMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ThemeOption.entries.forEach { option ->
-                            FilterChip(
-                                selected = selectedTheme == option,
-                                onClick = { selectedTheme = option },
-                                label = { Text(option.titleHebrew) }
-                            )
+                    Switch(
+                        checked = big,
+                        onCheckedChange = {
+                            scope.launch { prefsRepo.saveCarFriendlyUi(it) }
                         }
-                    }
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("ממשק מוגדל", fontWeight = FontWeight.Bold)
+                    Text("כפתורים וטקסט גדולים יותר לשימוש נוח.")
                 }
             }
         },
         confirmButton = {
             Button(onClick = {
                 scope.launch {
-                    prefsRepo.saveTapTimeout(tapTimeout.toLongOrNull() ?: 450L)
-                    prefsRepo.saveDebounce(debounce.toLongOrNull() ?: 80L)
-                    prefsRepo.saveHudStyle(selectedHud)
-                    prefsRepo.saveThemeOption(selectedTheme)
+                    prefsRepo.saveTapTimeout(localTimeout.toLong())
+                    prefsRepo.saveDebounce(localDebounce.toLong())
+                    prefsRepo.saveHudStyle(localHud)
+                    prefsRepo.saveThemeOption(localTheme)
                 }
                 onDismiss()
             }) {
                 Text("שמור")
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("ביטול") }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("ביטול") } }
     )
+}
+
+@Composable
+private fun ThemeCard(
+    option: ThemeOption,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val background = when (option) {
+        ThemeOption.LIGHT -> Color(0xFFF4F4F4)
+        ThemeOption.DARK -> Color(0xFF27252D)
+        ThemeOption.DARK_OLED -> Color.Black
+        ThemeOption.AUTO -> Color.Gray
+    }
+
+    Card(Modifier.weight(1f).clickable(onClick = onClick)) {
+        Column(
+            Modifier.padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                color = background,
+                modifier = Modifier.fillMaxWidth().height(42.dp)
+            ) {
+                if (selected) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            "✓",
+                            color = if (option == ThemeOption.LIGHT) Color.Black else Color.White
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(option.titleHebrew, fontSize = 13.sp, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun InfoDialog(title: String, body: String, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(body) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("סגור") } }
+    )
+}
+
+@Composable
+private fun BackupRestoreDialog(
+    mappings: List<KeyActionConfig>,
+    prefsRepo: AppPreferencesRepository,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("גיבוי ושחזור") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("אפשר לגבות או לשחזר את המיפויים דרך לוח ההעתקה של המכשיר.")
+
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                        val array = JSONArray()
+                        mappings.forEach { array.put(it.toJson()) }
+                        clipboard?.setPrimaryClip(
+                            ClipData.newPlainText("Click+ backup", array.toString())
+                        )
+                        message = "הגיבוי הועתק ללוח."
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("העתק גיבוי")
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                        val clip = clipboard?.primaryClip
+                        val text = clip?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
+                        runCatching {
+                            val array = JSONArray(text)
+                            val restored = buildList {
+                                for (i in 0 until array.length()) {
+                                    add(KeyActionConfig.fromJson(array.getJSONObject(i)))
+                                }
+                            }
+                            scope.launch {
+                                prefsRepo.saveMappings(restored)
+                                message = "השחזור הושלם בהצלחה."
+                            }
+                        }.onFailure {
+                            message = "לא נמצא גיבוי תקין בלוח."
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("שחזר מהלוח")
+                }
+
+                if (message.isNotBlank()) Text(message)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("סגור") } }
+    )
+}
+
+private fun isServiceEnabled(context: Context): Boolean {
+    val manager = context.getSystemService(AccessibilityManager::class.java) ?: return false
+    return manager
+        .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        .any { info ->
+            val serviceInfo = info.resolveInfo?.serviceInfo
+            serviceInfo?.packageName == context.packageName &&
+                serviceInfo.name == KeyInterceptorAccessibilityService::class.java.name
+        }
+}
+
+private fun testMapping(context: Context, config: KeyActionConfig) {
+    val service = KeyInterceptorAccessibilityService.instance
+    if (service != null) {
+        service.testMapping(config)
+    } else {
+        android.widget.Toast.makeText(
+            context,
+            "שירות Click+ אינו פעיל. הפעל אותו בהגדרות הנגישות.",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+    }
 }
