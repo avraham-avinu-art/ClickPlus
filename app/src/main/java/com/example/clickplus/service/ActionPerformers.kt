@@ -8,6 +8,7 @@ import android.view.KeyEvent
 import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.KeyActionConfig
+import com.example.clickplus.data.profileIdFromActionId
 import com.example.clickplus.data.SystemActionPreset
 
 data class ActionExecutionResult(
@@ -75,18 +76,31 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
             when (config.actionType) {
                 ActionType.MULTI_POINT_TAP -> ActionExecutionResult.failure("שתי לחיצות אוטומטיות דורשות מצב מלא עם שירות נגישות")
                 ActionType.APP_TAP -> ActionExecutionResult.failure("לחיצה בתוך אפליקציה דורשת מצב מלא עם שירות נגישות")
-                ActionType.PROFILE -> when (config.systemActionId) {
-                    "profile_next" ->
-                        ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(context, 1))
-                    "profile_previous" ->
-                        ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(context, -1))
-                    "profile_default" -> {
-                        AdvancedRuleRepository.setActiveProfileId(context, "default")
-                        ActionExecutionResult.success("חזר לפרופיל ברירת המחדל")
+                ActionType.PROFILE -> {
+                    val selectedProfileId = profileIdFromActionId(config.systemActionId)
+                    if (selectedProfileId != null) {
+                        val profile = AdvancedRuleRepository(context).profiles().firstOrNull { it.id == selectedProfileId }
+                            ?: return ActionExecutionResult.failure("הפרופיל שנבחר אינו קיים")
+                        if (!profile.enabled) {
+                            return ActionExecutionResult.failure("הפרופיל שנבחר מושבת")
+                        }
+                        AdvancedRuleRepository.setActiveProfileId(context, profile.id)
+                        ActionExecutionResult.success("עבר לפרופיל: " + profile.name)
+                    } else {
+                        // Backward compatibility for rules saved by older versions.
+                        when (config.systemActionId) {
+                            "profile_next" ->
+                                ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(context, 1))
+                            "profile_previous" ->
+                                ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(context, -1))
+                            "profile_default" -> {
+                                AdvancedRuleRepository.setActiveProfileId(context, "default")
+                                ActionExecutionResult.success("חזר לפרופיל ברירת המחדל")
+                            }
+                            else -> ActionExecutionResult.failure("פעולת פרופיל ClickPlus אינה מוכרת")
+                        }
                     }
-                    else -> ActionExecutionResult.failure("פעולת פרופיל ClickPlus אינה מוכרת")
-                }
-                ActionType.APP -> {
+                }                ActionType.APP -> {
                     if (config.targetPackage.isBlank()) {
                         return ActionExecutionResult.failure("לא נבחרה אפליקציית יעד")
                     }
