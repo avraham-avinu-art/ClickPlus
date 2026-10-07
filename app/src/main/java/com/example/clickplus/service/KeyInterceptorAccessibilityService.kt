@@ -320,11 +320,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
 
     private fun openEditor() {
         runCatching {
+            // Bring the existing editor instance back to the front so its draft
+            // (including point 1) is preserved for point 2.
             startActivity(
                 Intent(this, DashboardActivity::class.java).addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 )
             )
         }
