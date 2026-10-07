@@ -42,7 +42,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                     service.startActivity(intent)
                     ActionExecutionResult.success("אפליקציית היעד נפתחה")
                 }
-                ActionType.SYSTEM -> executeSystem(config.systemActionId)
+                ActionType.SYSTEM -> executeSystem(config.systemActionId, config.actionParameter)
             }
         } catch (error: Throwable) {
             ActionExecutionResult.failure(
@@ -255,7 +255,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         )
     }
 
-    private fun executeSystem(actionId: String): ActionExecutionResult = when (actionId) {
+    private fun executeSystem(actionId: String, actionParameter: String = ""): ActionExecutionResult = when (actionId) {
         SystemActionPreset.HOME.id ->
             globalAction(AccessibilityService.GLOBAL_ACTION_HOME, "מסך הבית נפתח")
         SystemActionPreset.BACK.id ->
@@ -301,7 +301,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         SystemActionPreset.BRIGHTNESS_DOWN.id ->
             changeBrightness(-0.10f, "הבהירות הוחלשה")
         SystemActionPreset.BRIGHTNESS_SET.id ->
-            setBrightness(config.actionParameter, "הבהירות שונתה")
+            setBrightness(actionParameter, "הבהירות שונתה")
         SystemActionPreset.WIFI_SETTINGS.id ->
             openSettings(Settings.ACTION_WIFI_SETTINGS, "הגדרות Wi‑Fi נפתחו")
         SystemActionPreset.BLUETOOTH_SETTINGS.id ->
@@ -319,7 +319,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         SystemActionPreset.DIALER.id ->
             openSettings(Intent.ACTION_DIAL, "החייגן נפתח")
         SystemActionPreset.DIAL_NUMBER.id -> {
-            val number = config.actionParameter.trim()
+            val number = actionParameter.trim()
             if (number.isBlank()) ActionExecutionResult.failure("לא הוגדר מספר לחיוג")
             else openSettingsIntent(
                 Intent(
