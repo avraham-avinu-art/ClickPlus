@@ -237,9 +237,10 @@ class DashboardActivity : ComponentActivity() {
 private fun ClickPlusDashboard(
     showPermissionIntro: Boolean,
     onBeginPermissionSetup: () -> Unit,
+    onLaterPermissionSetup: () -> Unit,
 ) {
     if (showPermissionIntro) {
-        PermissionIntroScreen(onBeginPermissionSetup)
+        PermissionIntroScreen(onBeginPermissionSetup, onLaterPermissionSetup)
         return
     }
 
