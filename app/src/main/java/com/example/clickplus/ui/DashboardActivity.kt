@@ -335,6 +335,7 @@ private fun ClickPlusDashboard(
             DashboardRoute.Backup -> BackupScreen(
                 mappings = mappings,
                 timeout = timeout,
+                actionDelay = actionDelay,
                 showTapCount = showTapCount,
                 onBack = { route = DashboardRoute.Settings },
             )
@@ -702,7 +703,9 @@ private fun StatusScreen(
                 StatusCard(
                     title = "שירות נגישות",
                     ok = service,
-                    detail = if (service) "מחובר ומוכן ללחיצות במיקום המסך" else "נדרש רק במצב מלא",
+                    detail = if (service) "השירות פעיל וזמין לפעולות הדורשות נגישות." else "השירות אינו פעיל. במצב מלא הוא נדרש לזיהוי לחיצות ולפעולות מערכת.",
+                    actionText = "פתיחת הגדרות נגישות",
+                    settingsHint = "פתח את שירותי הנגישות, מצא את קליק פלוס והפעל אותו.",
                     onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
                 )
             }
@@ -710,7 +713,9 @@ private fun StatusScreen(
                 StatusCard(
                     title = "שימוש בנתוני שימוש",
                     ok = usage,
-                    detail = if (usage) "אפשר לזהות את האפליקציה האחרונה גם במצב בסיסי" else "מומלץ עבור תנאי אפליקציה במצב בסיסי",
+                    detail = if (usage) "הגישה פעילה וניתן לזהות איזו אפליקציה הייתה פתוחה לפני ההפעלה." else "הגישה אינה פעילה. היא נדרשת לזיהוי האפליקציה שהייתה פתוחה לפני ההפעלה.",
+                    actionText = "פתיחת גישת נתוני שימוש",
+                    settingsHint = "פתח את גישת נתוני השימוש, מצא את קליק פלוס ואפשר לה גישה.",
                     onClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
                 )
             }
@@ -719,24 +724,29 @@ private fun StatusScreen(
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("מצב עבודה", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ChoiceChip(
-                                selected = mode == AppMode.FULL,
-                                onClick = { mode = AppMode.FULL; onMode(AppMode.FULL) },
-                                label = "מלא",
-                                modifier = Modifier.weight(1f),
-                            )
-                            ChoiceChip(
-                                selected = mode == AppMode.BASIC,
-                                onClick = { mode = AppMode.BASIC; onMode(AppMode.BASIC) },
-                                label = "Basic ללא נגישות",
-                                modifier = Modifier.weight(1f),
-                            )
+                            Column(
+                                Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                ChoiceChip(
+                                    selected = mode == AppMode.FULL,
+                                    onClick = { mode = AppMode.FULL; onMode(AppMode.FULL) },
+                                    label = "מלא",
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                ChoiceChip(
+                                    selected = mode == AppMode.BASIC,
+                                    onClick = { mode = AppMode.BASIC; onMode(AppMode.BASIC) },
+                                    label = "בסיסי ללא נגישות",
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                         Text(
                             if (mode == AppMode.FULL) {
                                 "כל היכולות זמינות, כולל זיהוי מיקום לחיצה ופעולות מערכת."
                             } else {
-                                "הפעלות כניסה, פתיחת אפליקציות ופעולות מדיה/ווליום הנתמכות יכולות לפעול ללא שירות נגישות. זיהוי מיקום לחיצה ופעולות מערכת גלובליות לא זמינים."
+                                "במצב זה אפשר לזהות כניסות, לפתוח אפליקציות ולהפעיל פעולות מדיה, ווליום, הגדרות וחייגן. אי אפשר לזהות מיקום לחיצה במסך או לבצע פעולות מערכת גלובליות כמו בית, חזרה, התראות ויישומים אחרונים."
                             },
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -758,7 +768,14 @@ private fun StatusScreen(
 }
 
 @Composable
-private fun StatusCard(title: String, ok: Boolean, detail: String, onClick: () -> Unit) {
+private fun StatusCard(
+    title: String,
+    ok: Boolean,
+    detail: String,
+    actionText: String,
+    settingsHint: String,
+    onClick: () -> Unit,
+) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(
             Modifier.fillMaxWidth().padding(18.dp),
@@ -785,10 +802,10 @@ private fun StatusCard(title: String, ok: Boolean, detail: String, onClick: () -
                     onClick = onClick,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("פתיחת הגדרות ומתן הרשאה")
+                    Text(actionText)
                 }
                 Text(
-                    "Android יפתח את „גישה לנתוני שימוש”. יש להפעיל שם את ClickPlus.",
+                    settingsHint,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center,
