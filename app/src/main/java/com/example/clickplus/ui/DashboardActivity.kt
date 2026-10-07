@@ -69,6 +69,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.BorderStroke
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -157,20 +158,86 @@ private sealed interface DashboardRoute {
 }
 
 class DashboardActivity : ComponentActivity() {
+    private var settingsStepActive = false
+    private var runtimeRequestActive = false
+
+    private val runtimePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        runtimeRequestActive = false
+        continueFirstLaunchPermissions()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 90)
-        }
         getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
             .edit()
             .putBoolean("first_ui_opened", true)
             .putBoolean("background_only", false)
             .apply()
         setContent { ClickPlusDashboard() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (runtimeRequestActive) return
+        val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+        if (!prefs.getBoolean("first_ui_opened", false) ||
+            prefs.getBoolean("permission_bootstrap_done", false)
+        ) return
+
+        if (settingsStepActive) {
+            settingsStepActive = false
+        }
+        continueFirstLaunchPermissions()
+    }
+
+    private fun continueFirstLaunchPermissions() {
+        if (runtimeRequestActive) return
+
+        val runtimePermissions = buildList {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(
+                    this@DashboardActivity,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            if (ContextCompat.checkSelfPermission(
+                    this@DashboardActivity,
+                    Manifest.permission.READ_PHONE_STATE
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                add(Manifest.permission.READ_PHONE_STATE)
+            }
+        }
+
+        if (runtimePermissions.isNotEmpty()) {
+            runtimeRequestActive = true
+            runtimePermissionLauncher.launch(runtimePermissions.toTypedArray())
+            return
+        }
+
+        val serviceEnabled = isAccessibilityEnabled(this)
+        if (!serviceEnabled) {
+            settingsStepActive = true
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            return
+        }
+
+        val usageEnabled = hasUsageAccess(this)
+        if (!usageEnabled) {
+            settingsStepActive = true
+            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+            return
+        }
+
+        getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+            .edit()
+            .putBoolean("permission_bootstrap_done", true)
+            .apply()
     }
 }
 
@@ -360,8 +427,8 @@ private fun HomeDashboard(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(12.dp, 8.dp, 12.dp, 18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
                 Card(
@@ -813,24 +880,23 @@ private fun CompactChoiceChip(
     onClick: () -> Unit,
     label: String,
 ) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
+    Surface(
         modifier = Modifier
-            .width(38.dp)
-            .height(34.dp),
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            labelColor = MaterialTheme.colorScheme.onSurface,
-            selectedContainerColor = MaterialTheme.colorScheme.primary,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+            .width(34.dp)
+            .height(34.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
         ),
-        label = {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(label, maxLines = 1, softWrap = false, textAlign = TextAlign.Center)
-            }
-        },
-    )
+        contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(label, maxLines = 1, softWrap = false, textAlign = TextAlign.Center)
+        }
+    }
 }
 
 @Composable
@@ -1594,7 +1660,7 @@ private fun PointEditor(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("תצוגה מקדימה · גרור את הנקודה למיקום המדויק")
         Box(
-            Modifier.fillMaxWidth().height(260.dp).background(
+            Modifier.fillMaxWidth().height(210.dp).background(
                 surfaceColor,
                 RoundedCornerShape(18.dp),
             ),
@@ -1645,6 +1711,7 @@ private fun isAccessibilityEnabled(context: Context): Boolean {
     ).orEmpty()
     return enabled.split(':').any { it.contains(context.packageName, true) }
 }
+
 
 private fun hasUsageAccess(context: Context): Boolean {
     val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
