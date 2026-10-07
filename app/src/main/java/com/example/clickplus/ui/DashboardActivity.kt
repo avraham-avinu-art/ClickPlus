@@ -1823,6 +1823,8 @@ private fun PointEditor(
     val safeY = y.coerceIn(0f, 1f)
     val safeTx = toleranceX.coerceIn(0.01f, 0.25f)
     val safeTy = toleranceY.coerceIn(0.01f, 0.25f)
+    val outlineColor = MaterialTheme.colorScheme.outline
+    val primaryColor = MaterialTheme.colorScheme.primary
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("תצוגה מקדימה · גרור את הנקודה למיקום המדויק", style = MaterialTheme.typography.bodySmall)
