@@ -255,6 +255,8 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         )
     }
 
+    private fun AccessibilityService.currentActionContactNumber(fallback: String): String = fallback.trim()
+
     private fun executeSystem(actionId: String, actionParameter: String = ""): ActionExecutionResult = when (actionId) {
         SystemActionPreset.HOME.id ->
             globalAction(AccessibilityService.GLOBAL_ACTION_HOME, "מסך הבית נפתח")
@@ -329,14 +331,20 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                 "מסך החיוג נפתח",
             )
         }
-        SystemActionPreset.DIAL_CONTACT.id ->
-            openSettingsIntent(
-                Intent(
-                    Intent.ACTION_PICK,
-                    android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                ),
-                "בחירת איש קשר נפתחה",
-            )
+        SystemActionPreset.DIAL_CONTACT.id -> {
+            val number = service.currentActionContactNumber(actionParameter)
+            if (number.isBlank()) {
+                ActionExecutionResult.failure("לא נבחר איש קשר")
+            } else {
+                openSettingsIntent(
+                    Intent(
+                        Intent.ACTION_DIAL,
+                        android.net.Uri.parse("tel:" + android.net.Uri.encode(number)),
+                    ),
+                    "מסך החיוג לאיש הקשר נפתח",
+                )
+            }
+        }
         SystemActionPreset.ANSWER_CALL.id -> answerCall()
         SystemActionPreset.DECLINE_CALL.id -> declineCall()
         SystemActionPreset.PROFILE_NEXT.id ->
