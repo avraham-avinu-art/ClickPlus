@@ -13,6 +13,8 @@ import com.example.clickplus.data.ContextConditionType
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.TriggerType
 import kotlin.math.sqrt
+import kotlin.math.max
+import kotlin.math.min
 
 class TapDetector(
     private val context: Context,
@@ -65,6 +67,7 @@ class TapDetector(
         if (all.isEmpty()) return
         val packageName = event.packageName?.toString().orEmpty()
         val source = event.source ?: return
+        runCatching { source.refresh() }
         val bounds = Rect()
         runCatching { source.getBoundsInScreen(bounds) }.getOrNull() ?: return
         if (bounds.isEmpty) return
@@ -75,7 +78,7 @@ class TapDetector(
         val yRatio = (bounds.centerY() / height).coerceIn(0f, 1f)
 
         all.filter { it.screenTapPackage.isBlank() || it.screenTapPackage == packageName }
-            .filter { tapLocationMatches(it, xRatio, yRatio) }
+            .filter { tapLocationMatches(it, xRatio, yRatio, bounds, width, height) }
             .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
             .forEach { config ->
                 val count = (screenTapCounts[config.id] ?: 0) + 1
@@ -98,8 +101,14 @@ class TapDetector(
             }
     }
 
-    private fun tapLocationMatches(config: KeyActionConfig, xRatio: Float, yRatio: Float): Boolean {
-        if (config.screenTapXRatio < 0f || config.screenTapYRatio < 0f) return false
+    private fun tapLocationMatches(
+        config: KeyActionConfig,
+        xRatio: Float,
+        yRatio: Float,
+        bounds: Rect,
+        width: Float,
+        height: Float,
+    ): Boolean {
         val meta = advanced.getRuleMetadata(config.id)
         val landscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val targetX = if (landscape && meta.landscapeX >= 0f) meta.landscapeX
@@ -109,8 +118,32 @@ class TapDetector(
         else if (!landscape && meta.portraitY >= 0f) meta.portraitY
         else config.screenTapYRatio
 
-        val tx = meta.toleranceXRatio.coerceIn(0.01f, 0.25f)
-        val ty = meta.toleranceYRatio.coerceIn(0.01f, 0.25f)
+        if (!targetX.isFinite() || !targetY.isFinite() || targetX < 0f || targetY < 0f) return false
+
+        val tx = meta.toleranceXRatio.takeIf { it.isFinite() }?.coerceIn(0.01f, 0.25f) ?: 0.08f
+        val ty = meta.toleranceYRatio.takeIf { it.isFinite() }?.coerceIn(0.01f, 0.25f) ?: 0.08f
+
+        // Prefer the actual clicked node area. This is much more reliable than
+        // comparing node centers when an app exposes a large clickable surface.
+        // Ignore a full-screen root/container so one generic node cannot trigger
+        // every tap in an app.
+        val nodeWidth = bounds.width().coerceAtLeast(1)
+        val nodeHeight = bounds.height().coerceAtLeast(1)
+        val fullScreenLike = nodeWidth >= width * 0.90f && nodeHeight >= height * 0.90f
+        if (!fullScreenLike) {
+            val marginX = tx * width
+            val marginY = ty * height
+            val targetPx = targetX * width
+            val targetPy = targetY * height
+            val left = bounds.left - marginX
+            val right = bounds.right + marginX
+            val top = bounds.top - marginY
+            val bottom = bounds.bottom + marginY
+            if (targetPx in left..right && targetPy in top..bottom) return true
+        }
+
+        // Fallback for apps that expose a small node while the click event is
+        // represented by its center.
         val dx = (xRatio - targetX) / tx
         val dy = (yRatio - targetY) / ty
         return sqrt(dx * dx + dy * dy) <= 1f
