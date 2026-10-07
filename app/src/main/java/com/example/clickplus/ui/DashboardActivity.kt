@@ -1632,45 +1632,91 @@ private fun EditorScreen(
                 EditorSectionCard(
                     "2",
                     "מתי להפעיל?",
-                    "ClickPlus מזהה כניסה לאפליקציה שנבחרה. אין כאן טריגר המבוסס על לחיצות בתוך אפליקציה.",
+                    "בחר אם הרצף יופעל בעקבות כניסות לקליק פלוס עצמו או בעקבות כניסות לאפליקציה אחרת.",
                 ) {
-                    OutlinedButton(
-                        onClick = { triggerAppDialog = true },
-                        Modifier.fillMaxWidth().heightIn(min = 46.dp),
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Icon(Icons.Outlined.Apps, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            draft.triggerAppName.ifBlank { "בחירת האפליקציה שבה תזוהה הכניסה" },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                        ChoiceChip(
+                            selected = draft.triggerType == TriggerType.CLICKPLUS_ENTRY,
+                            onClick = {
+                                draft = draft.copy(
+                                    triggerType = TriggerType.CLICKPLUS_ENTRY,
+                                    triggerPackage = "",
+                                    triggerAppName = "",
+                                )
+                                validationMessage = ""
+                            },
+                            label = "לחיצות כניסה לקליק פלוס",
+                            modifier = Modifier.weight(1f).height(62.dp),
+                        )
+                        ChoiceChip(
+                            selected = draft.triggerType == TriggerType.APP_ENTRY,
+                            onClick = {
+                                draft = draft.copy(triggerType = TriggerType.APP_ENTRY)
+                                validationMessage = ""
+                            },
+                            label = "לחיצות כניסה לאפליקציה אחרת",
+                            modifier = Modifier.weight(1f).height(62.dp),
                         )
                     }
-                    if (draft.triggerPackage.isBlank()) {
+
+                    Spacer(Modifier.height(8.dp))
+
+                    if (draft.triggerType == TriggerType.CLICKPLUS_ENTRY) {
                         Text(
-                            "יש לבחור אפליקציה. רק כניסה לאפליקציה הזאת תפעיל את הפעולה.",
-                            color = MaterialTheme.colorScheme.error,
+                            "הטריגר פועל לפי לחיצות על סמל קליק פלוס: כל כניסה דרך הסמל נחשבת לחיצה אחת. לאחר מספר הלחיצות שהוגדר, הפעולה מופעלת. הוא אינו תלוי בלחיצות בתוך אפליקציה אחרת.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     } else {
+                        OutlinedButton(
+                            onClick = { triggerAppDialog = true },
+                            Modifier.fillMaxWidth().heightIn(min = 46.dp),
+                        ) {
+                            Icon(Icons.Outlined.Apps, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                draft.triggerAppName.ifBlank { "בחירת האפליקציה שבה תזוהה הכניסה" },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                         Text(
-                            "הזיהוי מתרחש בעת מעבר לאפליקציה הזאת, ולא בעקבות לחיצה רגילה בתוך האפליקציה.",
+                            if (draft.triggerPackage.isBlank()) {
+                                "יש לבחור אפליקציה. הטריגר נספר בעת כניסה אליה, באמצעות זיהוי שינוי החלון של Android. אין צורך ללחוץ בתוך האפליקציה."
+                            } else {
+                                "הטריגר נספר בעת מעבר לאפליקציה שנבחרה. לחיצה רגילה בתוך האפליקציה אינה מפעילה את הרצף."
+                            },
                             style = MaterialTheme.typography.bodySmall,
+                            color = if (draft.triggerPackage.isBlank()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                    Spacer(Modifier.height(6.dp))
-                    Text("כמה כניסות רצופות ייחשבו לרצף?", fontWeight = FontWeight.Medium)
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        (1..10).forEach { count ->
-                            ChoiceChip(
-                                selected = draft.pressCount == count,
-                                onClick = { draft = draft.copy(pressCount = count) },
-                                label = count.toString(),
-                                modifier = Modifier.weight(1f),
-                            )
+
+                    Spacer(Modifier.height(9.dp))
+                    Text(
+                        if (draft.triggerType == TriggerType.CLICKPLUS_ENTRY) {
+                            "כמה לחיצות רצופות ייחשבו לרצף?"
+                        } else {
+                            "כמה כניסות רצופות ייחשבו לרצף?"
+                        },
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(1..5, 6..10).forEach { range ->
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                range.forEach { count ->
+                                    ChoiceChip(
+                                        selected = draft.pressCount == count,
+                                        onClick = { draft = draft.copy(pressCount = count) },
+                                        label = count.toString(),
+                                        modifier = Modifier.weight(1f).height(46.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1738,64 +1784,86 @@ private fun EditorScreen(
                     "מה לבצע?",
                     "בחר סוג פעולה. לאחר מכן תיפתח רק הקבוצה הרלוונטית של האפשרויות.",
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                    ) {
-                        ChoiceChip(
-                            selected = actionTypeChosen && draft.actionType == ActionType.SYSTEM,
-                            onClick = {
-                                actionTypeChosen = true
-                                selectedSystemCategory = existing?.let {
-                                    SystemActionPreset.entries.firstOrNull { preset ->
-                                        preset.id == it.systemActionId
-                                    }?.categoryHebrew
-                                }
-                                draft = draft.copy(
-                                    actionType = ActionType.SYSTEM,
-                                    systemActionId = if (existing != null) draft.systemActionId else "",
-                                )
-                            },
-                            label = "פעולת מכשיר",
-                            modifier = Modifier.weight(1f),
-                        )
-                        ChoiceChip(
-                            selected = actionTypeChosen && draft.actionType == ActionType.APP,
-                            onClick = {
-                                actionTypeChosen = true
-                                selectedSystemCategory = null
-                                draft = draft.copy(actionType = ActionType.APP, systemActionId = "")
-                            },
-                            label = "פתיחת אפליקציה",
-                            modifier = Modifier.weight(1f),
-                        )
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            ChoiceChip(
+                                selected = actionTypeChosen && draft.actionType == ActionType.SYSTEM,
+                                onClick = {
+                                    actionTypeChosen = true
+                                    selectedSystemCategory = if (existing?.actionType == ActionType.SYSTEM) {
+                                        SystemActionPreset.entries.firstOrNull { it.id == draft.systemActionId }?.categoryHebrew
+                                    } else null
+                                    draft = draft.copy(
+                                        actionType = ActionType.SYSTEM,
+                                        systemActionId = if (existing?.actionType == ActionType.SYSTEM) draft.systemActionId else "",
+                                    )
+                                },
+                                label = "פעולת מכשיר",
+                                modifier = Modifier.weight(1f).height(54.dp),
+                            )
+                            ChoiceChip(
+                                selected = actionTypeChosen && draft.actionType == ActionType.APP,
+                                onClick = {
+                                    actionTypeChosen = true
+                                    selectedSystemCategory = null
+                                    draft = draft.copy(actionType = ActionType.APP, systemActionId = "")
+                                },
+                                label = "פתיחת אפליקציה",
+                                modifier = Modifier.weight(1f).height(54.dp),
+                            )
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            ChoiceChip(
+                                selected = actionTypeChosen && draft.actionType == ActionType.APP_TAP,
+                                onClick = {
+                                    actionTypeChosen = true
+                                    selectedSystemCategory = null
+                                    draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "")
+                                },
+                                label = "פתיחה + לחיצה",
+                                modifier = Modifier.weight(1f).height(54.dp),
+                            )
+                            ChoiceChip(
+                                selected = actionTypeChosen && draft.actionType == ActionType.MULTI_POINT_TAP,
+                                onClick = {
+                                    actionTypeChosen = true
+                                    selectedSystemCategory = null
+                                    draft = draft.copy(actionType = ActionType.MULTI_POINT_TAP, systemActionId = "")
+                                },
+                                label = "שתי לחיצות",
+                                modifier = Modifier.weight(1f).height(54.dp),
+                            )
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            ChoiceChip(
+                                selected = actionTypeChosen && draft.actionType == ActionType.PROFILE,
+                                onClick = {
+                                    actionTypeChosen = true
+                                    selectedSystemCategory = null
+                                    draft = draft.copy(
+                                        actionType = ActionType.PROFILE,
+                                        systemActionId = if (
+                                            draft.actionType == ActionType.PROFILE &&
+                                                ClickPlusProfileAction.entries.any { it.id == draft.systemActionId }
+                                        ) draft.systemActionId else ClickPlusProfileAction.NEXT.id,
+                                    )
+                                },
+                                label = "פרופילי ClickPlus",
+                                modifier = Modifier.weight(1f).height(54.dp),
+                            )
+                            Spacer(Modifier.weight(1f).height(54.dp))
+                        }
                     }
-                    Spacer(Modifier.height(7.dp))
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                    ) {
-                        ChoiceChip(
-                            selected = actionTypeChosen && draft.actionType == ActionType.APP_TAP,
-                            onClick = {
-                                actionTypeChosen = true
-                                selectedSystemCategory = null
-                                draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "")
-                            },
-                            label = "פתיחה + לחיצה",
-                            modifier = Modifier.weight(1f),
-                        )
-                        ChoiceChip(
-                            selected = actionTypeChosen && draft.actionType == ActionType.MULTI_POINT_TAP,
-                            onClick = {
-                                actionTypeChosen = true
-                                selectedSystemCategory = null
-                                draft = draft.copy(actionType = ActionType.MULTI_POINT_TAP, systemActionId = "")
-                            },
-                            label = "שתי לחיצות",
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+
 
                     if (!actionTypeChosen) {
                         Text(
@@ -1881,16 +1949,16 @@ private fun EditorScreen(
                                             Text("אישור שינוי בהירות ב-Android")
                                         }
                                     }
-                                    SystemActionPreset.PROFILE_NEXT.id,
-                                    SystemActionPreset.PROFILE_PREVIOUS.id,
-                                    SystemActionPreset.PROFILE_DEFAULT.id -> {
-                                        Spacer(Modifier.height(8.dp))
-                                        Text(
-                                            "הפעולה תשנה את הפרופיל הפעיל בתוך קליק פלוס.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                    }
                                 }
+                            }
+                            ActionType.PROFILE -> {
+                                Spacer(Modifier.height(6.dp))
+                                ProfileActionPicker(
+                                    selectedId = draft.systemActionId,
+                                    onActionSelected = { id ->
+                                        draft = draft.copy(systemActionId = id)
+                                    },
+                                )
                             }
                             ActionType.APP -> {
                                 Spacer(Modifier.height(6.dp))
