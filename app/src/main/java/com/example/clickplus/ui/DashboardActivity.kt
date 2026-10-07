@@ -901,7 +901,7 @@ private fun SettingsScreen(
                 }
             }
             item {
-                SettingCard("הרשאות וכניסות", "ההרשאות הנוספות אינן נדרשות כדי להיכנס לאפליקציה.") {
+                SettingCard("הרשאות וגישה", "ההרשאות הנוספות אינן נדרשות כדי להיכנס לאפליקציה.") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = {
