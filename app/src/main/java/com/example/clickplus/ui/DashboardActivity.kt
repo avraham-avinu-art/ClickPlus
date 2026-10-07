@@ -59,6 +59,7 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -164,6 +165,7 @@ class DashboardActivity : ComponentActivity() {
     private var settingsStepActive = false
     private var runtimeRequestActive = false
     private var showPermissionIntro by mutableStateOf(false)
+    private var notificationRequestAttempted = false
 
     private val runtimePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -201,52 +203,21 @@ class DashboardActivity : ComponentActivity() {
             prefs.getBoolean("permission_bootstrap_done", false) ||
             !prefs.getBoolean("permission_intro_completed", false)
         ) return
-
-        if (settingsStepActive) {
-            settingsStepActive = false
-        }
         continueFirstLaunchPermissions()
     }
 
     private fun continueFirstLaunchPermissions() {
-        if (runtimeRequestActive) return
+        if (runtimeRequestActive || notificationRequestAttempted) return
+        notificationRequestAttempted = true
 
-        val runtimePermissions = buildList {
-            if (Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(
-                    this@DashboardActivity,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            if (ContextCompat.checkSelfPermission(
-                    this@DashboardActivity,
-                    Manifest.permission.READ_PHONE_STATE
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                add(Manifest.permission.READ_PHONE_STATE)
-            }
-        }
-
-        if (runtimePermissions.isNotEmpty()) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(
+                this@DashboardActivity,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
             runtimeRequestActive = true
-            runtimePermissionLauncher.launch(runtimePermissions.toTypedArray())
-            return
-        }
-
-        val serviceEnabled = isAccessibilityEnabled(this)
-        if (!serviceEnabled) {
-            settingsStepActive = true
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            return
-        }
-
-        val usageEnabled = hasUsageAccess(this)
-        if (!usageEnabled) {
-            settingsStepActive = true
-            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-            return
+            runtimePermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
         }
 
         getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
@@ -273,6 +244,7 @@ private fun ClickPlusDashboard(
     val timeout by prefs.tapTimeoutFlow.collectAsState(initial = 1200L)
     val actionDelay by prefs.actionDelayFlow.collectAsState(initial = 0L)
     val showTapCount by prefs.showTapCountFlow.collectAsState(initial = false)
+    val tapCountPosition by prefs.tapCountPositionFlow.collectAsState(initial = 35)
     var route by remember { mutableStateOf<DashboardRoute>(DashboardRoute.Home) }
     var themeMode by remember { mutableStateOf(advanced.themeMode()) }
 
@@ -324,11 +296,15 @@ private fun ClickPlusDashboard(
                 timeout = timeout,
                 actionDelay = actionDelay,
                 showTapCount = showTapCount,
+                tapCountPosition = tapCountPosition,
                 themeMode = themeMode,
+                currentMode = AdvancedRuleRepository.currentMode(context),
                 onBack = { route = DashboardRoute.Home },
                 onTimeout = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapTimeout(value) } },
                 onActionDelay = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveActionDelay(value) } },
                 onShowTapCount = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveShowTapCount(value) } },
+                onTapCountPosition = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapCountPosition(value) } },
+                onMode = { mode -> AdvancedRuleRepository.setMode(context, mode) },
                 onTheme = {
                     themeMode = it
                     advanced.saveThemeMode(it)
@@ -1133,11 +1109,15 @@ private fun SettingsScreen(
     timeout: Long,
     actionDelay: Long,
     showTapCount: Boolean,
+    tapCountPosition: Int,
+    currentMode: AppMode,
     themeMode: String,
     onBack: () -> Unit,
     onTimeout: (Long) -> Unit,
     onActionDelay: (Long) -> Unit,
     onShowTapCount: (Boolean) -> Unit,
+    onTapCountPosition: (Int) -> Unit,
+    onMode: (AppMode) -> Unit,
     onTheme: (String) -> Unit,
     onBackup: () -> Unit,
 ) {
