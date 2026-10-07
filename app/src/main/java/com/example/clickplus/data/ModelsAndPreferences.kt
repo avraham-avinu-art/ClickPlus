@@ -91,9 +91,6 @@ enum class SystemActionPreset(
     DIAL_NUMBER("dial_number", "חיוג למספר", "חייגן"),
     DIAL_CONTACT("dial_contact", "חיוג לאיש קשר", "חייגן"),
 
-    PROFILE_NEXT("profile_next", "פרופיל הבא", "פרופילים"),
-    PROFILE_PREVIOUS("profile_previous", "פרופיל קודם", "פרופילים"),
-    PROFILE_DEFAULT("profile_default", "חזרה לפרופיל ברירת המחדל", "פרופילים"),
 }
 
 data class KeyActionConfig(
