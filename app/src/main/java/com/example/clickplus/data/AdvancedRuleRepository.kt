@@ -20,6 +20,7 @@ data class RuleAdvancedMetadata(
     val portraitY: Float = -1f,
     val landscapeX: Float = -1f,
     val landscapeY: Float = -1f,
+    val useOrientationSpecificPosition: Boolean = false,
     val toleranceXRatio: Float = 0.08f,
     val toleranceYRatio: Float = 0.08f,
 )
@@ -237,6 +238,7 @@ class AdvancedRuleRepository(private val context: Context) {
         .put("portraitY", m.portraitY)
         .put("landscapeX", m.landscapeX)
         .put("landscapeY", m.landscapeY)
+        .put("useOrientationSpecificPosition", m.useOrientationSpecificPosition)
         .put("toleranceXRatio", m.toleranceXRatio)
         .put("toleranceYRatio", m.toleranceYRatio)
 
@@ -258,6 +260,7 @@ class AdvancedRuleRepository(private val context: Context) {
             portraitY = ratio("portraitY"),
             landscapeX = ratio("landscapeX"),
             landscapeY = ratio("landscapeY"),
+            useOrientationSpecificPosition = o.optBoolean("useOrientationSpecificPosition", false),
             toleranceXRatio = tolerance("toleranceXRatio"),
             toleranceYRatio = tolerance("toleranceYRatio"),
         )
