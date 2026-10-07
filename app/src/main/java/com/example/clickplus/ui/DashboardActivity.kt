@@ -1331,6 +1331,8 @@ private fun EditorScreen(
         )
     }
     var appDialog by remember { mutableStateOf(false) }
+    var triggerAppDialog by remember { mutableStateOf(false) }
+    var validationMessage by remember { mutableStateOf("") }
     var learning by remember { mutableStateOf(false) }
     var learningStage by remember { mutableIntStateOf(1) }
     var showDelete by remember { mutableStateOf(false) }
@@ -1502,9 +1504,17 @@ private fun EditorScreen(
     }
 
     fun saveCurrent() {
-        if (!actionTypeChosen) return
+        validationMessage = ""
+        if (!actionTypeChosen) {
+            validationMessage = "יש לבחור סוג פעולה."
+            return
+        }
+        if (draft.triggerPackage.isBlank()) {
+            validationMessage = "יש לבחור את האפליקציה שבה תזוהה הכניסה."
+            return
+        }
         if (draft.name.isBlank()) {
-            draft = draft.copy(name = "כניסה לאפליקציה")
+            draft = draft.copy(name = "כניסה ל-" + draft.triggerAppName.ifBlank { "אפליקציה" })
         }
         val safe = draft.copy(
             triggerType = TriggerType.APP_ENTRY,
@@ -1568,21 +1578,36 @@ private fun EditorScreen(
             }
 
             item {
-                EditorSectionCard("2", "מתי להפעיל?", "ClickPlus מזהה כניסה לאפליקציה. אין כאן טריגר המבוסס על לחיצות בתוך אפליקציה.") {
-                    OutlinedCard(
-                        Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                EditorSectionCard(
+                    "2",
+                    "מתי להפעיל?",
+                    "ClickPlus מזהה כניסה לאפליקציה שנבחרה. אין כאן טריגר המבוסס על לחיצות בתוך אפליקציה.",
+                ) {
+                    OutlinedButton(
+                        onClick = { triggerAppDialog = true },
+                        Modifier.fillMaxWidth().heightIn(min = 46.dp),
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Apps, null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("כניסה לאפליקציה", fontWeight = FontWeight.Bold)
-                                Text("זוהי נקודת הזיהוי של הפעולה.", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
+                        Icon(Icons.Outlined.Apps, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            draft.triggerAppName.ifBlank { "בחירת האפליקציה שבה תזוהה הכניסה" },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
-                    Spacer(Modifier.height(8.dp))
+                    if (draft.triggerPackage.isBlank()) {
+                        Text(
+                            "יש לבחור אפליקציה. רק כניסה לאפליקציה הזאת תפעיל את הפעולה.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } else {
+                        Text(
+                            "הזיהוי מתרחש בעת מעבר לאפליקציה הזאת, ולא בעקבות לחיצה רגילה בתוך האפליקציה.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
                     Text("כמה כניסות רצופות ייחשבו לרצף?", fontWeight = FontWeight.Medium)
                     Row(
                         Modifier.fillMaxWidth(),
@@ -1946,6 +1971,23 @@ private fun EditorScreen(
                 }
             }
 
+            if (validationMessage.isNotBlank()) {
+                item {
+                    Surface(
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(11.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                    ) {
+                        Text(
+                            validationMessage,
+                            Modifier.padding(11.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+            }
+
             item {
                 EditorSectionCard(
                     "5",
@@ -2103,6 +2145,21 @@ private fun EditorScreen(
                 }
             }
         }
+    }
+
+    if (triggerAppDialog) {
+        AppPickerDialog(
+            title = "בחירת אפליקציה לזיהוי כניסה",
+            onDismiss = { triggerAppDialog = false },
+            onSelect = { app ->
+                triggerAppDialog = false
+                draft = draft.copy(
+                    triggerPackage = app.packageName,
+                    triggerAppName = app.label,
+                )
+                validationMessage = ""
+            },
+        )
     }
 
     if (appDialog) {
