@@ -20,6 +20,7 @@ class LauncherActivity : Activity() {
         // The app UI remains usable normally even without Accessibility.
         if (accessibilityEnabled) {
             KeyInterceptorAccessibilityService.instance?.onClickPlusEntry()
+                ?: com.example.clickplus.service.StandaloneLauncherEngine.process(this)
         } else {
             com.example.clickplus.service.StandaloneLauncherEngine.process(this)
         }
