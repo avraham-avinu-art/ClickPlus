@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -20,6 +21,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -106,6 +108,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -118,6 +121,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.graphics.drawable.toBitmap
 import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.AppMode
 import com.example.clickplus.data.AppPreferencesRepository
@@ -426,10 +430,31 @@ private fun HomeDashboard(
 
 @Composable
 private fun StatCard(title: String, value: String, modifier: Modifier) {
-    Card(modifier, shape = RoundedCornerShape(18.dp)) {
-        Column(Modifier.padding(14.dp)) {
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(title, style = MaterialTheme.typography.labelMedium)
+    Card(
+        modifier = modifier.height(78.dp),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                value,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                title,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 2,
+                textAlign = TextAlign.Center,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -438,25 +463,71 @@ private fun StatCard(title: String, value: String, modifier: Modifier) {
 private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit) {
     val meta = AdvancedRuleRepository(LocalContext.current).getRuleMetadata(item.id)
     OutlinedCard(
-        modifier = Modifier.fillMaxWidth().animateContentSize().clickable(onClick = onEdit),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onEdit),
         shape = RoundedCornerShape(20.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(item.name.ifBlank { item.triggerType.titleHebrew }, fontWeight = FontWeight.Bold)
-                    Text(item.pressSummary() + " · " + item.contextSummary(), style = MaterialTheme.typography.bodySmall)
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        item.name.ifBlank { item.triggerType.titleHebrew },
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        item.pressSummary() + " · " + item.contextSummary(),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
-                IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "עריכה") }
+                IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Outlined.Edit, "עריכה")
+                }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = {}, label = { Text(item.actionSummary()) })
-                AssistChip(onClick = {}, label = { Text("עדיפות " + meta.priority) })
-                if (item.enabled) {
-                    AssistChip(onClick = {}, label = { Text("פעיל") }, leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) })
-                } else {
-                    AssistChip(onClick = {}, label = { Text("מושהה") })
-                }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(38.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AssistChip(
+                    onClick = {},
+                    label = {
+                        Text(
+                            item.actionSummary(),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    modifier = Modifier.height(34.dp),
+                )
+                AssistChip(
+                    onClick = {},
+                    label = { Text("עדיפות " + meta.priority, maxLines = 1) },
+                    modifier = Modifier.height(34.dp),
+                )
+                AssistChip(
+                    onClick = {},
+                    label = { Text(if (item.enabled) "פעיל" else "מושהה", maxLines = 1) },
+                    leadingIcon = if (item.enabled) ({ Icon(Icons.Outlined.CheckCircle, null) }) else null,
+                    modifier = Modifier.height(34.dp),
+                )
             }
         }
     }
@@ -737,6 +808,32 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
 }
 
 @Composable
+private fun CompactChoiceChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: String,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        modifier = Modifier
+            .width(38.dp)
+            .height(36.dp),
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            labelColor = MaterialTheme.colorScheme.onSurface,
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+        label = {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(label, maxLines = 1, softWrap = false, textAlign = TextAlign.Center)
+            }
+        },
+    )
+}
+
+@Composable
 private fun ChoiceChip(
     selected: Boolean,
     onClick: () -> Unit,
@@ -866,7 +963,7 @@ private fun ThemeChip(label: String, value: String, selectedValue: String, onThe
 @Composable
 private fun SettingCard(title: String, subtitle: String, content: @Composable () -> Unit) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(subtitle, style = MaterialTheme.typography.bodySmall)
             content()
@@ -1139,11 +1236,10 @@ private fun EditorScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         (1..10).forEach { n ->
-                            ChoiceChip(
+                            CompactChoiceChip(
                                 selected = draft.pressCount == n,
                                 onClick = { draft = draft.copy(pressCount = n) },
                                 label = n.toString(),
-                                modifier = Modifier.widthIn(min = 48.dp),
                             )
                         }
                     }
@@ -1364,7 +1460,11 @@ private fun EditorScreen(
     }
 }
 
-private data class InstalledApp(val packageName: String, val label: String)
+private data class InstalledApp(
+    val packageName: String,
+    val label: String,
+    val icon: Drawable?,
+)
 
 @Composable
 private fun AppPickerDialog(
@@ -1382,7 +1482,7 @@ private fun AppPickerDialog(
                     runCatching {
                         context.packageManager.getLaunchIntentForPackage(info.packageName) ?: return@runCatching null
                         val label = context.packageManager.getApplicationLabel(info).toString()
-                        InstalledApp(info.packageName, label)
+                        InstalledApp(info.packageName, label, null)
                     }.getOrNull()
                 }
                 .distinctBy { it.packageName }
@@ -1425,7 +1525,22 @@ private fun AppPickerDialog(
                             CircleShape,
                             color = MaterialTheme.colorScheme.surfaceVariant,
                         ) {
-                            Icon(Icons.Outlined.Apps, null, Modifier.padding(9.dp))
+                            val iconBitmap = remember(app.packageName) {
+                                app.icon?.let { drawable ->
+                                    runCatching { drawable.toBitmap(42, 42).asImageBitmap() }.getOrNull()
+                                }
+                            }
+                            if (iconBitmap != null) {
+                                Image(
+                                    bitmap = iconBitmap,
+                                    contentDescription = app.label,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(7.dp),
+                                )
+                            } else {
+                                Icon(Icons.Outlined.Apps, null, Modifier.padding(9.dp))
+                            }
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
