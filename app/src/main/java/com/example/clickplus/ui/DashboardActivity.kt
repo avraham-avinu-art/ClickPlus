@@ -383,53 +383,14 @@ private fun HomeDashboard(
                 title = { Text("קליק פלוס", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "הגדרות") }
+                    HelpIconButton(
+                        title = "הסבר על המסך הראשי",
+                        text = "כאן נמצאות הפעולות שהגדרת. לחיצה על פעולה פותחת אותה לעריכה. דרך ההגדרות אפשר לבחור מצב עבודה, מונה לחיצות, חלון לחיצות ומראה.",
+                    )
                 },
             )
         },
-        bottomBar = {
-            Surface(shadowElevation = 8.dp) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Button(
-                        onClick = onAdd,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(60.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "הוספת פעולה",
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = onTest,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(60.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Icon(Icons.Outlined.History, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "יומן",
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-        },
+        
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
