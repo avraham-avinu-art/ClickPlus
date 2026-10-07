@@ -1396,7 +1396,6 @@ private fun EditorScreen(
         mutableStateOf(repo.getRuleMetadata(existing?.id ?: ""))
     }
     var appDialog by remember { mutableStateOf(false) }
-    var screenAppDialog by remember { mutableStateOf(false) }
     var learning by remember { mutableStateOf(false) }
     var learningStage by remember { mutableIntStateOf(1) }
     var actionTypeChosen by remember(existing?.id) { mutableStateOf(existing != null) }
@@ -2027,22 +2026,6 @@ private fun EditorScreen(
                     )
                 }
                 appDialog = false
-            },
-        )
-    }
-
-    if (screenAppDialog) {
-        AppPickerDialog(
-            title = if (draft.actionType == ActionType.APP_TAP) "אפליקציה לביצוע הלחיצה" else "אפליקציה לזיהוי הלחיצה",
-            onDismiss = { screenAppDialog = false },
-            onSelect = { app ->
-                draft = draft.copy(
-                    screenTapPackage = app.packageName,
-                    screenTapAppName = app.label,
-                    screenTapXRatio = -1f,
-                    screenTapYRatio = -1f,
-                )
-                screenAppDialog = false
             },
         )
     }
