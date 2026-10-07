@@ -254,12 +254,19 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         success: Boolean,
         detail: String,
     ) {
+        val actionDetails = when (config.actionType) {
+            ActionType.APP_TAP ->
+                "פתיחת " + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " וביצוע לחיצה במיקום שנלמד"
+            ActionType.MULTI_POINT_TAP ->
+                "פתיחת " + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " וביצוע שתי לחיצות במיקומים שנלמדו"
+            else -> config.actionSummary()
+        }
         AdvancedRuleRepository.updateLatestPendingActionLog(
             context = service,
             ruleId = config.id,
             appPackage = targetPackage,
             success = success,
-            detail = detail,
+            detail = actionDetails,
         )
     }
 
