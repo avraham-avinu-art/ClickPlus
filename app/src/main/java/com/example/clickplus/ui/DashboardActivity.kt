@@ -1673,6 +1673,7 @@ private fun EditorScreen(
                                             learningStage = 1
                                             runtimePrefs.edit()
                                                 .putBoolean("tap_learning", true)
+                                                .putBoolean("tap_learning_multi", draft.actionType == ActionType.MULTI_POINT_TAP)
                                                 .putInt("tap_learning_stage", 1)
                                                 .putString("tap_learning_package", draft.screenTapPackage)
                                                 .apply()
@@ -2031,6 +2032,7 @@ private fun EditorScreen(
                             learningStage = 1
                             runtimePrefs.edit()
                                 .putBoolean("tap_learning", true)
+                                .putBoolean("tap_learning_multi", draft.actionType == ActionType.MULTI_POINT_TAP)
                                 .putInt("tap_learning_stage", 1)
                                 .putString("tap_learning_package", app.packageName)
                                 .apply()
