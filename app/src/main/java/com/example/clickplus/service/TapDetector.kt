@@ -77,8 +77,32 @@ class TapDetector(
         val xRatio = (bounds.centerX() / width).coerceIn(0f, 1f)
         val yRatio = (bounds.centerY() / height).coerceIn(0f, 1f)
 
+        // Some apps expose a small icon/text node for the click while the
+        // actual clickable target is one of its parents. Check the source and
+        // a few clickable ancestors without treating a full-screen root as a
+        // match.
+        val candidateBounds = buildList {
+            var node: android.view.accessibility.AccessibilityNodeInfo? = source
+            repeat(5) {
+                if (node == null) return@repeat
+                val nodeBounds = Rect()
+                if (runCatching { node?.getBoundsInScreen(nodeBounds) }.isSuccess &&
+                    !nodeBounds.isEmpty &&
+                    runCatching { node?.isClickable == true }.getOrDefault(false)
+                ) {
+                    add(nodeBounds)
+                }
+                node = runCatching { node?.parent }.getOrNull()
+            }
+            if (isEmpty()) add(bounds)
+        }
+
         all.filter { it.screenTapPackage.isBlank() || it.screenTapPackage == packageName }
-            .filter { tapLocationMatches(it, xRatio, yRatio, bounds, width, height) }
+            .filter { config ->
+                candidateBounds.any { candidate ->
+                    tapLocationMatches(config, xRatio, yRatio, candidate, width, height)
+                }
+            }
             .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
             .forEach { config ->
                 val count = (screenTapCounts[config.id] ?: 0) + 1
