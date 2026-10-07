@@ -109,6 +109,7 @@ class AppPreferencesRepository(private val context: Context) {
     companion object {
         val BACKGROUND_ONLY = booleanPreferencesKey("background_only")
         val TAP_TIMEOUT_MS = longPreferencesKey("tap_timeout_ms")
+        val ACTION_DELAY_MS = longPreferencesKey("action_delay_ms")
         val SHOW_TAP_COUNT = booleanPreferencesKey("show_tap_count")
         val MAPPINGS_JSON = stringPreferencesKey("mappings_json")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
@@ -128,7 +129,8 @@ class AppPreferencesRepository(private val context: Context) {
     }
 
     val backgroundOnlyFlow: Flow<Boolean> = context.dataStore.data.map { it[BACKGROUND_ONLY] ?: true }
-    val tapTimeoutFlow: Flow<Long> = context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 650L }
+    val tapTimeoutFlow: Flow<Long> = context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 1200L }
+    val actionDelayFlow: Flow<Long> = context.dataStore.data.map { it[ACTION_DELAY_MS] ?: 0L }
     val showTapCountFlow: Flow<Boolean> = context.dataStore.data.map { it[SHOW_TAP_COUNT] ?: false }
     val mappingsFlow: Flow<List<KeyActionConfig>> = context.dataStore.data.map { prefs ->
         val array = runCatching { JSONArray(prefs[MAPPINGS_JSON] ?: "[]") }.getOrDefault(JSONArray())
