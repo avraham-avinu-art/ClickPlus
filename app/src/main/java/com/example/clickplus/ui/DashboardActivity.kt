@@ -2598,6 +2598,10 @@ private fun ProfileSelector(
             "הפעולה תופעל רק כשהפרופיל הזה הוא הפרופיל הפעיל.",
             style = MaterialTheme.typography.bodySmall,
         )
+        Text(
+            "זהו שיוך של הפעולה לפרופיל בלבד. הוא נפרד מפעולת "החלפת פרופיל" שבשלב 4.",
+            style = MaterialTheme.typography.bodySmall,
+        )
         FlowRow(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
