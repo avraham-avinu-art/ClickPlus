@@ -725,77 +725,97 @@ private fun StatusScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    var mode by remember(refreshKey) { mutableStateOf(AdvancedRuleRepository.currentMode(context)) }
+    val mode by remember(refreshKey) { mutableStateOf(AdvancedRuleRepository.currentMode(context)) }
     val service = remember(refreshKey) { isAccessibilityEnabled(context) }
     val usage = remember(refreshKey) { hasUsageAccess(context) }
+    val notification = remember(refreshKey) {
+        Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    }
     val screenRules = mappings.count { it.triggerType == TriggerType.SCREEN_TAP && it.enabled }
-    Scaffold(topBar = { SimpleTopBar("מצב השירות", onBack) }) { padding ->
+    Scaffold(topBar = { SimpleTopBar("מצב השירות", onBack, "כאן מוצגים הסטטוסים של מצב העבודה וההרשאות. את בחירת מצב העבודה מבצעים רק במסך ההגדרות.") }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                StatusCard(
-                    title = "שירות נגישות",
-                    ok = service,
-                    detail = if (service) "השירות פעיל וזמין לפעולות הדורשות נגישות." else "השירות אינו פעיל. במצב מלא הוא נדרש לזיהוי לחיצות ולפעולות מערכת.",
-                    actionText = "פתיחת הגדרות נגישות",
-                    settingsHint = "פתח את שירותי הנגישות, מצא את קליק פלוס והפעל אותו.",
-                    onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
-                )
-            }
-            item {
-                StatusCard(
-                    title = "שימוש בנתוני שימוש",
-                    ok = usage,
-                    detail = if (usage) "הגישה פעילה וניתן לזהות איזו אפליקציה הייתה פתוחה לפני ההפעלה." else "הגישה אינה פעילה. היא נדרשת לזיהוי האפליקציה שהייתה פתוחה לפני ההפעלה.",
-                    actionText = "פתיחת גישת נתוני שימוש",
-                    settingsHint = "פתח את גישת נתוני השימוש, מצא את קליק פלוס ואפשר לה גישה.",
-                    onClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
-                )
-            }
-            item {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("מצב עבודה", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Column(
-                                Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                ChoiceChip(
-                                    selected = mode == AppMode.FULL,
-                                    onClick = { mode = AppMode.FULL; onMode(AppMode.FULL) },
-                                    label = "מלא",
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                ChoiceChip(
-                                    selected = mode == AppMode.BASIC,
-                                    onClick = { mode = AppMode.BASIC; onMode(AppMode.BASIC) },
-                                    label = "בסיסי ללא נגישות",
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("מצב עבודה נוכחי", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(if (mode == AppMode.FULL) "מצב מלא" else "מצב בסיסי ללא נגישות", fontWeight = FontWeight.Bold)
                         Text(
-                            if (mode == AppMode.FULL) {
-                                "כל היכולות זמינות, כולל זיהוי מיקום לחיצה ופעולות מערכת."
-                            } else {
-                                "במצב זה אפשר לזהות כניסות, לפתוח אפליקציות ולהפעיל פעולות מדיה, ווליום, הגדרות וחייגן. אי אפשר לזהות מיקום לחיצה במסך או לבצע פעולות מערכת גלובליות כמו בית, חזרה, התראות ויישומים אחרונים."
-                            },
+                            if (mode == AppMode.FULL) "שירות הנגישות משמש לזיהוי לחיצות ולפעולות מערכת."
+                            else "המצב אינו דורש שירות נגישות, ולכן היכולות התלויות בו אינן זמינות.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
             }
             item {
+                StatusCard(
+                    title = "שירות נגישות",
+                    ok = service,
+                    detail = if (service) "השירות פעיל וזמין." else "השירות אינו פעיל. במצב מלא חלק מהיכולות לא יעבדו.",
+                    actionText = "פתיחת הגדרות נגישות",
+                    settingsHint = "אפשר להפעיל את השירות כאן; אין צורך להישאר במסך ההגדרות לאחר ההפעלה.",
+                    onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                )
+            }
+            item {
+                StatusCard(
+                    title = "התראות",
+                    ok = notification,
+                    detail = if (notification) "הרשאת ההתראות פעילה." else "הרשאת ההתראות אינה פעילה. היא משפיעה על הצגת הודעת השירות.",
+                    actionText = "פתיחת הגדרות ההתראות",
+                    settingsHint = "אפשר להחזיר את ההרשאה דרך הגדרות Android של האפליקציה.",
+                    onClick = {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_APP_NOTIFICATION_SETTINGS,
+                            ).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+                        )
+                    },
+                )
+            }
+            item {
+                StatusCard(
+                    title = "שימוש בנתוני שימוש",
+                    ok = usage,
+                    detail = if (usage) "הגישה זמינה. היא אינה נדרשת להפעלה רגילה במצב מלא."
+                        else "הגישה אינה פעילה. במצב מלא האפליקציה יכולה לזהות את האפליקציה שבחזית דרך שירות הנגישות; במצב בסיסי היא משמשת רק כאשר צריך לזהות אפליקציה פעילה.",
+                    actionText = "פתיחת גישת נתוני שימוש",
+                    settingsHint = "אפשר להשאיר את הגישה כבויה אם אין צורך בזיהוי אפליקציה במצב בסיסי.",
+                    onClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
+                )
+            }
+            item {
+                StatusCard(
+                    title = "פעולות טלפוניה",
+                    ok = if (mode == AppMode.FULL) {
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+                    } else true,
+                    detail = "הרשאת מצב הטלפון נדרשת רק לפעולות/מצבים הקשורים לשיחות; היא אינה נדרשת להפעלה רגילה.",
+                    actionText = "פתיחת הרשאת טלפון",
+                    settingsHint = "ההרשאה אינה מבוקשת אוטומטית בזמן ההתקנה.",
+                    onClick = {
+                        if (Build.VERSION.SDK_INT >= 23) {
+                            androidx.core.app.ActivityCompat.requestPermissions(
+                                context as android.app.Activity,
+                                arrayOf(Manifest.permission.READ_PHONE_STATE),
+                                7001,
+                            )
+                        }
+                    },
+                )
+            }
+            item {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
                     Column(Modifier.padding(18.dp)) {
-                        Text("בריאות המערכת", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("סטטוס המערכת", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("פעולות פעילות: " + mappings.count { it.enabled })
                         Text("כללי מיקום: " + screenRules)
-                        Text("מצב השירות: " + if (mode == AppMode.FULL && service || mode == AppMode.BASIC) "תקין" else "דורש הרשאה")
+                        Text("מצב השירות: " + if ((mode == AppMode.FULL && service) || mode == AppMode.BASIC) "תקין" else "דורש הרשאה")
                     }
                 }
             }
@@ -858,9 +878,7 @@ private fun LogsScreen(onBack: () -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                items = AdvancedRuleRepository.logs(context)
-            }
+            if (event == Lifecycle.Event.ON_RESUME) items = AdvancedRuleRepository.logs(context)
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -872,17 +890,18 @@ private fun LogsScreen(onBack: () -> Unit) {
                 title = { Text("יומן פעילות") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
                 actions = {
-                    TextButton(onClick = {
-                        AdvancedRuleRepository.clearLogs(context)
+                    IconButton(onClick = {
                         items = emptyList()
-                    }) { Text("ניקוי") }
+                        AdvancedRuleRepository.clearLogs(context)
+                    }) { Icon(Icons.Outlined.Delete, "ניקוי") }
+                    IconButton(onClick = {}) { Icon(Icons.Outlined.Info, "הסבר") }
                 },
             )
         },
     ) { padding ->
         if (items.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("אין אירועים להצגה עדיין.")
+                Text("אין אירועים להצגה עדיין.", textAlign = TextAlign.Center)
             }
         } else {
             LazyColumn(
@@ -890,65 +909,49 @@ private fun LogsScreen(onBack: () -> Unit) {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(items) { log ->
+                items(items, key = { it.id }) { log ->
                     val (statusText, statusColor, statusTextColor) = when (log.success) {
                         true -> Triple("הצליח", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
                         false -> Triple("נכשל", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
                         null -> Triple("ממתין", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
                     }
-
-                    OutlinedCard(
-                        Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                    ) {
-                        Column(
-                            Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
+                    OutlinedCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Row(
                                 Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = statusColor,
-                                ) {
+                                Surface(shape = RoundedCornerShape(10.dp), color = statusColor) {
+                                    Text(statusText, color = statusTextColor, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        statusText,
-                                        color = statusTextColor,
+                                        SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(log.timestamp)),
+                                        style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    )
+                                    Text(
+                                        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(log.timestamp)),
+                                        style = MaterialTheme.typography.labelSmall,
                                     )
                                 }
-                                Text(
-                                    SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(log.timestamp)),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                )
                             }
-
                             Text(
-                                log.message,
+                                log.actionLabel.ifBlank { log.message },
                                 fontWeight = FontWeight.Bold,
                             )
-
-                            if (log.success == false) {
-                                Text(
-                                    "סיבת הכישלון: " + log.detail.ifBlank { "לא נמסר הסבר." },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            } else if (log.detail.isNotBlank()) {
-                                Text(
-                                    log.detail,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
+                            if (log.message.isNotBlank() && log.message != log.actionLabel) {
+                                Text(log.message, style = MaterialTheme.typography.bodyMedium)
                             }
-
+                            if (log.success == false) {
+                                Text("סיבת הכישלון: " + log.detail.ifBlank { "לא נמסר הסבר." })
+                            } else if (log.detail.isNotBlank()) {
+                                Text(log.detail, style = MaterialTheme.typography.bodySmall)
+                            }
                             if (log.appPackage.isNotBlank()) {
                                 Text(log.appPackage, style = MaterialTheme.typography.labelSmall)
                             }
-
                             if (log.xRatio >= 0f && log.yRatio >= 0f) {
                                 Text(
                                     "מיקום: X " + (log.xRatio * 100f).toInt() + "% · Y " + (log.yRatio * 100f).toInt() + "%",
