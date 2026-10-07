@@ -674,6 +674,63 @@ private fun EmptyState(onAdd: () -> Unit) {
 }
 
 @Composable
+private fun PermissionIntroScreen(onBeginPermissionSetup: () -> Unit) {
+    Surface(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Surface(
+                Modifier.size(72.dp),
+                CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Icon(
+                    Icons.Outlined.Settings,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(18.dp),
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+            Text("הגדרה ראשונית", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "כדי שקליק פלוס תוכל לזהות כניסות ולחיצות ולבצע את הפעולות שהגדרת, Android יבקש ממך כמה הרשאות.",
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(18.dp))
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                Column(
+                    Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("מה יופיע עכשיו?", fontWeight = FontWeight.Bold)
+                    Text("• הרשאת התראות – להפעלת שירות הרקע והצגת מצב השירות.")
+                    Text("• הרשאת מצב טלפון – עבור תנאים הקשורים למצב השיחה.")
+                    Text("• שירות נגישות – לזיהוי לחיצות ולפעולות מערכת הדורשות נגישות.")
+                    Text("• גישה לנתוני שימוש – לזיהוי האפליקציה שהייתה פתוחה, כשנדרש.")
+                    Text(
+                        "בכל מסך Android שיופיע, הפעל את קליק פלוס וחזור לאפליקציה. לאחר כל שלב נמשיך אוטומטית לשלב הבא.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = onBeginPermissionSetup,
+                Modifier.fillMaxWidth().height(54.dp),
+            ) {
+                Text("התחלת ההגדרה")
+            }
+        }
+    }
+}
+
+@Composable
 private fun StatusScreen(
     mappings: List<KeyActionConfig>,
     onBack: () -> Unit,
