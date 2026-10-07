@@ -18,7 +18,7 @@ enum class ActionType(val titleHebrew: String) {
     APP("פתיחת אפליקציה"),
     APP_TAP("לחיצה אוטומטית באפליקציה"),
     MULTI_POINT_TAP("שתי לחיצות אוטומטיות"),
-    PROFILE("ניהול פרופילי ClickPlus"),
+    PROFILE("החלפת פרופיל"),
 }
 
 enum class TriggerType(val titleHebrew: String) {
@@ -26,14 +26,18 @@ enum class TriggerType(val titleHebrew: String) {
     APP_ENTRY("לחיצות כניסה לאפליקציה אחרת"),
 }
 
-enum class ClickPlusProfileAction(
-    val id: String,
-    val titleHebrew: String,
-) {
-    NEXT("profile_next", "מעבר לפרופיל הבא"),
-    PREVIOUS("profile_previous", "מעבר לפרופיל הקודם"),
-    DEFAULT("profile_default", "חזרה לפרופיל ברירת המחדל"),
-}
+const val CLICKPLUS_PROFILE_ACTION_PREFIX = "profile:"
+
+fun profileActionId(profileId: String): String =
+    CLICKPLUS_PROFILE_ACTION_PREFIX + profileId
+
+fun profileIdFromActionId(actionId: String): String? =
+    actionId.takeIf { it.startsWith(CLICKPLUS_PROFILE_ACTION_PREFIX) }
+        ?.removePrefix(CLICKPLUS_PROFILE_ACTION_PREFIX)
+        ?.takeIf { it.isNotBlank() }
+
+private fun isLegacyProfileActionId(actionId: String): Boolean =
+    actionId == "profile_next" || actionId == "profile_previous" || actionId == "profile_default"
 
 enum class ContextConditionType(val titleHebrew: String) {
     ANY("בכל מצב"),
@@ -137,10 +141,7 @@ data class KeyActionConfig(
         ActionType.APP -> "פתיחת " + targetAppName.ifBlank { "אפליקציה" }
         ActionType.APP_TAP -> "לחיצה אוטומטית ב-" + screenTapAppName.ifBlank { "אפליקציה" }
         ActionType.MULTI_POINT_TAP -> "שתי לחיצות אוטומטיות ב-" + screenTapAppName.ifBlank { "אפליקציה" }
-        ActionType.PROFILE -> {
-            ClickPlusProfileAction.entries.firstOrNull { it.id == systemActionId }?.titleHebrew
-                ?: "ניהול פרופיל ClickPlus"
-        }
+        ActionType.PROFILE -> "החלפת פרופיל"
     }
 
     fun contextSummary(): String {
@@ -192,7 +193,7 @@ data class KeyActionConfig(
                     ActionType.valueOf(json.optString("actionType", ActionType.SYSTEM.name))
                 }.getOrDefault(ActionType.SYSTEM)
                 val storedSystemAction = json.optString("systemActionId", SystemActionPreset.HOME.id)
-                if (storedType == ActionType.SYSTEM && ClickPlusProfileAction.entries.any { it.id == storedSystemAction }) {
+                if (storedType == ActionType.SYSTEM && isLegacyProfileActionId(storedSystemAction)) {
                     ActionType.PROFILE
                 } else {
                     storedType
