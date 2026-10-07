@@ -1,6 +1,10 @@
 package com.example.clickplus.service
 
+import android.app.AppOpsManager
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.os.Build
+import android.provider.Settings
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -46,16 +50,43 @@ object StandaloneLauncherEngine {
     }
 
     private fun lastForegroundPackage(context: Context): String {
+        if (!hasUsageAccess(context)) return ""
         val usage = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return ""
-        val end = System.currentTimeMillis() - 200L
-        val start = end - 10_000L
+        val end = System.currentTimeMillis()
+        val start = end - 30_000L
         return runCatching {
-            usage.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, start, end)
-                .asSequence()
-                .filter { it.packageName != context.packageName }
-                .maxByOrNull { it.lastTimeUsed }
-                ?.packageName.orEmpty()
+            val events = usage.queryEvents(start, end)
+            val event = UsageEvents.Event()
+            var latestPackage = ""
+            var latestTimestamp = Long.MIN_VALUE
+            val foregroundType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                UsageEvents.Event.ACTIVITY_RESUMED
+            } else {
+                UsageEvents.Event.MOVE_TO_FOREGROUND
+            }
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (event.eventType != foregroundType) continue
+                val pkg = event.packageName.orEmpty()
+                if (pkg.isBlank() || pkg == context.packageName || pkg == "com.android.systemui") continue
+                if (event.timeStamp >= latestTimestamp) {
+                    latestTimestamp = event.timeStamp
+                    latestPackage = pkg
+                }
+            }
+            latestPackage
         }.getOrDefault("")
+    }
+
+    private fun hasUsageAccess(context: Context): Boolean {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
+        return runCatching {
+            appOps.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName,
+            ) == AppOpsManager.MODE_ALLOWED
+        }.getOrDefault(false)
     }
 
     private fun matchesCondition(context: Context, config: KeyActionConfig, foreground: String): Boolean {
