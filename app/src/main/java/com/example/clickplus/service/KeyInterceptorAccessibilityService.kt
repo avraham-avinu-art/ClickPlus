@@ -157,6 +157,10 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         consumePendingLaunches()
     }
 
+    override fun onInterrupt() {
+        // Required by AccessibilityService; no interrupted gesture state is retained here.
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         val eventPackage = event.packageName?.toString().orEmpty()
@@ -296,6 +300,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         tapLearningOverlay.hide()
     }
 
+    private fun captureTapLocationIfRequested(event: AccessibilityEvent): Boolean {
+        // Location learning is handled by the accessibility overlay itself.
+        // Returning false keeps normal accessibility event processing intact.
+        return false
+    }
+
     private fun openEditor() {
         runCatching {
             startActivity(
@@ -312,3 +322,4 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         // Intentionally unused: learning captures the point without replaying
         // a click into the target app.
     }
+}
