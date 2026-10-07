@@ -39,6 +39,7 @@ class AdvancedRuleRepository(private val context: Context) {
         private const val THEME = "theme_mode"
         private const val LAST_PACKAGE = "last_external_package"
         private const val LOGS = "activity_logs"
+        private const val ACTIVE_PROFILE = "active_profile"
 
         fun currentMode(context: Context): AppMode =
             runCatching {
@@ -50,6 +51,36 @@ class AdvancedRuleRepository(private val context: Context) {
 
         fun setMode(context: Context, mode: AppMode) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(MODE, mode.name).apply()
+        }
+
+        fun activeProfileId(context: Context): String =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(ACTIVE_PROFILE, "default")
+                .orEmpty()
+                .ifBlank { "default" }
+
+        fun setActiveProfileId(context: Context, profileId: String) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putString(ACTIVE_PROFILE, profileId.ifBlank { "default" }).apply()
+        }
+
+        fun isRuleInActiveProfile(context: Context, ruleId: String): Boolean {
+            val active = activeProfileId(context)
+            return AdvancedRuleRepository(context).getRuleMetadata(ruleId).profileId == active
+        }
+
+        fun cycleProfile(context: Context, direction: Int): String {
+            val repo = AdvancedRuleRepository(context)
+            val profiles = repo.profiles().filter { it.enabled }
+            if (profiles.isEmpty()) {
+                setActiveProfileId(context, "default")
+                return "default"
+            }
+            val current = activeProfileId(context)
+            val index = profiles.indexOfFirst { it.id == current }.let { if (it < 0) 0 else it }
+            val next = profiles[(index + direction + profiles.size) % profiles.size]
+            setActiveProfileId(context, next.id)
+            return next.name
         }
 
         fun lastExternalPackage(context: Context): String =
@@ -243,6 +274,7 @@ data class ActivityLog(
     val yRatio: Float = -1f,
     val success: Boolean? = null,
     val detail: String = "",
+    val actionLabel: String = "",
     val id: String = UUID.randomUUID().toString(),
 ) {
     fun toJson() = JSONObject()
@@ -256,6 +288,7 @@ data class ActivityLog(
         .put("yRatio", yRatio)
         .put("success", success)
         .put("detail", detail)
+        .put("actionLabel", actionLabel)
 
     companion object {
         fun fromJson(o: JSONObject): ActivityLog {
@@ -275,6 +308,7 @@ data class ActivityLog(
                 yRatio = o.optDouble("yRatio", -1.0).toFloat(),
                 success = if (type == "TRIGGER") null else storedSuccess,
                 detail = o.optString("detail"),
+                actionLabel = o.optString("actionLabel"),
                 id = o.optString("id", UUID.randomUUID().toString()),
             )
         }
