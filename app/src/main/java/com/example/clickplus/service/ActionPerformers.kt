@@ -64,6 +64,7 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
     override fun supports(config: KeyActionConfig): Boolean {
         return config.actionType == ActionType.APP ||
             config.actionType == ActionType.APP_TAP ||
+            config.actionType == ActionType.PROFILE ||
             config.systemActionId in supportedSystemActions
     }
 
@@ -77,6 +78,17 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
             when (config.actionType) {
                 ActionType.MULTI_POINT_TAP -> ActionExecutionResult.failure("שתי לחיצות אוטומטיות דורשות מצב מלא עם שירות נגישות")
                 ActionType.APP_TAP -> ActionExecutionResult.failure("לחיצה בתוך אפליקציה דורשת מצב מלא עם שירות נגישות")
+                ActionType.PROFILE -> when (config.systemActionId) {
+                    "profile_next" ->
+                        ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(context, 1))
+                    "profile_previous" ->
+                        ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(context, -1))
+                    "profile_default" -> {
+                        AdvancedRuleRepository.setActiveProfileId(context, "default")
+                        ActionExecutionResult.success("חזר לפרופיל ברירת המחדל")
+                    }
+                    else -> ActionExecutionResult.failure("פעולת פרופיל ClickPlus אינה מוכרת")
+                }
                 ActionType.APP -> {
                     if (config.targetPackage.isBlank()) {
                         return ActionExecutionResult.failure("לא נבחרה אפליקציית יעד")
