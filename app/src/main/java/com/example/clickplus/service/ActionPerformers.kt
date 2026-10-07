@@ -39,6 +39,7 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
 
     override fun supports(config: KeyActionConfig): Boolean {
         return config.actionType == ActionType.APP ||
+            config.actionType == ActionType.APP_TAP ||
             config.systemActionId in supportedSystemActions
     }
 
