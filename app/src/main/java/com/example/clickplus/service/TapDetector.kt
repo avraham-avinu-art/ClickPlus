@@ -35,6 +35,9 @@ class TapDetector(
     private val screenReset = mutableMapOf<String, Runnable>()
     private var profiles = emptyList<KeyActionConfig>()
     private val advanced = AdvancedRuleRepository(context)
+    // The first entry opens the selected app and is not counted as a trigger.
+    // Re-entering an already-opened app can be counted.
+    private val enteredAppPackages = mutableSetOf<String>()
 
     fun updateProfiles(newProfiles: List<KeyActionConfig>) {
         profiles = newProfiles.filter { it.enabled }
@@ -50,6 +53,11 @@ class TapDetector(
 
     fun processAppEntry(enteredPackage: String, previousForegroundPackage: String) {
         if (enteredPackage.isBlank()) return
+
+        val wasAlreadyOpened = enteredAppPackages.contains(enteredPackage)
+        enteredAppPackages.add(enteredPackage)
+        if (!wasAlreadyOpened) return
+
         registerTrigger(
             triggerType = TriggerType.APP_ENTRY,
             enteredPackage = enteredPackage,
