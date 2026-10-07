@@ -28,6 +28,7 @@ class TapCountOverlay(private val context: Context) {
 
     private var attached = false
     private var hideRunnable: Runnable? = null
+    private var positionPercentFromBottom = 35
 
     fun show(count: Int, durationMs: Long = 900L) {
         textView.text = count.toString()
@@ -46,7 +47,7 @@ class TapCountOverlay(private val context: Context) {
                 PixelFormat.TRANSLUCENT,
             ).apply {
                 gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                y = (height * 0.35f).toInt()
+                y = (height * positionPercentFromBottom.coerceIn(5, 90) / 100f).toInt()
             }
 
             runCatching {
@@ -62,6 +63,15 @@ class TapCountOverlay(private val context: Context) {
         val hide = Runnable { textView.visibility = View.GONE }
         hideRunnable = hide
         textView.postDelayed(hide, durationMs.coerceIn(300L, 1500L))
+    }
+
+    fun setPositionPercentFromBottom(percent: Int) {
+        positionPercentFromBottom = percent.coerceIn(5, 90)
+        if (attached) {
+            val params = textView.layoutParams as? WindowManager.LayoutParams ?: return
+            params.y = (context.resources.displayMetrics.heightPixels * positionPercentFromBottom / 100f).toInt()
+            runCatching { windowManager.updateViewLayout(textView, params) }
+        }
     }
 
     fun hide() {
