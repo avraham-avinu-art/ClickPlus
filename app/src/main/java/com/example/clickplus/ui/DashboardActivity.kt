@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -2250,7 +2251,7 @@ private fun PositionPreview(xPercent: Int, yPercent: Int) {
 private fun SystemActionPicker(
     selectedId: String,
     selectedCategory: String?,
-    onCategorySelected: (String) -> Unit,
+    onCategorySelected: (String?) -> Unit,
     onActionSelected: (String) -> Unit,
 ) {
     val categories = SystemActionPreset.entries.map { it.categoryHebrew }.distinct()
@@ -2385,6 +2386,12 @@ private fun EditorSliderRow(
         content()
     }
 }
+
+private data class InstalledApp(
+    val packageName: String,
+    val label: String,
+    val icon: Drawable?,
+)
 
 @Composable
 private fun AppPickerDialog(
