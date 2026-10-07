@@ -100,6 +100,8 @@ data class KeyActionConfig(
     val contextConditionName: String = "",
     val enabled: Boolean = true,
     val triggerType: TriggerType = TriggerType.APP_ENTRY,
+    val triggerPackage: String = "",
+    val triggerAppName: String = "",
     val screenTapPackage: String = "",
     val screenTapAppName: String = "",
     val screenTapXRatio: Float = -1f,
@@ -153,6 +155,7 @@ data class KeyActionConfig(
         put("contextConditionType", contextConditionType.name)
         put("contextConditionValue", contextConditionValue); put("contextConditionName", contextConditionName)
         put("enabled", enabled); put("triggerType", triggerType.name)
+        put("triggerPackage", triggerPackage); put("triggerAppName", triggerAppName)
         put("screenTapPackage", screenTapPackage); put("screenTapAppName", screenTapAppName)
         put("screenTapXRatio", screenTapXRatio); put("screenTapYRatio", screenTapYRatio)
         put("screenTapSecondXRatio", screenTapSecondXRatio); put("screenTapSecondYRatio", screenTapSecondYRatio)
@@ -177,6 +180,8 @@ data class KeyActionConfig(
             contextConditionName = json.optString("contextConditionName", ""),
             enabled = json.optBoolean("enabled", json.optBoolean("isEnabled", true)),
             triggerType = runCatching { TriggerType.valueOf(json.optString("triggerType", TriggerType.APP_ENTRY.name)) }.getOrDefault(TriggerType.APP_ENTRY),
+            triggerPackage = json.optString("triggerPackage", ""),
+            triggerAppName = json.optString("triggerAppName", ""),
             screenTapPackage = json.optString("screenTapPackage", ""),
             screenTapAppName = json.optString("screenTapAppName", ""),
             screenTapXRatio = json.optDouble("screenTapXRatio", -1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(-1f, 1f) ?: -1f,
