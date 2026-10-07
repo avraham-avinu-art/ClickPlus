@@ -191,6 +191,12 @@ class DashboardActivity : ComponentActivity() {
                     showPermissionIntro = false
                     continueFirstLaunchPermissions()
                 },
+                onLaterPermissionSetup = {
+                    runtimePrefs.edit().putBoolean("permission_intro_completed", true).apply()
+                    showPermissionIntro = false
+                    getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+                        .edit().putBoolean("permission_bootstrap_done", true).apply()
+                },
             )
         }
     }
@@ -636,9 +642,10 @@ private fun EmptyState(onAdd: () -> Unit) {
 }
 
 @Composable
-private fun PermissionIntroScreen(onBeginPermissionSetup: () -> Unit) {
-    var introVisible by remember { mutableStateOf(true) }
-    if (!introVisible) return
+private fun PermissionIntroScreen(
+    onBeginPermissionSetup: () -> Unit,
+    onLaterPermissionSetup: () -> Unit,
+) {
     Surface(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize(),
@@ -697,12 +704,7 @@ private fun PermissionIntroScreen(onBeginPermissionSetup: () -> Unit) {
             }
             item {
                 OutlinedButton(
-                    onClick = {
-                        introVisible = false
-                        onBeginPermissionSetup()
-                        /* DashboardActivity will dismiss the intro and, because the
-                           notification step is optional, the app opens normally. */
-                    },
+                    onClick = onLaterPermissionSetup,
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                 ) {
                     Text("מאוחר יותר – כניסה לאפליקציה")
