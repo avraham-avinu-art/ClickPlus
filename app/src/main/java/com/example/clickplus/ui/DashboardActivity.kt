@@ -2342,13 +2342,41 @@ private fun PositionPreview(xPercent: Int, yPercent: Int) {
 }
 
 @Composable
+private fun ProfileActionPicker(
+    selectedId: String,
+    onActionSelected: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Text(
+            "החלפת פרופיל פנימי של ClickPlus",
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            "הפעולות כאן משנות רק את הפרופיל הפעיל בתוך ClickPlus עצמו.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        ClickPlusProfileAction.entries.forEach { action ->
+            ChoiceChip(
+                selected = selectedId == action.id,
+                onClick = { onActionSelected(action.id) },
+                label = action.titleHebrew,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+            )
+        }
+    }
+}
+
+@Composable
 private fun SystemActionPicker(
     selectedId: String,
     selectedCategory: String?,
     onCategorySelected: (String?) -> Unit,
     onActionSelected: (String) -> Unit,
 ) {
-    val categories = SystemActionPreset.entries.map { it.categoryHebrew }.distinct()
+    val systemActions = SystemActionPreset.entries.filterNot {
+        ClickPlusProfileAction.entries.any { profileAction -> profileAction.id == it.id }
+    }
+    val categories = systemActions.map { it.categoryHebrew }.distinct()
     val selected = selectedCategory
     if (selected == null) {
         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -2374,7 +2402,7 @@ private fun SystemActionPicker(
             }
         }
     } else {
-        val actions = SystemActionPreset.entries.filter { it.categoryHebrew == selected }
+        val actions = systemActions.filter { it.categoryHebrew == selected }
         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
