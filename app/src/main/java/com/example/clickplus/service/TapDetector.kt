@@ -43,6 +43,8 @@ class TapDetector(
         val all = profiles.filter {
             it.enabled &&
                 it.triggerType == TriggerType.APP_ENTRY &&
+                it.triggerPackage.isNotBlank() &&
+                it.triggerPackage == enteredPackage &&
                 AdvancedRuleRepository.isRuleInActiveProfile(context, it.id)
         }
         if (all.isEmpty()) return
