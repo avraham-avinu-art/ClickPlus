@@ -907,7 +907,10 @@ private fun LogsScreen(onBack: () -> Unit) {
                         items = emptyList()
                         AdvancedRuleRepository.clearLogs(context)
                     }) { Icon(Icons.Outlined.Delete, "ניקוי") }
-                    IconButton(onClick = {}) { Icon(Icons.Outlined.Info, "הסבר") }
+                    HelpIconButton(
+                        "הסבר על יומן הפעילות",
+                        "היומן מציג תאריך, שעה, שם הפעולה, תוצאת הביצוע והסבר לכישלון כאשר יש כזה.",
+                    )
                 },
             )
         },
@@ -2366,11 +2369,32 @@ private fun PointEditor(
 }
 
 @Composable
-private fun SimpleTopBar(title: String, onBack: () -> Unit) {
+private fun SimpleTopBar(
+    title: String,
+    onBack: () -> Unit,
+    helpText: String = "כאן נמצא הסבר קצר על האפשרויות והפעולות של המסך הזה.",
+) {
     TopAppBar(
         title = { Text(title) },
         navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
+        actions = { HelpIconButton("הסבר על $title", helpText) },
     )
+}
+
+@Composable
+private fun HelpIconButton(title: String, text: String) {
+    var open by remember { mutableStateOf(false) }
+    IconButton(onClick = { open = true }) {
+        Icon(Icons.Outlined.Info, contentDescription = "הסבר")
+    }
+    if (open) {
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text(title) },
+            text = { Text(text) },
+            confirmButton = { TextButton(onClick = { open = false }) { Text("הבנתי") } },
+        )
+    }
 }
 
 private fun isAccessibilityEnabled(context: Context): Boolean {
