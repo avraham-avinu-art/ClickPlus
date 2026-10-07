@@ -50,6 +50,7 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
 
         return try {
             when (config.actionType) {
+                ActionType.APP_TAP -> ActionExecutionResult.failure("לחיצה בתוך אפליקציה דורשת מצב מלא עם שירות נגישות")
                 ActionType.APP -> {
                     if (config.targetPackage.isBlank()) {
                         return ActionExecutionResult.failure("לא נבחרה אפליקציית יעד")
