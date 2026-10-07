@@ -637,56 +637,83 @@ private fun EmptyState(onAdd: () -> Unit) {
 
 @Composable
 private fun PermissionIntroScreen(onBeginPermissionSetup: () -> Unit) {
+    var introVisible by remember { mutableStateOf(true) }
+    if (!introVisible) return
     Surface(Modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 32.dp),
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Surface(
-                Modifier.size(72.dp),
-                CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Icon(
-                    Icons.Outlined.Settings,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(18.dp),
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-            Text("הגדרה ראשונית", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "כדי שקליק פלוס תוכל לזהות כניסות ולחיצות ולבצע את הפעולות שהגדרת, Android יבקש ממך כמה הרשאות.",
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(18.dp))
-            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                Column(
-                    Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+            item {
+                Surface(
+                    Modifier.size(72.dp),
+                    CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
-                    Text("מה יופיע עכשיו?", fontWeight = FontWeight.Bold)
-                    Text("• הרשאת התראות – להפעלת שירות הרקע והצגת מצב השירות.")
-                    Text("• הרשאת מצב טלפון – עבור תנאים הקשורים למצב השיחה.")
-                    Text("• שירות נגישות – לזיהוי לחיצות ולפעולות מערכת הדורשות נגישות.")
-                    Text("• גישה לנתוני שימוש – לזיהוי האפליקציה שהייתה פתוחה, כשנדרש.")
-                    Text(
-                        "בכל מסך Android שיופיע, הפעל את קליק פלוס וחזור לאפליקציה. לאחר כל שלב נמשיך אוטומטית לשלב הבא.",
-                        style = MaterialTheme.typography.bodySmall,
+                    Icon(
+                        Icons.Outlined.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(18.dp),
                     )
                 }
             }
-            Spacer(Modifier.height(20.dp))
-            Button(
-                onClick = onBeginPermissionSetup,
-                Modifier.fillMaxWidth().height(54.dp),
-            ) {
-                Text("התחלת ההגדרה")
+            item {
+                Text("הגדרה ראשונית", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            }
+            item {
+                Text(
+                    "אפשר להשתמש בקליק פלוס גם בלי לתת עכשיו את כל ההרשאות. ההרשאות הנוספות נדרשות רק ליכולות מסוימות.",
+                    textAlign = TextAlign.Center,
+                )
+            }
+            item {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("מה נדרש ולמה?", fontWeight = FontWeight.Bold)
+                        Text("• שירות נגישות – לזיהוי לחיצות באפליקציות אחרות ולביצוע לחיצות אוטומטיות ופעולות מערכת.")
+                        Text("• גישה לנתוני שימוש – אפשרית רק כאשר משתמשים במצב בסיסי וצריך לזהות אפליקציה פעילה.")
+                        Text("• התראות – להצגת הודעת השירות כאשר הדבר מופעל.")
+                        Text("• הרשאת טלפון – נדרשת רק לתנאים או פעולות הקשורים לשיחות.")
+                    }
+                }
+            }
+            item {
+                Text(
+                    "אין צורך לחזור ידנית אחרי כל הרשאה: במסכים שמופיעים כאן אפשר לחזור לאפליקציה בכל שלב, וההמשך נעשה לפי הפעולה שבחרת.",
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            item {
+                Button(
+                    onClick = onBeginPermissionSetup,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                ) {
+                    Text("הענקת הרשאות עכשיו")
+                }
+            }
+            item {
+                OutlinedButton(
+                    onClick = {
+                        introVisible = false
+                        onBeginPermissionSetup()
+                        /* DashboardActivity will dismiss the intro and, because the
+                           notification step is optional, the app opens normally. */
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                ) {
+                    Text("מאוחר יותר – כניסה לאפליקציה")
+                }
+            }
+            item {
+                Text(
+                    "ההגדרות והפעולות זמינות גם בלי הרשאות שאינן נדרשות כרגע.",
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }
