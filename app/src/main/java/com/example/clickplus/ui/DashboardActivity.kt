@@ -1307,7 +1307,7 @@ private fun BackupScreen(
                             onClick = {
                                 val json = advanced.exportJson(
                                     JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
-                                    JSONObject().put("tapTimeoutMs", timeout).put("showTapCount", showTapCount)
+                                    JSONObject().put("tapTimeoutMs", timeout).put("actionDelayMs", actionDelay).put("showTapCount", showTapCount)
                                 )
                                 runCatching {
                                     val file = java.io.File(context.cacheDir, "clickplus-backup.json")
@@ -1396,6 +1396,15 @@ private fun EditorScreen(
         )
     }
     var showDelete by remember { mutableStateOf(false) }
+
+    LaunchedEffect(draft.triggerType, draft.actionType) {
+        if (draft.triggerType == TriggerType.SCREEN_TAP && draft.actionType != ActionType.APP_TAP) {
+            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("tap_learning", false)
+                .apply()
+        }
+    }
 
     LaunchedEffect(draft.id) {
         while (true) {
