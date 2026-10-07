@@ -165,6 +165,14 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         super.onTaskRemoved(rootIntent)
     }
 
+    override fun onDestroy() {
+        tapLearningOverlay.destroy()
+        tapCountOverlay.destroy()
+        serviceScope.cancel()
+        instance = null
+        super.onDestroy()
+    }
+
     override fun onInterrupt() {
         // Required by AccessibilityService; no interrupted gesture state is retained here.
     }
