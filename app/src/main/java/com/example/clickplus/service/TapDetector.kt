@@ -43,6 +43,8 @@ class TapDetector(
         profiles = newProfiles.filter { it.enabled }
     }
 
+    fun resetOpenAppState() { enteredAppPackages.clear() }
+
     fun processClickPlusEntry(previousForegroundPackage: String) {
         registerTrigger(
             triggerType = TriggerType.CLICKPLUS_ENTRY,
