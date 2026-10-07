@@ -38,7 +38,15 @@ class RuleExecutionCoordinator(
         if (!test) {
             val profiles = advanced.profiles()
             val selectedProfile = profiles.firstOrNull { it.id == meta.profileId }
-            if (selectedProfile != null && !selectedProfile.enabled) {
+            val activeProfileId = AdvancedRuleRepository.activeProfileId(context)
+            if (selectedProfile == null) {
+                logFailure(config, sourcePackage, "הפעולה אינה משויכת לפרופיל קיים")
+                return false
+            }
+            if (selectedProfile.id != activeProfileId) {
+                return false
+            }
+            if (!selectedProfile.enabled) {
                 logFailure(config, sourcePackage, "הפרופיל \"" + selectedProfile.name + "\" מושבת")
                 return false
             }
@@ -87,7 +95,8 @@ class RuleExecutionCoordinator(
             }
         }
 
-        val delay = AppPreferencesRepository.actionDelaySnapshot(context)
+        val globalDelay = AppPreferencesRepository.actionDelaySnapshot(context)
+        val delay = if (meta.delayMs > 0L) meta.delayMs.coerceIn(0L, 10_000L) else globalDelay
         if (delay == 0L) runAttempt(1) else handler.postDelayed({ runAttempt(1) }, delay)
         return true
     }
