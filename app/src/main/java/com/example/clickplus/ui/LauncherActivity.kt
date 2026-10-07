@@ -44,10 +44,7 @@ class LauncherActivity : Activity() {
             if (service != null) {
                 service.onLauncherEntry()
             } else {
-                val pending = prefs.getInt("pending_activation_launches", 0)
-                prefs.edit()
-                    .putInt("pending_activation_launches", (pending + 1).coerceAtMost(10))
-                    .apply()
+                StandaloneLauncherEngine.recordAccessibilityUnavailable(this)
             }
         }
 
