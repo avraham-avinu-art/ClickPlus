@@ -82,7 +82,9 @@ class TapDetector(
     }
 
     fun processViewClicked(event: AccessibilityEvent) {
-        val all = profiles.filter { it.triggerType == TriggerType.SCREEN_TAP }
+        val all = profiles.filter {
+            it.triggerType == TriggerType.SCREEN_TAP || it.triggerType == TriggerType.APP_TAP
+        }
         if (all.isEmpty()) return
         val packageName = event.packageName?.toString().orEmpty()
         val source = event.source ?: return
@@ -154,13 +156,8 @@ class TapDetector(
         height: Float,
     ): Boolean {
         val meta = advanced.getRuleMetadata(config.id)
-        val landscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val targetX = if (landscape && meta.landscapeX >= 0f) meta.landscapeX
-        else if (!landscape && meta.portraitX >= 0f) meta.portraitX
-        else config.screenTapXRatio
-        val targetY = if (landscape && meta.landscapeY >= 0f) meta.landscapeY
-        else if (!landscape && meta.portraitY >= 0f) meta.portraitY
-        else config.screenTapYRatio
+        val targetX = config.screenTapXRatio
+        val targetY = config.screenTapYRatio
 
         if (!targetX.isFinite() || !targetY.isFinite() || targetX < 0f || targetY < 0f) return false
 
@@ -218,6 +215,25 @@ class TapDetector(
                     if (config.contextConditionValue.isBlank()) {
                         value.contains("radio") || value.contains("fm") || value.contains("dab") || value.contains("tuner")
                     } else foregroundPackage == config.contextConditionValue
+            }
+            ContextConditionType.BRIGHTNESS_LOW -> {
+                val current = runCatching {
+                    android.provider.Settings.System.getInt(
+                        context.contentResolver,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS,
+                        255,
+                    )
+                }.getOrDefault(255)
+                current <= 64
+            }
+            ContextConditionType.VOLUME_LEVEL -> {
+                val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                if (audio == null) false else {
+                    val expected = config.contextConditionValue.toIntOrNull()?.coerceIn(1, 30) ?: return false
+                    val maxVolume = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                    val current = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+                    kotlin.math.round(current.toDouble() / maxVolume.toDouble() * 30.0).toInt().coerceIn(0, 30) == expected
+                }
             }
         }
     }
