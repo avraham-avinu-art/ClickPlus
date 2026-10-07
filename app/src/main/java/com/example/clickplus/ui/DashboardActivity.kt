@@ -2599,7 +2599,7 @@ private fun ProfileSelector(
             style = MaterialTheme.typography.bodySmall,
         )
         Text(
-            "זהו שיוך של הפעולה לפרופיל בלבד. הוא נפרד מפעולת "החלפת פרופיל" שבשלב 4.",
+            "זהו שיוך של הפעולה לפרופיל בלבד. הוא נפרד מפעולת \"החלפת פרופיל\" שבשלב 4.",
             style = MaterialTheme.typography.bodySmall,
         )
         FlowRow(
