@@ -1044,10 +1044,12 @@ private fun ChoiceChip(
 @Composable
 private fun SettingsScreen(
     timeout: Long,
+    actionDelay: Long,
     showTapCount: Boolean,
     themeMode: String,
     onBack: () -> Unit,
     onTimeout: (Long) -> Unit,
+    onActionDelay: (Long) -> Unit,
     onShowTapCount: (Boolean) -> Unit,
     onTheme: (String) -> Unit,
     onBackup: () -> Unit,
@@ -1066,6 +1068,17 @@ private fun SettingsScreen(
                         onValueChange = { onTimeout(it.toLong()) },
                         valueRange = 300f..1500f,
                         steps = 11,
+                    )
+                }
+            }
+            item {
+                SettingCard("השהיה לפני פעולה", "המתנה אחידה אחרי שהרצף זוהה ולפני ביצוע הפעולה.") {
+                    Text(actionDelay.toString() + "ms", style = MaterialTheme.typography.titleMedium)
+                    Slider(
+                        value = actionDelay.toFloat(),
+                        onValueChange = { onActionDelay(it.toLong()) },
+                        valueRange = 0f..5000f,
+                        steps = 9,
                     )
                 }
             }
@@ -1092,12 +1105,6 @@ private fun SettingsScreen(
             item {
                 SettingCard("גיבוי והעברה", "ייצוא, ייבוא ואיפוס של כל ההגדרות.") {
                     Button(onClick = onBackup, Modifier.fillMaxWidth()) { Text("פתח גיבוי") }
-                }
-            }
-            item {
-                SettingCard("גרסה", "ClickPlus 2.0 · בנויה ל־Android 16") {
-                    Text("Target API 36", fontWeight = FontWeight.Bold)
-                    Text("מצב רקע פעיל תמיד.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -1148,6 +1155,7 @@ private fun BackupScreen(
     mappings: List<KeyActionConfig>,
     timeout: Long,
     showTapCount: Boolean,
+    actionDelay: Long,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -1172,7 +1180,8 @@ private fun BackupScreen(
                     }
                     basePrefs.saveMappings(imported)
                     root.optJSONObject("settings")?.let {
-                        if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 650L))
+                        if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 1200L))
+                        if (it.has("actionDelayMs")) basePrefs.saveActionDelay(it.optLong("actionDelayMs", 0L))
                         if (it.has("showTapCount")) basePrefs.saveShowTapCount(it.optBoolean("showTapCount", false))
                     }
                     advanced.importBundle(root)
@@ -1188,7 +1197,7 @@ private fun BackupScreen(
         uri?.let { selected ->
             val json = advanced.exportJson(
                 JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
-                JSONObject().put("tapTimeoutMs", timeout).put("showTapCount", showTapCount)
+                JSONObject().put("tapTimeoutMs", timeout).put("actionDelayMs", actionDelay).put("showTapCount", showTapCount)
             )
             runCatching {
                 context.contentResolver.openOutputStream(selected)?.bufferedWriter()?.use { it.write(json) }
