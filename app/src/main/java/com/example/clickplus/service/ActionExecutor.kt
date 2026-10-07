@@ -1,18 +1,26 @@
 package com.example.clickplus.service
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.content.Context
 import android.content.Intent
+import android.graphics.Path
 import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.KeyEvent
 import com.example.clickplus.data.ActionType
+import com.example.clickplus.data.ActivityLog
+import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.SystemActionPreset
 
 class ActionExecutor(private val service: AccessibilityService) : ClickActionPerformer {
+    private val handler = Handler(Looper.getMainLooper())
     override fun supports(config: KeyActionConfig): Boolean {
-        return config.actionType == ActionType.APP ||
+        return config.actionType == ActionType.APP_TAP ||
+            config.actionType == ActionType.APP ||
             SystemActionPreset.entries.any { it.id == config.systemActionId }
     }
 
@@ -22,6 +30,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
 
         return try {
             when (config.actionType) {
+                ActionType.APP_TAP -> executeAppTap(config)
                 ActionType.APP -> {
                     if (config.targetPackage.isBlank()) {
                         return ActionExecutionResult.failure("לא נבחרה אפליקציית יעד")
@@ -40,6 +49,130 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                     (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName)
             )
         }
+    }
+
+    private fun executeAppTap(config: KeyActionConfig): ActionExecutionResult {
+        val targetPackage = config.screenTapPackage.trim()
+        if (targetPackage.isBlank()) {
+            return ActionExecutionResult.failure("לא נבחרה אפליקציה לביצוע הלחיצה")
+        }
+
+        val xRatio = config.screenTapXRatio.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
+        val yRatio = config.screenTapYRatio.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
+        if (xRatio == null || yRatio == null || config.screenTapXRatio < 0f || config.screenTapYRatio < 0f) {
+            return ActionExecutionResult.failure("לא נלמד מיקום לחיצה תקין באפליקציה")
+        }
+
+        val intent = service.packageManager.getLaunchIntentForPackage(targetPackage)
+            ?: return ActionExecutionResult.failure("אפליקציית היעד אינה מותקנת או שאין לה מסך פתיחה")
+
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        service.startActivity(intent)
+
+        scheduleTapWhenAppIsVisible(config, targetPackage, xRatio, yRatio)
+        return ActionExecutionResult.success("האפליקציה נפתחה; הלחיצה תתבצע אוטומטית במיקום שנלמד")
+    }
+
+    private fun scheduleTapWhenAppIsVisible(
+        config: KeyActionConfig,
+        targetPackage: String,
+        xRatio: Float,
+        yRatio: Float,
+    ) {
+        val startedAt = System.currentTimeMillis()
+        val timeoutMs = 6000L
+
+        val check = object : Runnable {
+            override fun run() {
+                if (System.currentTimeMillis() - startedAt >= timeoutMs) {
+                    logAppTapResult(config, targetPackage, false, "האפליקציה נפתחה, אך לא זוהתה בחזית בתוך 6 שניות")
+                    return
+                }
+
+                val foregroundPackage = service.rootInActiveWindow?.packageName?.toString().orEmpty()
+                if (foregroundPackage == targetPackage) {
+                    dispatchLearnedTap(config, targetPackage, xRatio, yRatio)
+                } else {
+                    handler.postDelayed(this, 150L)
+                }
+            }
+        }
+        handler.post(check)
+    }
+
+    private fun dispatchLearnedTap(
+        config: KeyActionConfig,
+        targetPackage: String,
+        xRatio: Float,
+        yRatio: Float,
+    ) {
+        val metrics = service.resources.displayMetrics
+        val width = metrics.widthPixels.coerceAtLeast(1).toFloat()
+        val height = metrics.heightPixels.coerceAtLeast(1).toFloat()
+        val x = (xRatio * width).coerceIn(0f, width - 1f)
+        val y = (yRatio * height).coerceIn(0f, height - 1f)
+
+        val path = Path().apply { moveTo(x, y) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0L, 60L))
+            .build()
+
+        val dispatched = runCatching {
+            service.dispatchGesture(
+                gesture,
+                object : AccessibilityService.GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        super.onCompleted(gestureDescription)
+                        logAppTapResult(
+                            config,
+                            targetPackage,
+                            true,
+                            "הלחיצה בוצעה ב-X ${(xRatio * 100f).toInt()}% · Y ${(yRatio * 100f).toInt()}%",
+                        )
+                    }
+
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        super.onCancelled(gestureDescription)
+                        logAppTapResult(config, targetPackage, false, "Android ביטל את הלחיצה באפליקציית היעד")
+                    }
+                },
+                handler,
+            )
+        }.getOrElse {
+            logAppTapResult(
+                config,
+                targetPackage,
+                false,
+                "לא ניתן לשלוח את הלחיצה: " + (it.message?.takeIf { message -> message.isNotBlank() } ?: it.javaClass.simpleName),
+            )
+            false
+        }
+
+        if (!dispatched) {
+            logAppTapResult(config, targetPackage, false, "Android לא קיבל את פקודת הלחיצה")
+        }
+    }
+
+    private fun logAppTapResult(
+        config: KeyActionConfig,
+        targetPackage: String,
+        success: Boolean,
+        detail: String,
+    ) {
+        AdvancedRuleRepository.addLog(
+            service,
+            ActivityLog(
+                timestamp = System.currentTimeMillis(),
+                type = "ACTION",
+                message = if (success) "הפעולה הצליחה" else "הפעולה נכשלה",
+                ruleId = config.id,
+                appPackage = targetPackage,
+                xRatio = config.screenTapXRatio,
+                yRatio = config.screenTapYRatio,
+                success = success,
+                detail = detail,
+            ),
+        )
     }
 
     private fun executeSystem(actionId: String): ActionExecutionResult = when (actionId) {
