@@ -25,9 +25,9 @@ class LauncherActivity : Activity() {
             com.example.clickplus.service.StandaloneLauncherEngine.process(this)
         }
 
-        // With Accessibility enabled, keep the brief-flash behavior after the UI
-        // process has been recreated. Without Accessibility always open normally.
-        openMainInterface(flashOnly = accessibilityEnabled && !uiIsInThisProcess)
+        // Only when Accessibility is OFF and the ClickPlus UI process is not already
+        // alive should the launcher briefly show the UI and then close it.
+        openMainInterface(flashOnly = !accessibilityEnabled && !uiIsInThisProcess)
     }
 
     private fun openMainInterface(flashOnly: Boolean) {
