@@ -47,8 +47,10 @@ class TapCountOverlay(private val context: Context) {
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT,
             ).apply {
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                y = (height * positionPercentFromBottom.coerceIn(5, 90) / 100f).toInt()
+                gravity = Gravity.TOP or Gravity.START
+                x = ((context.resources.displayMetrics.widthPixels - (64 * density).toInt())
+                    .coerceAtLeast(0) * xPercentFromLeft.coerceIn(0, 100) / 100f).toInt()
+                y = ((height - (48 * density).toInt()).coerceAtLeast(0) * yPercentFromTop.coerceIn(0, 100) / 100f).toInt()
             }
 
             runCatching {
