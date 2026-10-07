@@ -204,10 +204,9 @@ class DashboardActivity : ComponentActivity() {
                     showPermissionIntro = false
 
                     if (isAccessibilityEnabled(this@DashboardActivity)) {
-                        return@ClickPlusDashboard
-                    }
-
-                    val notificationNeeded = Build.VERSION.SDK_INT >= 33 &&
+                        // Already enabled; there is nothing more to grant.
+                    } else {
+                        val notificationNeeded = Build.VERSION.SDK_INT >= 33 &&
                         ContextCompat.checkSelfPermission(
                             this@DashboardActivity,
                             Manifest.permission.POST_NOTIFICATIONS,
@@ -219,8 +218,9 @@ class DashboardActivity : ComponentActivity() {
                         notificationRequestAttempted = true
                         runtimeRequestActive = true
                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        openAccessibilitySettings()
+                        } else {
+                            openAccessibilitySettings()
+                        }
                     }
                 },
                 onLaterPermissionSetup = {
