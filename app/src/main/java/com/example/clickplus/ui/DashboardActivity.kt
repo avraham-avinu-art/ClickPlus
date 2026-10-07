@@ -1517,7 +1517,7 @@ private fun EditorScreen(
                 EditorSectionCard(
                     number = "1",
                     title = "פרטי הפעולה",
-                    subtitle = "השם שיוצג ביומן וברשימת הפעולות.",
+                    subtitle = "שם הפעולה שיופיע ברשימה וביומן.",
                 ) {
                     OutlinedTextField(
                         value = draft.name,
@@ -1532,12 +1532,7 @@ private fun EditorScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text("הפעלת הפעולה", fontWeight = FontWeight.Medium)
-                            Text(
-                                if (draft.enabled) "הפעולה פעילה וזמינה להפעלה."
-                                else "הפעולה שמורה אך לא תופעל.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                                                    }
                         Switch(
                             checked = draft.enabled,
                             onCheckedChange = { draft = draft.copy(enabled = it) },
@@ -1570,7 +1565,7 @@ private fun EditorScreen(
                         )
                     }
                     Text(
-                        "מספר הפעלות רצופות",
+                        "מספר הלחיצות הרצופות",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Medium,
                     )
@@ -1595,7 +1590,7 @@ private fun EditorScreen(
                     number = "3",
                     title = "באיזה מצב?",
                     subtitle = if (draft.triggerType == TriggerType.APP_ENTRY) {
-                        "קבע מתי הכלל מתאים לפי האפליקציה והמצב לפני ClickPlus."
+                        "קבע מתי הכלל מתאים לפי האפליקציה והמצב בזמן שהטריגר מזוהה."
                     } else {
                         "בחר באיזו אפליקציה ובאיזה מיקום לחיצה הכלל יזוהה."
                     },
@@ -1640,7 +1635,7 @@ private fun EditorScreen(
                                 )
                             }
                             Text(
-                                "ההתאמה נבדקת לפי האפליקציה שהייתה פתוחה לפני ClickPlus.",
+                                "ההתאמה נבדקת לפי האפליקציה הפעילה בזמן זיהוי הטריגר.",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -1691,24 +1686,6 @@ private fun EditorScreen(
                                 )
                             }
 
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                ChoiceChip(
-                                    selected = orientation == "portrait",
-                                    onClick = { orientation = "portrait" },
-                                    label = "אנכי",
-                                    modifier = Modifier.weight(1f),
-                                )
-                                ChoiceChip(
-                                    selected = orientation == "landscape",
-                                    onClick = { orientation = "landscape" },
-                                    label = "אופקי",
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-
                             PointEditor(
                                 x = x,
                                 y = y,
@@ -1719,17 +1696,7 @@ private fun EditorScreen(
                                         screenTapXRatio = nx,
                                         screenTapYRatio = ny,
                                     )
-                                    metadata = if (orientation == "landscape") {
-                                        metadata.copy(
-                                            landscapeX = nx,
-                                            landscapeY = ny,
-                                        )
-                                    } else {
-                                        metadata.copy(
-                                            portraitX = nx,
-                                            portraitY = ny,
-                                        )
-                                    }
+                                    metadata = metadata.copy(portraitX = nx, portraitY = ny)
                                 },
                             )
                         }
@@ -1741,7 +1708,7 @@ private fun EditorScreen(
                 EditorSectionCard(
                     number = "4",
                     title = "מה לבצע?",
-                    subtitle = "בחר מה ClickPlus יעשה לאחר שהכלל הופעל.",
+                    subtitle = "בחר מה קליק פלוס יבצע לאחר שהטריגר זוהה.",
                 ) {
                     Column(
                         Modifier.fillMaxWidth(),
@@ -1912,10 +1879,10 @@ private fun EditorScreen(
                 EditorSectionCard(
                     number = "5",
                     title = "הגדרות מתקדמות",
-                    subtitle = "ניסיונות, הגנה ואזור התאמה.",
+                    subtitle = "הגנה, ניסיונות ואזור התאמה.",
                 ) {
                     EditorSliderRow(
-                        title = "Cooldown",
+                        title = "זמן חסימה בין הפעלות",
                         valueText = metadata.cooldownMs.toString() + "ms",
                     ) {
                         Slider(
@@ -2635,11 +2602,7 @@ private fun EditorScreen(
                             screenTapYRatio = capturedY,
                         )
                     }
-                    metadata = if (orientation == "landscape") {
-                        metadata.copy(landscapeX = capturedX, landscapeY = capturedY)
-                    } else {
-                        metadata.copy(portraitX = capturedX, portraitY = capturedY)
-                    }
+                    metadata = metadata.copy(portraitX = capturedX, portraitY = capturedY)
                 }
                 p.edit().putBoolean("tap_capture_ready", false).apply()
                 learning = false
