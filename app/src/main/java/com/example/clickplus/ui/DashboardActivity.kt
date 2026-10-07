@@ -1255,13 +1255,22 @@ private fun EditorScreen(
                 val pkg = p.getString("tap_capture_package", "").orEmpty()
                 val name = p.getString("tap_capture_app_name", "").orEmpty()
                 if (capturedX >= 0f && capturedY >= 0f) {
-                    draft = draft.copy(
-                        triggerType = TriggerType.SCREEN_TAP,
-                        screenTapPackage = pkg,
-                        screenTapAppName = name,
-                        screenTapXRatio = capturedX,
-                        screenTapYRatio = capturedY,
-                    )
+                    draft = if (draft.actionType == ActionType.APP_TAP) {
+                        draft.copy(
+                            screenTapPackage = pkg,
+                            screenTapAppName = name,
+                            screenTapXRatio = capturedX,
+                            screenTapYRatio = capturedY,
+                        )
+                    } else {
+                        draft.copy(
+                            triggerType = TriggerType.SCREEN_TAP,
+                            screenTapPackage = pkg,
+                            screenTapAppName = name,
+                            screenTapXRatio = capturedX,
+                            screenTapYRatio = capturedY,
+                        )
+                    }
                     metadata = if (orientation == "landscape") {
                         metadata.copy(landscapeX = capturedX, landscapeY = capturedY)
                     } else {
@@ -1627,42 +1636,143 @@ private fun EditorScreen(
                         )
                     }
 
-                    if (draft.actionType == ActionType.SYSTEM) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            SystemActionPreset.entries.forEach { action ->
-                                ChoiceChip(
-                                    selected = draft.systemActionId == action.id,
-                                    onClick = {
-                                        draft = draft.copy(systemActionId = action.id)
-                                    },
-                                    label = action.titleHebrew,
-                                    modifier = Modifier.fillMaxWidth(),
+                    Spacer(Modifier.height(2.dp))
+                    ChoiceChip(
+                        selected = draft.actionType == ActionType.APP_TAP,
+                        onClick = { draft = draft.copy(actionType = ActionType.APP_TAP) },
+                        label = "פתיחת אפליקציה + לחיצה",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    when (draft.actionType) {
+                        ActionType.SYSTEM -> {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                SystemActionPreset.entries.forEach { action ->
+                                    ChoiceChip(
+                                        selected = draft.systemActionId == action.id,
+                                        onClick = { draft = draft.copy(systemActionId = action.id) },
+                                        label = action.titleHebrew,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
+                            }
+                        }
+                        ActionType.APP -> {
+                            OutlinedButton(onClick = { appDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Outlined.Apps, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    if (draft.targetAppName.isBlank()) "בחירת אפליקציית יעד" else draft.targetAppName,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
-                    } else {
-                        OutlinedButton(
-                            onClick = { appDialog = true },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(Icons.Outlined.Apps, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                if (draft.targetAppName.isBlank()) {
-                                    "בחירת אפליקציית יעד"
-                                } else {
-                                    draft.targetAppName
+                        ActionType.APP_TAP -> {
+                            OutlinedButton(
+                                onClick = {
+                                    if (!isAccessibilityEnabled(context)) {
+                                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                    } else if (draft.screenTapPackage.isBlank()) {
+                                        screenAppDialog = true
+                                    } else {
+                                        val p = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                                        p.edit()
+                                            .putBoolean("tap_learning", true)
+                                            .putString("tap_learning_package", draft.screenTapPackage)
+                                            .apply()
+                                        context.packageManager.getLaunchIntentForPackage(draft.screenTapPackage)?.let {
+                                            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            context.startActivity(it)
+                                            learning = true
+                                        }
+                                    }
                                 },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(Icons.Outlined.LocationOn, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    if (draft.screenTapPackage.isBlank()) "בחירת אפליקציה ולימוד נקודת לחיצה" else "לימוד מחדש של נקודת הלחיצה",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+
+                            if (learning) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                ) {
+                                    Text(
+                                        "מצב לימוד פעיל: לחץ באפליקציה על היעד שבו תתבצע הלחיצה האוטומטית.",
+                                        modifier = Modifier.padding(12.dp),
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                            }
+
+                            if (draft.screenTapPackage.isNotBlank()) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            draft.screenTapAppName.ifBlank { "האפליקציה שנבחרה" },
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            "נקודת לחיצה: X " + (x * 100f).toInt() + "% · Y " + (y * 100f).toInt() + "%",
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                    ChoiceChip(
+                                        selected = false,
+                                        onClick = { screenAppDialog = true },
+                                        label = "החלפה",
+                                        modifier = Modifier.widthIn(min = 88.dp),
+                                    )
+                                }
+
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    ChoiceChip(
+                                        selected = orientation == "portrait",
+                                        onClick = { orientation = "portrait" },
+                                        label = "אנכי",
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    ChoiceChip(
+                                        selected = orientation == "landscape",
+                                        onClick = { orientation = "landscape" },
+                                        label = "אופקי",
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+
+                                PointEditor(
+                                    x = x,
+                                    y = y,
+                                    toleranceX = metadata.toleranceXRatio,
+                                    toleranceY = metadata.toleranceYRatio,
+                                    onChange = { nx, ny ->
+                                        draft = draft.copy(screenTapXRatio = nx, screenTapYRatio = ny)
+                                        metadata = if (orientation == "landscape") {
+                                            metadata.copy(landscapeX = nx, landscapeY = ny)
+                                        } else {
+                                            metadata.copy(portraitX = nx, portraitY = ny)
+                                        }
+                                    },
+                                )
+                                Text(
+                                    "בעת ההפעלה האפליקציה תיפתח על המסך, תזוהה בחזית, ואז ClickPlus יבצע את הלחיצה בנקודה הזו.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                         }
                     }
 
-                    if (
-                        draft.actionType == ActionType.APP &&
-                        draft.targetPackage.isNotBlank()
-                    ) {
+                    if (draft.actionType == ActionType.APP && draft.targetPackage.isNotBlank()) {
                         Text(
                             "יעד: " + draft.targetAppName.ifBlank { draft.targetPackage },
                             style = MaterialTheme.typography.bodySmall,
@@ -1670,7 +1780,6 @@ private fun EditorScreen(
                     }
                 }
             }
-
             item {
                 EditorSectionCard(
                     number = "5",
@@ -1829,6 +1938,13 @@ private fun EditorScreen(
                     draft = draft.copy(
                         contextConditionValue = app.packageName,
                         contextConditionName = app.label,
+                    )
+                } else if (draft.actionType == ActionType.APP_TAP) {
+                    draft = draft.copy(
+                        screenTapPackage = app.packageName,
+                        screenTapAppName = app.label,
+                        screenTapXRatio = -1f,
+                        screenTapYRatio = -1f,
                     )
                 } else {
                     draft = draft.copy(
