@@ -1532,7 +1532,7 @@ private fun EditorScreen(
             validationMessage = "יש לבחור סוג פעולה."
             return
         }
-        if (draft.triggerPackage.isBlank()) {
+        if (draft.triggerType == TriggerType.APP_ENTRY && draft.triggerPackage.isBlank()) {
             validationMessage = "יש לבחור את האפליקציה שבה תזוהה הכניסה."
             return
         }
@@ -1540,7 +1540,6 @@ private fun EditorScreen(
             draft = draft.copy(name = "כניסה ל-" + draft.triggerAppName.ifBlank { "אפליקציה" })
         }
         val safe = draft.copy(
-            triggerType = TriggerType.APP_ENTRY,
             screenTapToleranceRatio = maxOf(metadata.toleranceXRatio, metadata.toleranceYRatio),
         )
         onSave(safe, metadata)
@@ -1556,7 +1555,7 @@ private fun EditorScreen(
                 actions = {
                     HelpIconButton(
                         "איך מגדירים פעולה?",
-                        "מגדירים מה יזוהה בעת כניסה לאפליקציה, בוחרים את הפעולה שתתבצע, ובמידת הצורך מלמדים נקודת לחיצה בתוך אפליקציית היעד.",
+                        "מגדירים את סוג הטריגר, בוחרים את הפעולה שתתבצע, ובמידת הצורך מלמדים נקודת לחיצה בתוך אפליקציית היעד.",
                     )
                     if (existing != null) {
                         IconButton(onClick = { showDelete = true }) {
@@ -1695,7 +1694,7 @@ private fun EditorScreen(
             }
 
             item {
-                EditorSectionCard("3", "תנאי הפעלה", "התנאי נבדק בזמן זיהוי הכניסה לאפליקציה.") {
+                EditorSectionCard("3", "תנאי הפעלה", "התנאי נבדק ברגע שבו הטריגר מופעל.") {
                     FlowRow(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(7.dp),
