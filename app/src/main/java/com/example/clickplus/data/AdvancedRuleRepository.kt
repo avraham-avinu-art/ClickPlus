@@ -79,6 +79,33 @@ class AdvancedRuleRepository(private val context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, array.toString()).apply()
         }
 
+        fun updateLatestPendingActionLog(
+            context: Context,
+            ruleId: String,
+            appPackage: String,
+            success: Boolean,
+            detail: String,
+        ) {
+            val current = logs(context).toMutableList()
+            val index = current.indexOfFirst {
+                it.ruleId == ruleId &&
+                    (appPackage.isBlank() || it.appPackage == appPackage) &&
+                    it.type == "ACTION" &&
+                    it.success == null &&
+                    it.message == "הפעולה בביצוע"
+            }
+            if (index < 0) return
+            current[index] = current[index].copy(
+                timestamp = System.currentTimeMillis(),
+                message = if (success) "הפעולה הצליחה" else "הפעולה נכשלה",
+                success = success,
+                detail = detail,
+            )
+            val array = JSONArray()
+            current.take(120).forEach { array.put(it.toJson()) }
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, array.toString()).apply()
+        }
+
         fun clearLogs(context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, "[]").apply()
         }
@@ -207,6 +234,7 @@ class AdvancedRuleRepository(private val context: Context) {
 }
 
 data class ActivityLog(
+    val id: String = UUID.randomUUID().toString(),
     val timestamp: Long,
     val type: String,
     val message: String,
@@ -218,6 +246,7 @@ data class ActivityLog(
     val detail: String = "",
 ) {
     fun toJson() = JSONObject()
+        .put("id", id)
         .put("timestamp", timestamp)
         .put("type", type)
         .put("message", message)
@@ -237,6 +266,7 @@ data class ActivityLog(
                 null
             }
             return ActivityLog(
+                id = o.optString("id", UUID.randomUUID().toString()),
                 timestamp = o.optLong("timestamp"),
                 type = type,
                 message = o.optString("message"),
