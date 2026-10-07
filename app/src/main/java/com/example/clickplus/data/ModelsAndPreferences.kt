@@ -45,6 +45,9 @@ enum class SystemActionPreset(
     BACK("back", "חזרה", "ניווט"),
     RECENTS("recents", "יישומים אחרונים", "ניווט"),
     NOTIFICATIONS("notifications", "פתיחת התראות", "ניווט"),
+    LOCK_SCREEN("lock_screen", "נעילת המסך", "מכשיר"),
+    POWER_MENU("power_menu", "תפריט כיבוי", "מכשיר"),
+    SCREENSHOT("screenshot", "צילום מסך", "מכשיר"),
 
     MEDIA_STOP("media_stop", "עצור השמעה", "נגן"),
     MEDIA_PLAY("media_play", "הפעל השמעה", "נגן"),
