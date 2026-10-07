@@ -2045,6 +2045,8 @@ private fun EditorScreen(
                 draft = draft.copy(
                     screenTapPackage = app.packageName,
                     screenTapAppName = app.label,
+                    screenTapXRatio = -1f,
+                    screenTapYRatio = -1f,
                 )
                 screenAppDialog = false
             },
