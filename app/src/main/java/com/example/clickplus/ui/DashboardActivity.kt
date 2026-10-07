@@ -744,6 +744,7 @@ private fun StatusCard(title: String, ok: Boolean, detail: String, onClick: () -
 private fun LogsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var items by remember { mutableStateOf(AdvancedRuleRepository.logs(context)) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -769,17 +770,64 @@ private fun LogsScreen(onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(items) { log ->
-                    OutlinedCard(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                        Column(Modifier.padding(14.dp)) {
+                    val (statusText, statusColor, statusTextColor) = when (log.success) {
+                        true -> Triple("הצליח", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                        false -> Triple("נכשל", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+                        null -> Triple("מידע", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                    }
+
+                    OutlinedCard(
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Column(
+                            Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = statusColor,
+                                ) {
+                                    Text(
+                                        statusText,
+                                        color = statusTextColor,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    )
+                                }
+                                Text(
+                                    SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(log.timestamp)),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+
                             Text(
-                                SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(log.timestamp)),
-                                style = MaterialTheme.typography.labelMedium,
+                                log.message,
                                 fontWeight = FontWeight.Bold,
                             )
-                            Text(log.message)
+
+                            if (log.success == false) {
+                                Text(
+                                    "סיבת הכישלון: " + log.detail.ifBlank { "לא נמסר הסבר." },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            } else if (log.detail.isNotBlank()) {
+                                Text(
+                                    log.detail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+
                             if (log.appPackage.isNotBlank()) {
                                 Text(log.appPackage, style = MaterialTheme.typography.labelSmall)
                             }
+
                             if (log.xRatio >= 0f && log.yRatio >= 0f) {
                                 Text(
                                     "מיקום: X " + (log.xRatio * 100f).toInt() + "% · Y " + (log.yRatio * 100f).toInt() + "%",
