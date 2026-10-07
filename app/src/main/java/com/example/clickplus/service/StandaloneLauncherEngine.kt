@@ -9,7 +9,6 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.example.clickplus.data.AppPreferencesRepository
-import com.example.clickplus.data.AppMode
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.ContextConditionType
 import com.example.clickplus.data.KeyActionConfig
@@ -22,7 +21,6 @@ object StandaloneLauncherEngine {
     private var previousForegroundPackage = ""
 
     fun process(context: Context) {
-        if (AdvancedRuleRepository.currentMode(context) != AppMode.BASIC) return
         val mappings = AppPreferencesRepository.mappingsSnapshot(context)
             .filter { it.enabled && it.triggerType == TriggerType.CLICKPLUS_ENTRY }
         if (mappings.isEmpty()) return
