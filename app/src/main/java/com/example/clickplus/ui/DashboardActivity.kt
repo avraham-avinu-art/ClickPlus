@@ -818,7 +818,7 @@ private fun CompactChoiceChip(
         onClick = onClick,
         modifier = Modifier
             .width(38.dp)
-            .height(36.dp),
+            .height(34.dp),
         colors = FilterChipDefaults.filterChipColors(
             containerColor = MaterialTheme.colorScheme.surface,
             labelColor = MaterialTheme.colorScheme.onSurface,
@@ -1232,8 +1232,9 @@ private fun EditorScreen(
                     }
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        maxItemsInEachRow = 5,
                     ) {
                         (1..10).forEach { n ->
                             CompactChoiceChip(
@@ -1482,7 +1483,8 @@ private fun AppPickerDialog(
                     runCatching {
                         context.packageManager.getLaunchIntentForPackage(info.packageName) ?: return@runCatching null
                         val label = context.packageManager.getApplicationLabel(info).toString()
-                        InstalledApp(info.packageName, label, null)
+                        val icon = runCatching { info.loadIcon(context.packageManager) }.getOrNull()
+                        InstalledApp(info.packageName, label, icon)
                     }.getOrNull()
                 }
                 .distinctBy { it.packageName }
