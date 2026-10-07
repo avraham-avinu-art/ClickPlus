@@ -89,7 +89,6 @@ class AdvancedRuleRepository(private val context: Context) {
             val current = logs(context).toMutableList()
             val index = current.indexOfFirst {
                 it.ruleId == ruleId &&
-                    (appPackage.isBlank() || it.appPackage == appPackage) &&
                     it.type == "ACTION" &&
                     it.success == null &&
                     it.message == "הפעולה בביצוע"
@@ -99,6 +98,7 @@ class AdvancedRuleRepository(private val context: Context) {
                 timestamp = System.currentTimeMillis(),
                 message = if (success) "הפעולה הצליחה" else "הפעולה נכשלה",
                 success = success,
+                appPackage = appPackage,
                 detail = detail,
             )
             val array = JSONArray()
