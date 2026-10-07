@@ -56,9 +56,6 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
         SystemActionPreset.DECLINE_CALL.id,
         SystemActionPreset.DIAL_NUMBER.id,
         SystemActionPreset.DIAL_CONTACT.id,
-        SystemActionPreset.PROFILE_NEXT.id,
-        SystemActionPreset.PROFILE_PREVIOUS.id,
-        SystemActionPreset.PROFILE_DEFAULT.id,
     )
 
     override fun supports(config: KeyActionConfig): Boolean {
@@ -173,14 +170,6 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
                     SystemActionPreset.ANSWER_CALL.id,
                     SystemActionPreset.DECLINE_CALL.id ->
                         ActionExecutionResult.failure("פעולת שיחה זו דורשת הרשאות טלפוניה ולא מתבצעת במצב בסיסי")
-                    SystemActionPreset.PROFILE_NEXT.id ->
-                        ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(context, 1))
-                    SystemActionPreset.PROFILE_PREVIOUS.id ->
-                        ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(context, -1))
-                    SystemActionPreset.PROFILE_DEFAULT.id -> {
-                        AdvancedRuleRepository.setActiveProfileId(context, "default")
-                        ActionExecutionResult.success("חזר לפרופיל ברירת המחדל")
-                    }
                     SystemActionPreset.WIFI_SETTINGS.id -> openSettings(Settings.ACTION_WIFI_SETTINGS, "הגדרות Wi‑Fi נפתחו")
                     SystemActionPreset.BLUETOOTH_SETTINGS.id -> openSettings(Settings.ACTION_BLUETOOTH_SETTINGS, "הגדרות Bluetooth נפתחו")
                     SystemActionPreset.DISPLAY_SETTINGS.id -> openSettings(Settings.ACTION_DISPLAY_SETTINGS, "הגדרות תצוגה נפתחו")
