@@ -105,6 +105,9 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             .setSmallIcon(com.example.clickplus.R.drawable.ic_notification_transparent)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setAutoCancel(false)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
 
         runCatching {
@@ -153,6 +156,13 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         instance = this
         startAsForeground()
         consumePendingLaunches()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // The UI task is independent from this accessibility service.
+        // Keep the service foreground notification present after task removal.
+        startAsForeground()
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onInterrupt() {
