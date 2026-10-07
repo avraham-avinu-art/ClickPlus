@@ -111,7 +111,7 @@ data class KeyActionConfig(
     val contextConditionValue: String = "",
     val contextConditionName: String = "",
     val enabled: Boolean = true,
-    val triggerType: TriggerType = TriggerType.APP_ENTRY,
+    val triggerType: TriggerType = TriggerType.CLICKPLUS_ENTRY,
     val triggerPackage: String = "",
     val triggerAppName: String = "",
     val screenTapPackage: String = "",
