@@ -21,11 +21,14 @@ class TapDetector(
     private val actionExecutor: RuleExecutionCoordinator,
     private val onTapCount: (Int) -> Unit = {},
 ) {
-    var tapTimeoutMs = 650L
+    var tapTimeoutMs = 1200L
     private var tapCount = 0
     private var lastLaunchTime = 0L
+    private var pendingForegroundPackage = ""
     private val handler = Handler(Looper.getMainLooper())
-    private val resetRunnable = Runnable { tapCount = 0 }
+    private val resetRunnable = Runnable {
+        resolveActivationLaunch()
+    }
     private val screenTapCounts = mutableMapOf<String, Int>()
     private val screenReset = mutableMapOf<String, Runnable>()
     private var profiles = emptyList<KeyActionConfig>()
@@ -38,28 +41,44 @@ class TapDetector(
     fun processActivationLaunch(previousForegroundPackage: String) {
         val all = profiles.filter { it.triggerType == TriggerType.APP_ENTRY }
         if (all.isEmpty()) return
+
         val now = System.currentTimeMillis()
         if (now - lastLaunchTime < 100L) return
         lastLaunchTime = now
 
         tapCount = (tapCount + 1).coerceAtMost(10)
+        pendingForegroundPackage = previousForegroundPackage
         handler.removeCallbacks(resetRunnable)
         onTapCount(tapCount)
 
+        // Do not execute a 1-press rule immediately. Wait for the full global
+        // window so a 4-press rule can win when the user continues the sequence.
+        handler.postDelayed(
+            resetRunnable,
+            tapTimeoutMs.coerceIn(300L, 1500L),
+        )
+    }
+
+    private fun resolveActivationLaunch() {
+        val finalCount = tapCount.coerceIn(1, 10)
+        val previousForegroundPackage = pendingForegroundPackage
+        tapCount = 0
+        pendingForegroundPackage = ""
+
+        val all = profiles.filter { it.triggerType == TriggerType.APP_ENTRY }
         val matchingSpecific = all
-            .filter { it.pressCount == tapCount && it.contextConditionType != ContextConditionType.ANY }
+            .filter { it.pressCount == finalCount && it.contextConditionType != ContextConditionType.ANY }
             .filter { contextMatches(it, previousForegroundPackage) }
             .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
 
         val chosen = matchingSpecific.firstOrNull() ?: all
-            .filter { it.pressCount == tapCount && it.contextConditionType == ContextConditionType.ANY }
+            .filter { it.pressCount == finalCount && it.contextConditionType == ContextConditionType.ANY }
             .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
             .firstOrNull()
 
         if (chosen != null) {
             actionExecutor.execute(chosen, previousForegroundPackage, "כניסה ל-ClickPlus")
         }
-        handler.postDelayed(resetRunnable, tapTimeoutMs.coerceIn(300L, 1500L))
     }
 
     fun processViewClicked(event: AccessibilityEvent) {
@@ -109,19 +128,20 @@ class TapDetector(
                 screenTapCounts[config.id] = count
                 onTapCount(count)
                 screenReset[config.id]?.let(handler::removeCallbacks)
+                // Resolve only after the global window closes. This prevents a
+                // 1-press rule from firing before a longer multi-press sequence is complete.
                 val reset = Runnable {
-                    screenTapCounts.remove(config.id)
+                    val finalCount = screenTapCounts.remove(config.id) ?: 0
                     screenReset.remove(config.id)
+                    if (finalCount == config.pressCount) {
+                        actionExecutor.execute(config, packageName, "לחיצה במיקום במסך")
+                    }
                 }
                 screenReset[config.id] = reset
-                handler.postDelayed(reset, tapTimeoutMs.coerceIn(300L, 1500L))
-
-                if (count >= config.pressCount) {
-                    screenTapCounts.remove(config.id)
-                    screenReset.remove(config.id)
-                    handler.removeCallbacks(reset)
-                    actionExecutor.execute(config, packageName, "לחיצה במיקום במסך")
-                }
+                handler.postDelayed(
+                    reset,
+                    tapTimeoutMs.coerceIn(300L, 1500L),
+                )
             }
     }
 

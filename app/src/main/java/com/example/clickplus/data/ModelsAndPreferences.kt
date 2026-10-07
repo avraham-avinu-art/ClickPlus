@@ -109,9 +109,20 @@ class AppPreferencesRepository(private val context: Context) {
     companion object {
         val BACKGROUND_ONLY = booleanPreferencesKey("background_only")
         val TAP_TIMEOUT_MS = longPreferencesKey("tap_timeout_ms")
+        val ACTION_DELAY_MS = longPreferencesKey("action_delay_ms")
         val SHOW_TAP_COUNT = booleanPreferencesKey("show_tap_count")
         val MAPPINGS_JSON = stringPreferencesKey("mappings_json")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+
+        fun tapTimeoutSnapshot(context: Context): Long =
+            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                .getLong("tap_timeout_ms", 1200L)
+                .coerceIn(300L, 1500L)
+
+        fun actionDelaySnapshot(context: Context): Long =
+            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                .getLong("action_delay_ms", 0L)
+                .coerceIn(0L, 5000L)
 
         fun mappingsSnapshot(context: Context): List<KeyActionConfig> {
             val raw = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
@@ -128,7 +139,8 @@ class AppPreferencesRepository(private val context: Context) {
     }
 
     val backgroundOnlyFlow: Flow<Boolean> = context.dataStore.data.map { it[BACKGROUND_ONLY] ?: true }
-    val tapTimeoutFlow: Flow<Long> = context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 650L }
+    val tapTimeoutFlow: Flow<Long> = context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 1200L }
+    val actionDelayFlow: Flow<Long> = context.dataStore.data.map { it[ACTION_DELAY_MS] ?: 0L }
     val showTapCountFlow: Flow<Boolean> = context.dataStore.data.map { it[SHOW_TAP_COUNT] ?: false }
     val mappingsFlow: Flow<List<KeyActionConfig>> = context.dataStore.data.map { prefs ->
         val array = runCatching { JSONArray(prefs[MAPPINGS_JSON] ?: "[]") }.getOrDefault(JSONArray())
@@ -144,7 +156,18 @@ class AppPreferencesRepository(private val context: Context) {
         context.dataStore.edit { it[BACKGROUND_ONLY] = true }
         context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE).edit().putBoolean("background_only", true).apply()
     }
-    suspend fun saveTapTimeout(ms: Long) { context.dataStore.edit { it[TAP_TIMEOUT_MS] = ms.coerceIn(300L, 1500L) } }
+    suspend fun saveTapTimeout(ms: Long) {
+        val safe = ms.coerceIn(300L, 1500L)
+        context.dataStore.edit { it[TAP_TIMEOUT_MS] = safe }
+        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+            .edit().putLong("tap_timeout_ms", safe).apply()
+    }
+    suspend fun saveActionDelay(ms: Long) {
+        val safe = ms.coerceIn(0L, 5000L)
+        context.dataStore.edit { it[ACTION_DELAY_MS] = safe }
+        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+            .edit().putLong("action_delay_ms", safe).apply()
+    }
     suspend fun saveShowTapCount(enabled: Boolean) { context.dataStore.edit { it[SHOW_TAP_COUNT] = enabled } }
     suspend fun setOnboardingCompleted(completed: Boolean) { context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed } }
     suspend fun saveMappings(mappings: List<KeyActionConfig>) {

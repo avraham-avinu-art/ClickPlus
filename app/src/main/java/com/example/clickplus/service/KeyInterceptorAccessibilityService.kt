@@ -94,7 +94,6 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         )
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("קליק פלוס פעיל")
-            .setContentText("מוכן לכניסות ולחיצות")
             .setSmallIcon(com.example.clickplus.R.drawable.ic_notification_transparent)
             .setContentIntent(pendingIntent)
             .setOngoing(true)

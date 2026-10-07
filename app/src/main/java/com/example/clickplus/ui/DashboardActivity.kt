@@ -24,7 +24,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.animation.animateContentSize
@@ -135,6 +137,7 @@ import com.example.clickplus.data.SystemActionPreset
 import com.example.clickplus.data.TriggerType
 import com.example.clickplus.service.ActionExecutor
 import com.example.clickplus.service.BasicActionPerformer
+import com.example.clickplus.service.UnavailableActionPerformer
 import com.example.clickplus.service.KeyInterceptorAccessibilityService
 import com.example.clickplus.service.RuleExecutionCoordinator
 import kotlinx.coroutines.launch
@@ -160,6 +163,7 @@ private sealed interface DashboardRoute {
 class DashboardActivity : ComponentActivity() {
     private var settingsStepActive = false
     private var runtimeRequestActive = false
+    private var showPermissionIntro by mutableStateOf(false)
 
     private val runtimePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -171,12 +175,22 @@ class DashboardActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
-            .edit()
+        val runtimePrefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+        showPermissionIntro = !runtimePrefs.getBoolean("permission_intro_completed", false)
+        runtimePrefs.edit()
             .putBoolean("first_ui_opened", true)
             .putBoolean("background_only", false)
             .apply()
-        setContent { ClickPlusDashboard() }
+        setContent {
+            ClickPlusDashboard(
+                showPermissionIntro = showPermissionIntro,
+                onBeginPermissionSetup = {
+                    runtimePrefs.edit().putBoolean("permission_intro_completed", true).apply()
+                    showPermissionIntro = false
+                    continueFirstLaunchPermissions()
+                },
+            )
+        }
     }
 
     override fun onResume() {
@@ -184,7 +198,8 @@ class DashboardActivity : ComponentActivity() {
         if (runtimeRequestActive) return
         val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
         if (!prefs.getBoolean("first_ui_opened", false) ||
-            prefs.getBoolean("permission_bootstrap_done", false)
+            prefs.getBoolean("permission_bootstrap_done", false) ||
+            !prefs.getBoolean("permission_intro_completed", false)
         ) return
 
         if (settingsStepActive) {
@@ -242,12 +257,21 @@ class DashboardActivity : ComponentActivity() {
 }
 
 @Composable
-private fun ClickPlusDashboard() {
+private fun ClickPlusDashboard(
+    showPermissionIntro: Boolean,
+    onBeginPermissionSetup: () -> Unit,
+) {
+    if (showPermissionIntro) {
+        PermissionIntroScreen(onBeginPermissionSetup)
+        return
+    }
+
     val context = LocalContext.current
     val prefs = remember { AppPreferencesRepository(context.applicationContext) }
     val advanced = remember { AdvancedRuleRepository(context.applicationContext) }
     val mappings by prefs.mappingsFlow.collectAsState(initial = emptyList())
-    val timeout by prefs.tapTimeoutFlow.collectAsState(initial = 650L)
+    val timeout by prefs.tapTimeoutFlow.collectAsState(initial = 1200L)
+    val actionDelay by prefs.actionDelayFlow.collectAsState(initial = 0L)
     val showTapCount by prefs.showTapCountFlow.collectAsState(initial = false)
     var route by remember { mutableStateOf<DashboardRoute>(DashboardRoute.Home) }
     var themeMode by remember { mutableStateOf(advanced.themeMode()) }
@@ -274,6 +298,12 @@ private fun ClickPlusDashboard() {
                 mappings = mappings,
                 onAdd = { route = DashboardRoute.Editor(null) },
                 onEdit = { route = DashboardRoute.Editor(it) },
+                onDelete = { item ->
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                        prefs.saveMappings(mappings.filterNot { it.id == item.id })
+                        advanced.removeRuleMetadata(item.id)
+                    }
+                },
                 onStatus = { route = DashboardRoute.Status },
                 onLogs = { route = DashboardRoute.Logs },
                 onProfiles = { route = DashboardRoute.Profiles },
@@ -292,10 +322,12 @@ private fun ClickPlusDashboard() {
             )
             DashboardRoute.Settings -> SettingsScreen(
                 timeout = timeout,
+                actionDelay = actionDelay,
                 showTapCount = showTapCount,
                 themeMode = themeMode,
                 onBack = { route = DashboardRoute.Home },
                 onTimeout = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapTimeout(value) } },
+                onActionDelay = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveActionDelay(value) } },
                 onShowTapCount = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveShowTapCount(value) } },
                 onTheme = {
                     themeMode = it
@@ -306,6 +338,7 @@ private fun ClickPlusDashboard() {
             DashboardRoute.Backup -> BackupScreen(
                 mappings = mappings,
                 timeout = timeout,
+                actionDelay = actionDelay,
                 showTapCount = showTapCount,
                 onBack = { route = DashboardRoute.Settings },
             )
@@ -340,6 +373,7 @@ private fun HomeDashboard(
     mappings: List<KeyActionConfig>,
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
+    onDelete: (KeyActionConfig) -> Unit,
     onStatus: () -> Unit,
     onLogs: () -> Unit,
     onProfiles: () -> Unit,
@@ -348,7 +382,9 @@ private fun HomeDashboard(
 ) {
     val context = LocalContext.current
     val mode = AdvancedRuleRepository.currentMode(context)
+    val accessibilityEnabled = isAccessibilityEnabled(context)
     var query by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<KeyActionConfig?>(null) }
     val active = mappings.count { it.enabled }
     val apps = mappings.mapNotNull {
         when {
@@ -368,14 +404,8 @@ private fun HomeDashboard(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text("קליק פלוס", fontWeight = FontWeight.Bold)
-                        Text("מרכז שליטה", style = MaterialTheme.typography.labelSmall)
-                    }
-                },
+                title = { Text("קליק פלוס", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = onStatus) { Icon(Icons.Outlined.Tune, "מצב השירות") }
                     IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "הגדרות") }
                 },
             )
@@ -437,7 +467,10 @@ private fun HomeDashboard(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 ) {
                     Row(
-                        Modifier.fillMaxWidth().padding(20.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onStatus)
+                            .padding(20.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Surface(Modifier.size(52.dp), CircleShape, color = MaterialTheme.colorScheme.primary) {
@@ -447,9 +480,19 @@ private fun HomeDashboard(
                         Column(Modifier.weight(1f)) {
                             Text("ClickPlus פעילה", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Text(
-                                if (mode == AppMode.FULL) "מצב מלא · נגישות פעילה" else "מצב בסיסי · ללא נגישות",
+                                when {
+                                    mode == AppMode.BASIC -> "מצב בסיסי · ללא נגישות"
+                                    accessibilityEnabled -> "מצב מלא · נגישות פעילה"
+                                    else -> "מצב מלא · נגישות לא פעילה"
+                                },
                                 style = MaterialTheme.typography.bodyMedium
                             )
+                            if (mode == AppMode.FULL && !accessibilityEnabled) {
+                                Text(
+                                    "יש להפעיל את שירות הנגישות כדי שפעולות שדורשות אותו יעבדו.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                         }
                     }
                 }
@@ -488,10 +531,31 @@ private fun HomeDashboard(
                 }
             } else {
                 items(filtered, key = { it.id }) { item ->
-                    RuleCard(item = item, onEdit = { onEdit(item.id) })
+                    RuleCard(
+                        item = item,
+                        onEdit = { onEdit(item.id) },
+                        onDelete = { deleteTarget = item },
+                    )
                 }
             }
         }
+    }
+
+    deleteTarget?.let { item ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("למחוק את הפעולה?") },
+            text = { Text("הפעולה וההגדרות המתקדמות שלה יוסרו.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteTarget = null
+                    onDelete(item)
+                }) { Text("מחיקה") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) { Text("ביטול") }
+            },
+        )
     }
 }
 
@@ -527,7 +591,7 @@ private fun StatCard(title: String, value: String, modifier: Modifier) {
 }
 
 @Composable
-private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit) {
+private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit, onDelete: () -> Unit) {
     val meta = AdvancedRuleRepository(LocalContext.current).getRuleMetadata(item.id)
     OutlinedCard(
         modifier = Modifier
@@ -563,6 +627,9 @@ private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit) {
                 IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Outlined.Edit, "עריכה")
                 }
+                IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Outlined.Delete, "מחיקה")
+                }
             }
             Row(
                 Modifier
@@ -586,11 +653,6 @@ private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit) {
                 )
                 AssistChip(
                     onClick = {},
-                    label = { Text("עדיפות " + meta.priority, maxLines = 1) },
-                    modifier = Modifier.height(34.dp),
-                )
-                AssistChip(
-                    onClick = {},
                     label = { Text(if (item.enabled) "פעיל" else "מושהה", maxLines = 1) },
                     leadingIcon = if (item.enabled) ({ Icon(Icons.Outlined.CheckCircle, null) }) else null,
                     modifier = Modifier.height(34.dp),
@@ -610,6 +672,63 @@ private fun EmptyState(onAdd: () -> Unit) {
             Text("צור את הכלל הראשון שלך ובנה פעולה לפי כניסה או מיקום לחיצה.")
             Spacer(Modifier.height(12.dp))
             Button(onClick = onAdd) { Text("יצירת הפעולה הראשונה") }
+        }
+    }
+}
+
+@Composable
+private fun PermissionIntroScreen(onBeginPermissionSetup: () -> Unit) {
+    Surface(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Surface(
+                Modifier.size(72.dp),
+                CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Icon(
+                    Icons.Outlined.Settings,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(18.dp),
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+            Text("הגדרה ראשונית", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "כדי שקליק פלוס תוכל לזהות כניסות ולחיצות ולבצע את הפעולות שהגדרת, Android יבקש ממך כמה הרשאות.",
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(18.dp))
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                Column(
+                    Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("מה יופיע עכשיו?", fontWeight = FontWeight.Bold)
+                    Text("• הרשאת התראות – להפעלת שירות הרקע והצגת מצב השירות.")
+                    Text("• הרשאת מצב טלפון – עבור תנאים הקשורים למצב השיחה.")
+                    Text("• שירות נגישות – לזיהוי לחיצות ולפעולות מערכת הדורשות נגישות.")
+                    Text("• גישה לנתוני שימוש – לזיהוי האפליקציה שהייתה פתוחה, כשנדרש.")
+                    Text(
+                        "בכל מסך Android שיופיע, הפעל את קליק פלוס וחזור לאפליקציה. לאחר כל שלב נמשיך אוטומטית לשלב הבא.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = onBeginPermissionSetup,
+                Modifier.fillMaxWidth().height(54.dp),
+            ) {
+                Text("התחלת ההגדרה")
+            }
         }
     }
 }
@@ -644,7 +763,9 @@ private fun StatusScreen(
                 StatusCard(
                     title = "שירות נגישות",
                     ok = service,
-                    detail = if (service) "מחובר ומוכן ללחיצות במיקום המסך" else "נדרש רק במצב מלא",
+                    detail = if (service) "השירות פעיל וזמין לפעולות הדורשות נגישות." else "השירות אינו פעיל. במצב מלא הוא נדרש לזיהוי לחיצות ולפעולות מערכת.",
+                    actionText = "פתיחת הגדרות נגישות",
+                    settingsHint = "פתח את שירותי הנגישות, מצא את קליק פלוס והפעל אותו.",
                     onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
                 )
             }
@@ -652,7 +773,9 @@ private fun StatusScreen(
                 StatusCard(
                     title = "שימוש בנתוני שימוש",
                     ok = usage,
-                    detail = if (usage) "אפשר לזהות את האפליקציה האחרונה גם במצב בסיסי" else "מומלץ עבור תנאי אפליקציה במצב בסיסי",
+                    detail = if (usage) "הגישה פעילה וניתן לזהות איזו אפליקציה הייתה פתוחה לפני ההפעלה." else "הגישה אינה פעילה. היא נדרשת לזיהוי האפליקציה שהייתה פתוחה לפני ההפעלה.",
+                    actionText = "פתיחת גישת נתוני שימוש",
+                    settingsHint = "פתח את גישת נתוני השימוש, מצא את קליק פלוס ואפשר לה גישה.",
                     onClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
                 )
             }
@@ -661,24 +784,29 @@ private fun StatusScreen(
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("מצב עבודה", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ChoiceChip(
-                                selected = mode == AppMode.FULL,
-                                onClick = { mode = AppMode.FULL; onMode(AppMode.FULL) },
-                                label = "מלא",
-                                modifier = Modifier.weight(1f),
-                            )
-                            ChoiceChip(
-                                selected = mode == AppMode.BASIC,
-                                onClick = { mode = AppMode.BASIC; onMode(AppMode.BASIC) },
-                                label = "Basic ללא נגישות",
-                                modifier = Modifier.weight(1f),
-                            )
+                            Column(
+                                Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                ChoiceChip(
+                                    selected = mode == AppMode.FULL,
+                                    onClick = { mode = AppMode.FULL; onMode(AppMode.FULL) },
+                                    label = "מלא",
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                ChoiceChip(
+                                    selected = mode == AppMode.BASIC,
+                                    onClick = { mode = AppMode.BASIC; onMode(AppMode.BASIC) },
+                                    label = "בסיסי ללא נגישות",
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                         Text(
                             if (mode == AppMode.FULL) {
                                 "כל היכולות זמינות, כולל זיהוי מיקום לחיצה ופעולות מערכת."
                             } else {
-                                "הפעלות כניסה, פתיחת אפליקציות ופעולות מדיה/ווליום הנתמכות יכולות לפעול ללא שירות נגישות. זיהוי מיקום לחיצה ופעולות מערכת גלובליות לא זמינים."
+                                "במצב זה אפשר לזהות כניסות, לפתוח אפליקציות ולהפעיל פעולות מדיה, ווליום, הגדרות וחייגן. אי אפשר לזהות מיקום לחיצה במסך או לבצע פעולות מערכת גלובליות כמו בית, חזרה, התראות ויישומים אחרונים."
                             },
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -700,7 +828,14 @@ private fun StatusScreen(
 }
 
 @Composable
-private fun StatusCard(title: String, ok: Boolean, detail: String, onClick: () -> Unit) {
+private fun StatusCard(
+    title: String,
+    ok: Boolean,
+    detail: String,
+    actionText: String,
+    settingsHint: String,
+    onClick: () -> Unit,
+) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(
             Modifier.fillMaxWidth().padding(18.dp),
@@ -727,10 +862,10 @@ private fun StatusCard(title: String, ok: Boolean, detail: String, onClick: () -
                     onClick = onClick,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("פתיחת הגדרות ומתן הרשאה")
+                    Text(actionText)
                 }
                 Text(
-                    "Android יפתח את „גישה לנתוני שימוש”. יש להפעיל שם את ClickPlus.",
+                    settingsHint,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center,
@@ -744,6 +879,16 @@ private fun StatusCard(title: String, ok: Boolean, detail: String, onClick: () -
 private fun LogsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var items by remember { mutableStateOf(AdvancedRuleRepository.logs(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                items = AdvancedRuleRepository.logs(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
@@ -773,7 +918,7 @@ private fun LogsScreen(onBack: () -> Unit) {
                     val (statusText, statusColor, statusTextColor) = when (log.success) {
                         true -> Triple("הצליח", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
                         false -> Triple("נכשל", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-                        null -> Triple("מידע", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                        null -> Triple("ממתין", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
                     }
 
                     OutlinedCard(
@@ -927,11 +1072,11 @@ private fun CompactChoiceChip(
     selected: Boolean,
     onClick: () -> Unit,
     label: String,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = Modifier
-            .width(34.dp)
-            .height(34.dp)
+        modifier = modifier
+            .height(36.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(10.dp),
         color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
@@ -986,10 +1131,12 @@ private fun ChoiceChip(
 @Composable
 private fun SettingsScreen(
     timeout: Long,
+    actionDelay: Long,
     showTapCount: Boolean,
     themeMode: String,
     onBack: () -> Unit,
     onTimeout: (Long) -> Unit,
+    onActionDelay: (Long) -> Unit,
     onShowTapCount: (Boolean) -> Unit,
     onTheme: (String) -> Unit,
     onBackup: () -> Unit,
@@ -1008,6 +1155,17 @@ private fun SettingsScreen(
                         onValueChange = { onTimeout(it.toLong()) },
                         valueRange = 300f..1500f,
                         steps = 11,
+                    )
+                }
+            }
+            item {
+                SettingCard("השהיה לפני פעולה", "המתנה אחידה אחרי שהרצף זוהה ולפני ביצוע הפעולה.") {
+                    Text(actionDelay.toString() + "ms", style = MaterialTheme.typography.titleMedium)
+                    Slider(
+                        value = actionDelay.toFloat(),
+                        onValueChange = { onActionDelay(it.toLong()) },
+                        valueRange = 0f..5000f,
+                        steps = 9,
                     )
                 }
             }
@@ -1034,12 +1192,6 @@ private fun SettingsScreen(
             item {
                 SettingCard("גיבוי והעברה", "ייצוא, ייבוא ואיפוס של כל ההגדרות.") {
                     Button(onClick = onBackup, Modifier.fillMaxWidth()) { Text("פתח גיבוי") }
-                }
-            }
-            item {
-                SettingCard("גרסה", "ClickPlus 2.0 · בנויה ל־Android 16") {
-                    Text("Target API 36", fontWeight = FontWeight.Bold)
-                    Text("מצב רקע פעיל תמיד.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -1090,6 +1242,7 @@ private fun BackupScreen(
     mappings: List<KeyActionConfig>,
     timeout: Long,
     showTapCount: Boolean,
+    actionDelay: Long,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -1114,7 +1267,8 @@ private fun BackupScreen(
                     }
                     basePrefs.saveMappings(imported)
                     root.optJSONObject("settings")?.let {
-                        if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 650L))
+                        if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 1200L))
+                        if (it.has("actionDelayMs")) basePrefs.saveActionDelay(it.optLong("actionDelayMs", 0L))
                         if (it.has("showTapCount")) basePrefs.saveShowTapCount(it.optBoolean("showTapCount", false))
                     }
                     advanced.importBundle(root)
@@ -1130,7 +1284,7 @@ private fun BackupScreen(
         uri?.let { selected ->
             val json = advanced.exportJson(
                 JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
-                JSONObject().put("tapTimeoutMs", timeout).put("showTapCount", showTapCount)
+                JSONObject().put("tapTimeoutMs", timeout).put("actionDelayMs", actionDelay).put("showTapCount", showTapCount)
             )
             runCatching {
                 context.contentResolver.openOutputStream(selected)?.bufferedWriter()?.use { it.write(json) }
@@ -1156,7 +1310,7 @@ private fun BackupScreen(
                             onClick = {
                                 val json = advanced.exportJson(
                                     JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
-                                    JSONObject().put("tapTimeoutMs", timeout).put("showTapCount", showTapCount)
+                                    JSONObject().put("tapTimeoutMs", timeout).put("actionDelayMs", actionDelay).put("showTapCount", showTapCount)
                                 )
                                 runCatching {
                                     val file = java.io.File(context.cacheDir, "clickplus-backup.json")
@@ -1245,6 +1399,15 @@ private fun EditorScreen(
         )
     }
     var showDelete by remember { mutableStateOf(false) }
+
+    LaunchedEffect(draft.triggerType, draft.actionType) {
+        if (draft.triggerType == TriggerType.SCREEN_TAP && draft.actionType != ActionType.APP_TAP) {
+            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("tap_learning", false)
+                .apply()
+        }
+    }
 
     LaunchedEffect(draft.id) {
         while (true) {
@@ -1427,6 +1590,7 @@ private fun EditorScreen(
                                 selected = draft.pressCount == n,
                                 onClick = { draft = draft.copy(pressCount = n) },
                                 label = n.toString(),
+                                modifier = Modifier.weight(1f),
                             )
                         }
                     }
@@ -1489,56 +1653,24 @@ private fun EditorScreen(
                         }
                     } else {
                         OutlinedButton(
-                            onClick = {
-                                if (!isAccessibilityEnabled(context)) {
-                                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                                } else if (draft.screenTapPackage.isBlank()) {
-                                    screenAppDialog = true
-                                } else {
-                                    val p = context.getSharedPreferences(
-                                        "clickplus_runtime",
-                                        Context.MODE_PRIVATE,
-                                    )
-                                    p.edit()
-                                        .putBoolean("tap_learning", true)
-                                        .putString("tap_learning_package", draft.screenTapPackage)
-                                        .apply()
-                                    context.packageManager
-                                        .getLaunchIntentForPackage(draft.screenTapPackage)
-                                        ?.let {
-                                            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            context.startActivity(it)
-                                            learning = true
-                                        }
-                                }
-                            },
+                            onClick = { screenAppDialog = true },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Icon(Icons.Outlined.LocationOn, null)
+                            Icon(Icons.Outlined.Apps, null)
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                if (draft.screenTapPackage.isBlank()) {
-                                    "בחירת אפליקציה ולימוד מיקום"
-                                } else {
-                                    "לימוד מחדש של מיקום הלחיצה"
-                                },
+                                if (draft.screenTapPackage.isBlank()) "בחירת אפליקציה לזיהוי הלחיצה"
+                                else "החלפת אפליקציית הזיהוי",
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
 
-                        if (learning) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                            ) {
-                                Text(
-                                    "מצב לימוד פעיל: האפליקציה נפתחה. לחץ על היעד שברצונך לשמור.",
-                                    modifier = Modifier.padding(12.dp),
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            }
+                        if (draft.screenTapPackage.isBlank()) {
+                            Text(
+                                "אין צורך לפתוח את האפליקציה או להפעיל שכבת לימוד. בחר אפליקציה והגדר את הנקודה בתצוגה המקדימה.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         }
 
                         if (draft.screenTapPackage.isNotBlank()) {
@@ -1618,31 +1750,34 @@ private fun EditorScreen(
                     title = "מה לבצע?",
                     subtitle = "בחר מה ClickPlus יעשה לאחר שהכלל הופעל.",
                 ) {
-                    Row(
+                    Column(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         ChoiceChip(
                             selected = draft.actionType == ActionType.SYSTEM,
-                            onClick = { draft = draft.copy(actionType = ActionType.SYSTEM) },
+                            onClick = {
+                                draft = draft.copy(
+                                    actionType = ActionType.SYSTEM,
+                                    systemActionId = draft.systemActionId.ifBlank { SystemActionPreset.HOME.id },
+                                )
+                            },
                             label = "פעולת מערכת",
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                         )
                         ChoiceChip(
                             selected = draft.actionType == ActionType.APP,
-                            onClick = { draft = draft.copy(actionType = ActionType.APP) },
+                            onClick = { draft = draft.copy(actionType = ActionType.APP, systemActionId = "") },
                             label = "פתיחת אפליקציה",
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        ChoiceChip(
+                            selected = draft.actionType == ActionType.APP_TAP,
+                            onClick = { draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "") },
+                            label = "פתיחת אפליקציה + לחיצה",
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
-
-                    Spacer(Modifier.height(2.dp))
-                    ChoiceChip(
-                        selected = draft.actionType == ActionType.APP_TAP,
-                        onClick = { draft = draft.copy(actionType = ActionType.APP_TAP) },
-                        label = "פתיחת אפליקציה + לחיצה",
-                        modifier = Modifier.fillMaxWidth(),
-                    )
 
                     when (draft.actionType) {
                         ActionType.SYSTEM -> {
@@ -1784,40 +1919,8 @@ private fun EditorScreen(
                 EditorSectionCard(
                     number = "5",
                     title = "הגדרות מתקדמות",
-                    subtitle = "עדיפות, תזמון, ניסיונות ואזור התאמה.",
+                    subtitle = "ניסיונות, הגנה ואזור התאמה.",
                 ) {
-                    EditorSliderRow(
-                        title = "עדיפות",
-                        valueText = metadata.priority.toString(),
-                    ) {
-                        Slider(
-                            value = metadata.priority.coerceIn(0, 10).toFloat(),
-                            onValueChange = {
-                                metadata = metadata.copy(
-                                    priority = it.toInt().coerceIn(0, 10),
-                                )
-                            },
-                            valueRange = 0f..10f,
-                            steps = 9,
-                        )
-                    }
-
-                    EditorSliderRow(
-                        title = "זמן המתנה לפני הפעולה",
-                        valueText = metadata.delayMs.toString() + "ms",
-                    ) {
-                        Slider(
-                            value = metadata.delayMs.coerceIn(0L, 5000L).toFloat(),
-                            onValueChange = {
-                                metadata = metadata.copy(
-                                    delayMs = it.toLong().coerceIn(0L, 10_000L),
-                                )
-                            },
-                            valueRange = 0f..5000f,
-                            steps = 9,
-                        )
-                    }
-
                     EditorSliderRow(
                         title = "Cooldown",
                         valueText = metadata.cooldownMs.toString() + "ms",
@@ -1890,27 +1993,16 @@ private fun EditorScreen(
 
                     OutlinedButton(
                         onClick = {
-                            val performer = if (isAccessibilityEnabled(context)) {
-                                KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
-                            } else {
-                                null
+                            val performer = when (AdvancedRuleRepository.currentMode(context)) {
+                                AppMode.BASIC -> BasicActionPerformer(context)
+                                AppMode.FULL -> KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
+                                    ?: UnavailableActionPerformer("מצב מלא נבחר, אבל שירות הנגישות אינו פעיל.")
                             }
-                            if (performer != null) {
-                                RuleExecutionCoordinator(context, performer).execute(
-                                    draft,
-                                    test = true,
-                                    reason = "בדיקה ידנית",
-                                )
-                            } else {
-                                RuleExecutionCoordinator(
-                                    context,
-                                    BasicActionPerformer(context),
-                                ).execute(
-                                    draft,
-                                    test = true,
-                                    reason = "בדיקה במצב בסיסי",
-                                )
-                            }
+                            RuleExecutionCoordinator(context, performer).execute(
+                                draft,
+                                test = true,
+                                reason = "בדיקה ידנית",
+                            )
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -1928,7 +2020,14 @@ private fun EditorScreen(
             title = "בחירת אפליקציה",
             onDismiss = { appDialog = false },
             onSelect = { app ->
-                if (
+                if (draft.triggerType == TriggerType.SCREEN_TAP || draft.actionType == ActionType.APP_TAP) {
+                    draft = draft.copy(
+                        screenTapPackage = app.packageName,
+                        screenTapAppName = app.label,
+                        screenTapXRatio = -1f,
+                        screenTapYRatio = -1f,
+                    )
+                } else if (
                     draft.triggerType == TriggerType.APP_ENTRY &&
                     (
                         draft.contextConditionType == ContextConditionType.APP ||
@@ -1938,13 +2037,6 @@ private fun EditorScreen(
                     draft = draft.copy(
                         contextConditionValue = app.packageName,
                         contextConditionName = app.label,
-                    )
-                } else if (draft.actionType == ActionType.APP_TAP) {
-                    draft = draft.copy(
-                        screenTapPackage = app.packageName,
-                        screenTapAppName = app.label,
-                        screenTapXRatio = -1f,
-                        screenTapYRatio = -1f,
                     )
                 } else {
                     draft = draft.copy(
@@ -1959,12 +2051,14 @@ private fun EditorScreen(
 
     if (screenAppDialog) {
         AppPickerDialog(
-            title = "בחירת אפליקציה לזיהוי הלחיצה",
+            title = if (draft.actionType == ActionType.APP_TAP) "אפליקציה לביצוע הלחיצה" else "אפליקציה לזיהוי הלחיצה",
             onDismiss = { screenAppDialog = false },
             onSelect = { app ->
                 draft = draft.copy(
                     screenTapPackage = app.packageName,
                     screenTapAppName = app.label,
+                    screenTapXRatio = -1f,
+                    screenTapYRatio = -1f,
                 )
                 screenAppDialog = false
             },
@@ -2216,14 +2310,33 @@ private fun PointEditor(
             ),
         ) {
             Canvas(
-                Modifier.fillMaxSize().padding(14.dp).pointerInput(Unit) {
-                    detectDragGestures { change, _ ->
-                        val nx = if (size.width > 0f) (change.position.x / size.width).coerceIn(0f, 1f) else safeX
-                        val ny = if (size.height > 0f) (change.position.y / size.height).coerceIn(0f, 1f) else safeY
-                        onChange(nx, ny)
-                        change.consume()
+                Modifier
+                    .fillMaxSize()
+                    .padding(14.dp)
+                    .pointerInput(safeX, safeY) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val pointX = safeX * size.width
+                            val pointY = safeY * size.height
+                            val dx = down.position.x - pointX
+                            val dy = down.position.y - pointY
+                            val handleRadius = 40.dp.toPx()
+                            val startsOnHandle = dx * dx + dy * dy <= handleRadius * handleRadius
+                            if (!startsOnHandle) return@awaitEachGesture
+
+                            down.consume()
+                            drag(down.id) { change ->
+                                val nx = if (size.width > 0f) {
+                                    (change.position.x / size.width).coerceIn(0f, 1f)
+                                } else safeX
+                                val ny = if (size.height > 0f) {
+                                    (change.position.y / size.height).coerceIn(0f, 1f)
+                                } else safeY
+                                onChange(nx, ny)
+                                change.consume()
+                            }
+                        }
                     }
-                }
             ) {
                 val px = safeX * size.width
                 val py = safeY * size.height

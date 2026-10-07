@@ -79,6 +79,33 @@ class AdvancedRuleRepository(private val context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, array.toString()).apply()
         }
 
+        fun updateLatestPendingActionLog(
+            context: Context,
+            ruleId: String,
+            appPackage: String,
+            success: Boolean,
+            detail: String,
+        ) {
+            val current = logs(context).toMutableList()
+            val index = current.indexOfFirst {
+                it.ruleId == ruleId &&
+                    it.type == "ACTION" &&
+                    it.success == null &&
+                    it.message == "הפעולה בביצוע"
+            }
+            if (index < 0) return
+            current[index] = current[index].copy(
+                timestamp = System.currentTimeMillis(),
+                message = if (success) "הפעולה הצליחה" else "הפעולה נכשלה",
+                success = success,
+                appPackage = appPackage,
+                detail = detail,
+            )
+            val array = JSONArray()
+            current.take(120).forEach { array.put(it.toJson()) }
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, array.toString()).apply()
+        }
+
         fun clearLogs(context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, "[]").apply()
         }
@@ -216,8 +243,10 @@ data class ActivityLog(
     val yRatio: Float = -1f,
     val success: Boolean? = null,
     val detail: String = "",
+    val id: String = UUID.randomUUID().toString(),
 ) {
     fun toJson() = JSONObject()
+        .put("id", id)
         .put("timestamp", timestamp)
         .put("type", type)
         .put("message", message)
@@ -246,6 +275,7 @@ data class ActivityLog(
                 yRatio = o.optDouble("yRatio", -1.0).toFloat(),
                 success = if (type == "TRIGGER") null else storedSuccess,
                 detail = o.optString("detail"),
+                id = o.optString("id", UUID.randomUUID().toString()),
             )
         }
     }

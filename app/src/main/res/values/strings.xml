@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">קליק פלוס</string>
+    <string name="accessibility_service_description">קליק פלוס משתמשת בשירות הנגישות כדי לזהות לחיצות וכניסות ולבצע פעולות שהוגדרו, כולל לחיצה בנקודה בתוך אפליקציה ופעולות מערכת.</string>
+</resources>
