@@ -70,7 +70,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         service.startActivity(intent)
 
         scheduleTapWhenAppIsVisible(config, targetPackage, xRatio, yRatio)
-        return ActionExecutionResult.success("האפליקציה נפתחה; הלחיצה תתבצע אוטומטית במיקום שנלמד")
+        return ActionExecutionResult.pending("האפליקציה נפתחה; ממתינים להופעתה על המסך ואז תתבצע הלחיצה")
     }
 
     private fun scheduleTapWhenAppIsVisible(
@@ -117,7 +117,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
             .addStroke(GestureDescription.StrokeDescription(path, 0L, 60L))
             .build()
 
-        val dispatched = runCatching {
+        runCatching {
             service.dispatchGesture(
                 gesture,
                 object : AccessibilityService.GestureResultCallback() {
@@ -138,21 +138,15 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                 },
                 handler,
             )
-        }.getOrElse {
+        }.onFailure { error ->
             logAppTapResult(
                 config,
                 targetPackage,
                 false,
-                "לא ניתן לשלוח את הלחיצה: " + (it.message?.takeIf { message -> message.isNotBlank() } ?: it.javaClass.simpleName),
+                "לא ניתן לשלוח את הלחיצה: " + (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName),
             )
-            false
-        }
-
-        if (!dispatched) {
-            logAppTapResult(config, targetPackage, false, "Android לא קיבל את פקודת הלחיצה")
         }
     }
-
     private fun logAppTapResult(
         config: KeyActionConfig,
         targetPackage: String,
