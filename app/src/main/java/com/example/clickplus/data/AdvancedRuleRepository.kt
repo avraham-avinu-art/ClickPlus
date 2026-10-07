@@ -234,7 +234,6 @@ class AdvancedRuleRepository(private val context: Context) {
 }
 
 data class ActivityLog(
-    val id: String = UUID.randomUUID().toString(),
     val timestamp: Long,
     val type: String,
     val message: String,
@@ -244,6 +243,7 @@ data class ActivityLog(
     val yRatio: Float = -1f,
     val success: Boolean? = null,
     val detail: String = "",
+    val id: String = UUID.randomUUID().toString(),
 ) {
     fun toJson() = JSONObject()
         .put("id", id)
@@ -266,7 +266,6 @@ data class ActivityLog(
                 null
             }
             return ActivityLog(
-                id = o.optString("id", UUID.randomUUID().toString()),
                 timestamp = o.optLong("timestamp"),
                 type = type,
                 message = o.optString("message"),
@@ -276,6 +275,7 @@ data class ActivityLog(
                 yRatio = o.optDouble("yRatio", -1.0).toFloat(),
                 success = if (type == "TRIGGER") null else storedSuccess,
                 detail = o.optString("detail"),
+                id = o.optString("id", UUID.randomUUID().toString()),
             )
         }
     }
