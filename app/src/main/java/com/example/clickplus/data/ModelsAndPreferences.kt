@@ -131,18 +131,21 @@ data class KeyActionConfig(
     }
 
     fun contextSummary(): String {
-        if (triggerType == TriggerType.APP_ENTRY && actionType == ActionType.SYSTEM && systemActionId == SystemActionPreset.DIAL_CONTACT.id) {
-            return "כניסה לאפליקציה · חיוג לאיש הקשר " + contactName.ifBlank { "שנבחר" }
-        }
-        return when (contextConditionType) {
+        val entryText = "בכניסה ל-" + triggerAppName.ifBlank { "אפליקציה" }
+        val conditionText = when (contextConditionType) {
             ContextConditionType.ANY -> "בכל מצב"
-            ContextConditionType.APP -> "כשהאפליקציה פתוחה: " + contextConditionName.ifBlank { contextConditionValue }
+            ContextConditionType.APP -> "כשהאפליקציה הקודמת פתוחה: " + contextConditionName.ifBlank { contextConditionValue }
             ContextConditionType.MUSIC -> "כשהמוזיקה פועלת"
             ContextConditionType.MUTED -> "כשהשמיעה מושתק"
             ContextConditionType.RINGING -> "כשהטלפון מצלצל"
             ContextConditionType.RADIO -> "כשהרדיו פועל" + contextConditionName.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
             ContextConditionType.BRIGHTNESS_LOW -> "כשהבהירות נמוכה"
             ContextConditionType.VOLUME_LEVEL -> "כשעוצמת השמע ברמה " + contextConditionValue.ifBlank { "1" }
+        }
+        return if (actionType == ActionType.SYSTEM && systemActionId == SystemActionPreset.DIAL_CONTACT.id) {
+            entryText + " · " + conditionText + " · חיוג לאיש הקשר " + contactName.ifBlank { "שנבחר" }
+        } else {
+            entryText + " · " + conditionText
         }
     }
 
