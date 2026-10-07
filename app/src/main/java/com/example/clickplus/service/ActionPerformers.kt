@@ -114,3 +114,10 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
         return ActionExecutionResult.success(reason)
     }
 }
+
+
+class UnavailableActionPerformer(private val reason: String) : ClickActionPerformer {
+    override fun supports(config: KeyActionConfig): Boolean = true
+    override fun execute(config: KeyActionConfig): ActionExecutionResult =
+        ActionExecutionResult.failure(reason)
+}
