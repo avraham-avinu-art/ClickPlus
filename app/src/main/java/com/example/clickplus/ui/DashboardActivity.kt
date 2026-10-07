@@ -453,6 +453,29 @@ private fun HomeDashboard(
                     label = { Text("חיפוש פעולות") },
                 )
             }
+            item {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = onStatus,
+                        Modifier.weight(1f).heightIn(min = 44.dp),
+                    ) {
+                        Icon(Icons.Outlined.Tune, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("סטטוס השירות")
+                    }
+                    OutlinedButton(
+                        onClick = onProfiles,
+                        Modifier.weight(1f).heightIn(min = 44.dp),
+                    ) {
+                        Icon(Icons.Outlined.Settings, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("פרופילים")
+                    }
+                }
+            }
             if (filtered.isEmpty()) {
                 item { EmptyState(onAdd) }
             } else {
@@ -1230,6 +1253,8 @@ private fun BackupScreen(
                 .put("tapTimeoutMs", timeout)
                 .put("actionDelayMs", actionDelay)
                 .put("showTapCount", showTapCount)
+                .put("tapCountX", AppPreferencesRepository.tapCountXSnapshot(context))
+                .put("tapCountY", AppPreferencesRepository.tapCountYSnapshot(context))
                 .put("tapCountPosition", AppPreferencesRepository.tapCountPositionSnapshot(context)),
         )
         runCatching {
