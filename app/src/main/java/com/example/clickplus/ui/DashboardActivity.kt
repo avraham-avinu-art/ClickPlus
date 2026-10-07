@@ -292,7 +292,6 @@ private fun ClickPlusDashboard(
             DashboardRoute.Status -> StatusScreen(
                 mappings = mappings,
                 onBack = { route = DashboardRoute.Home },
-                onMode = { mode -> AdvancedRuleRepository.setMode(context, mode) },
             )
             DashboardRoute.Logs -> LogsScreen(onBack = { route = DashboardRoute.Home })
             DashboardRoute.Profiles -> ProfilesScreen(
@@ -726,7 +725,6 @@ private fun PermissionIntroScreen(
 private fun StatusScreen(
     mappings: List<KeyActionConfig>,
     onBack: () -> Unit,
-    onMode: (AppMode) -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -1316,7 +1314,7 @@ private fun BackupScreen(
         }
     }
 
-    Scaffold(topBar = { SimpleTopBar("גיבוי והעברה", onBack) }) { padding ->
+    Scaffold(topBar = { SimpleTopBar("גיבוי והעברה", onBack, "כאן אפשר לייצא, לשתף, לייבא או לאפס את הפעולות וההגדרות.") }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
