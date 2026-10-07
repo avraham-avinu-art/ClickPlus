@@ -38,8 +38,13 @@ class TapDetector(
         profiles = newProfiles.filter { it.enabled }
     }
 
-    fun processActivationLaunch(previousForegroundPackage: String) {
-        val all = profiles.filter { it.triggerType == TriggerType.APP_ENTRY }
+    fun processAppEntry(enteredPackage: String, previousForegroundPackage: String) {
+        if (enteredPackage.isBlank()) return
+        val all = profiles.filter {
+            it.enabled &&
+                it.triggerType == TriggerType.APP_ENTRY &&
+                AdvancedRuleRepository.isRuleInActiveProfile(context, it.id)
+        }
         if (all.isEmpty()) return
 
         val now = System.currentTimeMillis()
@@ -50,13 +55,12 @@ class TapDetector(
         pendingForegroundPackage = previousForegroundPackage
         handler.removeCallbacks(resetRunnable)
         onTapCount(tapCount)
+        handler.postDelayed(resetRunnable, tapTimeoutMs.coerceIn(300L, 1500L))
+    }
 
-        // Do not execute a 1-press rule immediately. Wait for the full global
-        // window so a 4-press rule can win when the user continues the sequence.
-        handler.postDelayed(
-            resetRunnable,
-            tapTimeoutMs.coerceIn(300L, 1500L),
-        )
+    fun processActivationLaunch(previousForegroundPackage: String) {
+        // Kept for the legacy launcher entry path.
+        processAppEntry("legacy_launcher", previousForegroundPackage)
     }
 
     private fun resolveActivationLaunch() {
@@ -65,7 +69,11 @@ class TapDetector(
         tapCount = 0
         pendingForegroundPackage = ""
 
-        val all = profiles.filter { it.triggerType == TriggerType.APP_ENTRY }
+        val all = profiles.filter {
+            it.enabled &&
+                it.triggerType == TriggerType.APP_ENTRY &&
+                AdvancedRuleRepository.isRuleInActiveProfile(context, it.id)
+        }
         val matchingSpecific = all
             .filter { it.pressCount == finalCount && it.contextConditionType != ContextConditionType.ANY }
             .filter { contextMatches(it, previousForegroundPackage) }
@@ -81,70 +89,9 @@ class TapDetector(
         }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun processViewClicked(event: AccessibilityEvent) {
-        val all = profiles.filter {
-            it.triggerType == TriggerType.SCREEN_TAP || it.triggerType == TriggerType.APP_TAP
-        }
-        if (all.isEmpty()) return
-        val packageName = event.packageName?.toString().orEmpty()
-        val source = event.source ?: return
-        runCatching { source.refresh() }
-        val bounds = Rect()
-        runCatching { source.getBoundsInScreen(bounds) }.getOrNull() ?: return
-        if (bounds.isEmpty) return
-
-        val width = context.resources.displayMetrics.widthPixels.coerceAtLeast(1).toFloat()
-        val height = context.resources.displayMetrics.heightPixels.coerceAtLeast(1).toFloat()
-        val xRatio = (bounds.centerX() / width).coerceIn(0f, 1f)
-        val yRatio = (bounds.centerY() / height).coerceIn(0f, 1f)
-
-        // Some apps expose a small icon/text node for the click while the
-        // actual clickable target is one of its parents. Check the source and
-        // a few clickable ancestors without treating a full-screen root as a
-        // match.
-        val candidateBounds = buildList {
-            var node: android.view.accessibility.AccessibilityNodeInfo? = source
-            repeat(5) {
-                if (node == null) return@repeat
-                val nodeBounds = Rect()
-                if (runCatching { node?.getBoundsInScreen(nodeBounds) }.isSuccess &&
-                    !nodeBounds.isEmpty &&
-                    runCatching { node?.isClickable == true }.getOrDefault(false)
-                ) {
-                    add(nodeBounds)
-                }
-                node = runCatching { node?.parent }.getOrNull()
-            }
-            if (isEmpty()) add(bounds)
-        }
-
-        all.filter { it.screenTapPackage.isBlank() || it.screenTapPackage == packageName }
-            .filter { config ->
-                candidateBounds.any { candidate ->
-                    tapLocationMatches(config, xRatio, yRatio, candidate, width, height)
-                }
-            }
-            .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
-            .forEach { config ->
-                val count = (screenTapCounts[config.id] ?: 0) + 1
-                screenTapCounts[config.id] = count
-                onTapCount(count)
-                screenReset[config.id]?.let(handler::removeCallbacks)
-                // Resolve only after the global window closes. This prevents a
-                // 1-press rule from firing before a longer multi-press sequence is complete.
-                val reset = Runnable {
-                    val finalCount = screenTapCounts.remove(config.id) ?: 0
-                    screenReset.remove(config.id)
-                    if (finalCount == config.pressCount) {
-                        actionExecutor.execute(config, packageName, "לחיצה במיקום במסך")
-                    }
-                }
-                screenReset[config.id] = reset
-                handler.postDelayed(
-                    reset,
-                    tapTimeoutMs.coerceIn(300L, 1500L),
-                )
-            }
+        // Intentionally not used: in-app touch is an action mechanism, not a trigger.
     }
 
     private fun tapLocationMatches(
@@ -156,8 +103,17 @@ class TapDetector(
         height: Float,
     ): Boolean {
         val meta = advanced.getRuleMetadata(config.id)
-        val targetX = config.screenTapXRatio
-        val targetY = config.screenTapYRatio
+        val landscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val targetX = if (meta.useOrientationSpecificPosition && landscape && meta.landscapeX >= 0f) {
+            meta.landscapeX
+        } else if (meta.useOrientationSpecificPosition && !landscape && meta.portraitX >= 0f) {
+            meta.portraitX
+        } else config.screenTapXRatio
+        val targetY = if (meta.useOrientationSpecificPosition && landscape && meta.landscapeY >= 0f) {
+            meta.landscapeY
+        } else if (meta.useOrientationSpecificPosition && !landscape && meta.portraitY >= 0f) {
+            meta.portraitY
+        } else config.screenTapYRatio
 
         if (!targetX.isFinite() || !targetY.isFinite() || targetX < 0f || targetY < 0f) return false
 
