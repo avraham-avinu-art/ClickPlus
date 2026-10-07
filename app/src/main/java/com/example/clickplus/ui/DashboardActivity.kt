@@ -125,6 +125,7 @@ import com.example.clickplus.data.AppMode
 import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.ClickPlusProfile
+import com.example.clickplus.data.ClickPlusProfileAction
 import com.example.clickplus.data.ContextConditionType
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.RuleAdvancedMetadata
@@ -327,7 +328,7 @@ private fun ClickPlusDashboard(
                     mappings = mappings,
                     onBack = { route = DashboardRoute.Home },
                 )
-                DashboardRoute.Logs -> LogsScreen(onBack = { route = DashboardRoute.Home })
+                DashboardRoute.Logs -> LogsScreen(mappings = mappings, onBack = { route = DashboardRoute.Home })
                 DashboardRoute.Profiles -> ProfilesScreen(
                     mappings = mappings,
                     onBack = { route = DashboardRoute.Home },
