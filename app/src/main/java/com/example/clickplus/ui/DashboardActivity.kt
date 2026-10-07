@@ -1903,6 +1903,48 @@ private fun EditorScreen(
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                     )
+                                    if (draft.triggerType == TriggerType.APP_ENTRY) {
+                                        Spacer(Modifier.height(6.dp))
+                                        PointEditor(
+                                            x = x,
+                                            y = y,
+                                            toleranceX = metadata.toleranceXRatio,
+                                            toleranceY = metadata.toleranceYRatio,
+                                            onChange = { nx, ny ->
+                                                draft = draft.copy(screenTapXRatio = nx, screenTapYRatio = ny)
+                                            },
+                                        )
+                                        if (draft.actionType == ActionType.MULTI_POINT_TAP) {
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                if (draft.screenTapSecondXRatio >= 0f) {
+                                                    "נקודה שנייה: X " + (secondX * 100).toInt() + "% · Y " + (secondY * 100).toInt() + "%"
+                                                } else "הנקודה השנייה עדיין לא נלמדה",
+                                                fontWeight = FontWeight.Medium,
+                                            )
+                                            if (draft.screenTapSecondXRatio >= 0f) {
+                                                PointEditor(
+                                                    x = secondX,
+                                                    y = secondY,
+                                                    toleranceX = metadata.toleranceXRatio,
+                                                    toleranceY = metadata.toleranceYRatio,
+                                                    onChange = { nx, ny ->
+                                                        draft = draft.copy(screenTapSecondXRatio = nx, screenTapSecondYRatio = ny)
+                                                    },
+                                                )
+                                            }
+                                            Text(
+                                                "השהיה בין שתי הלחיצות: " + (draft.screenTapIntervalMs / 1000f) + " שניות",
+                                                style = MaterialTheme.typography.bodySmall,
+                                            )
+                                            Slider(
+                                                value = draft.screenTapIntervalMs.toFloat(),
+                                                onValueChange = { draft = draft.copy(screenTapIntervalMs = it.toLong().coerceIn(500L, 10_000L)) },
+                                                valueRange = 500f..10_000f,
+                                                steps = 19,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
