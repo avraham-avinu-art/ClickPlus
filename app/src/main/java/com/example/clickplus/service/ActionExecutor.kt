@@ -367,14 +367,6 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         }
         SystemActionPreset.ANSWER_CALL.id -> answerCall()
         SystemActionPreset.DECLINE_CALL.id -> declineCall()
-        SystemActionPreset.PROFILE_NEXT.id ->
-            ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(service, 1))
-        SystemActionPreset.PROFILE_PREVIOUS.id ->
-            ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(service, -1))
-        SystemActionPreset.PROFILE_DEFAULT.id -> {
-            AdvancedRuleRepository.setActiveProfileId(service, "default")
-            ActionExecutionResult.success("חזר לפרופיל ברירת המחדל")
-        }
         else -> ActionExecutionResult.failure("פעולת המערכת אינה מוכרת")
     }
 
