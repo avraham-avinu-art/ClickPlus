@@ -87,16 +87,19 @@ class RuleExecutionCoordinator(
                 ActivityLog(
                     System.currentTimeMillis(),
                     "ACTION",
-                    if (result.success) "הפעולה הצליחה" else "הפעולה נכשלה",
+                    when {
+                        result.pending -> "הפעולה בביצוע"
+                        result.success -> "הפעולה הצליחה"
+                        else -> "הפעולה נכשלה"
+                    },
                     config.id,
                     sourcePackage,
-                    success = result.success,
-                    detail = if (result.success) {
+                    success = if (result.pending) null else result.success,
+                    detail = if (result.pending || result.success) {
                         result.reason
                     } else {
                         result.reason.ifBlank { "לא נמסר הסבר מהמבצע" }
-                    }
-                )
+                    }                )
             )
             if (!result.success && attempt < attempts) {
                 handler.postDelayed({ runAttempt(attempt + 1) }, 250L)
