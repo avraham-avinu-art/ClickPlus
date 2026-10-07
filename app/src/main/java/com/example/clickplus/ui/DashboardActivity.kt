@@ -1002,11 +1002,11 @@ private fun CompactChoiceChip(
     selected: Boolean,
     onClick: () -> Unit,
     label: String,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = Modifier
-            .width(34.dp)
-            .height(34.dp)
+        modifier = modifier
+            .height(36.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(10.dp),
         color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
@@ -1511,6 +1511,7 @@ private fun EditorScreen(
                                 selected = draft.pressCount == n,
                                 onClick = { draft = draft.copy(pressCount = n) },
                                 label = n.toString(),
+                                modifier = Modifier.weight(1f),
                             )
                         }
                     }
@@ -1573,56 +1574,24 @@ private fun EditorScreen(
                         }
                     } else {
                         OutlinedButton(
-                            onClick = {
-                                if (!isAccessibilityEnabled(context)) {
-                                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                                } else if (draft.screenTapPackage.isBlank()) {
-                                    screenAppDialog = true
-                                } else {
-                                    val p = context.getSharedPreferences(
-                                        "clickplus_runtime",
-                                        Context.MODE_PRIVATE,
-                                    )
-                                    p.edit()
-                                        .putBoolean("tap_learning", true)
-                                        .putString("tap_learning_package", draft.screenTapPackage)
-                                        .apply()
-                                    context.packageManager
-                                        .getLaunchIntentForPackage(draft.screenTapPackage)
-                                        ?.let {
-                                            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            context.startActivity(it)
-                                            learning = true
-                                        }
-                                }
-                            },
+                            onClick = { screenAppDialog = true },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Icon(Icons.Outlined.LocationOn, null)
+                            Icon(Icons.Outlined.Apps, null)
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                if (draft.screenTapPackage.isBlank()) {
-                                    "בחירת אפליקציה ולימוד מיקום"
-                                } else {
-                                    "לימוד מחדש של מיקום הלחיצה"
-                                },
+                                if (draft.screenTapPackage.isBlank()) "בחירת אפליקציה לזיהוי הלחיצה"
+                                else "החלפת אפליקציית הזיהוי",
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
 
-                        if (learning) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                            ) {
-                                Text(
-                                    "מצב לימוד פעיל: האפליקציה נפתחה. לחץ על היעד שברצונך לשמור.",
-                                    modifier = Modifier.padding(12.dp),
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            }
+                        if (draft.screenTapPackage.isBlank()) {
+                            Text(
+                                "אין צורך לפתוח את האפליקציה או להפעיל שכבת לימוד. בחר אפליקציה והגדר את הנקודה בתצוגה המקדימה.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         }
 
                         if (draft.screenTapPackage.isNotBlank()) {
@@ -1702,31 +1671,34 @@ private fun EditorScreen(
                     title = "מה לבצע?",
                     subtitle = "בחר מה ClickPlus יעשה לאחר שהכלל הופעל.",
                 ) {
-                    Row(
+                    Column(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         ChoiceChip(
                             selected = draft.actionType == ActionType.SYSTEM,
-                            onClick = { draft = draft.copy(actionType = ActionType.SYSTEM) },
+                            onClick = {
+                                draft = draft.copy(
+                                    actionType = ActionType.SYSTEM,
+                                    systemActionId = draft.systemActionId.ifBlank { SystemActionPreset.HOME.id },
+                                )
+                            },
                             label = "פעולת מערכת",
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                         )
                         ChoiceChip(
                             selected = draft.actionType == ActionType.APP,
-                            onClick = { draft = draft.copy(actionType = ActionType.APP) },
+                            onClick = { draft = draft.copy(actionType = ActionType.APP, systemActionId = "") },
                             label = "פתיחת אפליקציה",
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        ChoiceChip(
+                            selected = draft.actionType == ActionType.APP_TAP,
+                            onClick = { draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "") },
+                            label = "פתיחת אפליקציה + לחיצה",
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
-
-                    Spacer(Modifier.height(2.dp))
-                    ChoiceChip(
-                        selected = draft.actionType == ActionType.APP_TAP,
-                        onClick = { draft = draft.copy(actionType = ActionType.APP_TAP) },
-                        label = "פתיחת אפליקציה + לחיצה",
-                        modifier = Modifier.fillMaxWidth(),
-                    )
 
                     when (draft.actionType) {
                         ActionType.SYSTEM -> {
@@ -1868,40 +1840,8 @@ private fun EditorScreen(
                 EditorSectionCard(
                     number = "5",
                     title = "הגדרות מתקדמות",
-                    subtitle = "עדיפות, תזמון, ניסיונות ואזור התאמה.",
+                    subtitle = "ניסיונות, הגנה ואזור התאמה.",
                 ) {
-                    EditorSliderRow(
-                        title = "עדיפות",
-                        valueText = metadata.priority.toString(),
-                    ) {
-                        Slider(
-                            value = metadata.priority.coerceIn(0, 10).toFloat(),
-                            onValueChange = {
-                                metadata = metadata.copy(
-                                    priority = it.toInt().coerceIn(0, 10),
-                                )
-                            },
-                            valueRange = 0f..10f,
-                            steps = 9,
-                        )
-                    }
-
-                    EditorSliderRow(
-                        title = "זמן המתנה לפני הפעולה",
-                        valueText = metadata.delayMs.toString() + "ms",
-                    ) {
-                        Slider(
-                            value = metadata.delayMs.coerceIn(0L, 5000L).toFloat(),
-                            onValueChange = {
-                                metadata = metadata.copy(
-                                    delayMs = it.toLong().coerceIn(0L, 10_000L),
-                                )
-                            },
-                            valueRange = 0f..5000f,
-                            steps = 9,
-                        )
-                    }
-
                     EditorSliderRow(
                         title = "Cooldown",
                         valueText = metadata.cooldownMs.toString() + "ms",
@@ -1974,27 +1914,16 @@ private fun EditorScreen(
 
                     OutlinedButton(
                         onClick = {
-                            val performer = if (isAccessibilityEnabled(context)) {
-                                KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
-                            } else {
-                                null
+                            val performer = when (AdvancedRuleRepository.currentMode(context)) {
+                                AppMode.BASIC -> BasicActionPerformer(context)
+                                AppMode.FULL -> KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
+                                    ?: UnavailableActionPerformer("מצב מלא נבחר, אבל שירות הנגישות אינו פעיל.")
                             }
-                            if (performer != null) {
-                                RuleExecutionCoordinator(context, performer).execute(
-                                    draft,
-                                    test = true,
-                                    reason = "בדיקה ידנית",
-                                )
-                            } else {
-                                RuleExecutionCoordinator(
-                                    context,
-                                    BasicActionPerformer(context),
-                                ).execute(
-                                    draft,
-                                    test = true,
-                                    reason = "בדיקה במצב בסיסי",
-                                )
-                            }
+                            RuleExecutionCoordinator(context, performer).execute(
+                                draft,
+                                test = true,
+                                reason = "בדיקה ידנית",
+                            )
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -2012,7 +1941,14 @@ private fun EditorScreen(
             title = "בחירת אפליקציה",
             onDismiss = { appDialog = false },
             onSelect = { app ->
-                if (
+                if (draft.triggerType == TriggerType.SCREEN_TAP || draft.actionType == ActionType.APP_TAP) {
+                    draft = draft.copy(
+                        screenTapPackage = app.packageName,
+                        screenTapAppName = app.label,
+                        screenTapXRatio = -1f,
+                        screenTapYRatio = -1f,
+                    )
+                } else if (
                     draft.triggerType == TriggerType.APP_ENTRY &&
                     (
                         draft.contextConditionType == ContextConditionType.APP ||
@@ -2022,13 +1958,6 @@ private fun EditorScreen(
                     draft = draft.copy(
                         contextConditionValue = app.packageName,
                         contextConditionName = app.label,
-                    )
-                } else if (draft.actionType == ActionType.APP_TAP) {
-                    draft = draft.copy(
-                        screenTapPackage = app.packageName,
-                        screenTapAppName = app.label,
-                        screenTapXRatio = -1f,
-                        screenTapYRatio = -1f,
                     )
                 } else {
                     draft = draft.copy(
@@ -2043,7 +1972,7 @@ private fun EditorScreen(
 
     if (screenAppDialog) {
         AppPickerDialog(
-            title = "בחירת אפליקציה לזיהוי הלחיצה",
+            title = if (draft.actionType == ActionType.APP_TAP) "אפליקציה לביצוע הלחיצה" else "אפליקציה לזיהוי הלחיצה",
             onDismiss = { screenAppDialog = false },
             onSelect = { app ->
                 draft = draft.copy(
