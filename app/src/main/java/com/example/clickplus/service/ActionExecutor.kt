@@ -42,7 +42,12 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                     service.startActivity(intent)
                     ActionExecutionResult.success("אפליקציית היעד נפתחה")
                 }
-                ActionType.SYSTEM -> executeSystem(config.systemActionId, config.actionParameter)
+                ActionType.SYSTEM -> executeSystem(
+                    config.systemActionId,
+                    if (config.systemActionId == SystemActionPreset.DIAL_CONTACT.id) {
+                        config.contactNumber.ifBlank { config.actionParameter }
+                    } else config.actionParameter,
+                )
             }
         } catch (error: Throwable) {
             ActionExecutionResult.failure(
@@ -255,7 +260,6 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         )
     }
 
-    private fun AccessibilityService.currentActionContactNumber(fallback: String): String = fallback.trim()
 
     private fun executeSystem(actionId: String, actionParameter: String = ""): ActionExecutionResult = when (actionId) {
         SystemActionPreset.HOME.id ->
@@ -332,7 +336,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
             )
         }
         SystemActionPreset.DIAL_CONTACT.id -> {
-            val number = service.currentActionContactNumber(actionParameter)
+            val number = actionParameter.trim()
             if (number.isBlank()) {
                 ActionExecutionResult.failure("לא נבחר איש קשר")
             } else {
