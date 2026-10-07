@@ -63,8 +63,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         consumePendingLaunches()
     }
 
+    fun onClickPlusEntry() {
+        tapDetector.processClickPlusEntry(lastExternalPackage)
+    }
+
     fun onLauncherEntry() {
-        tapDetector.processActivationLaunch(lastExternalPackage)
+        onClickPlusEntry()
     }
 
     fun openMainInterface() {
@@ -82,7 +86,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         val count = prefs.getInt("pending_activation_launches", 0)
         if (count <= 0) return
         prefs.edit().putInt("pending_activation_launches", 0).apply()
-        repeat(count.coerceAtMost(10)) { tapDetector.processActivationLaunch(lastExternalPackage) }
+        repeat(count.coerceAtMost(10)) { onClickPlusEntry() }
     }
 
     private fun startAsForeground() {
