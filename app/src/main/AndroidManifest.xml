@@ -38,7 +38,8 @@
         <activity
             android:name=".ui.MainActivity"
             android:exported="false"
-            android:label="קליק פלוס" />
+            android:label="קליק פלוס"
+            android:excludeFromRecents="true" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -53,7 +54,9 @@
         <activity
             android:name=".ui.DashboardActivity"
             android:exported="false"
-            android:label="קליק פלוס" />
+            android:label="קליק פלוס"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
 
         <service
             android:name=".service.KeyInterceptorAccessibilityService"
