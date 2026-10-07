@@ -14,13 +14,25 @@ import org.json.JSONObject
 val Context.dataStore by preferencesDataStore(name = "clickplus_settings")
 
 enum class ActionType(val titleHebrew: String) {
-    SYSTEM("פעולת מערכת"),
+    SYSTEM("פעולת מכשיר"),
     APP("פתיחת אפליקציה"),
     APP_TAP("לחיצה אוטומטית באפליקציה"),
     MULTI_POINT_TAP("שתי לחיצות אוטומטיות"),
+    PROFILE("ניהול פרופילי ClickPlus"),
 }
+
 enum class TriggerType(val titleHebrew: String) {
-    APP_ENTRY("כניסה לאפליקציה"),
+    CLICKPLUS_ENTRY("לחיצות כניסה לקליק פלוס"),
+    APP_ENTRY("לחיצות כניסה לאפליקציה אחרת"),
+}
+
+enum class ClickPlusProfileAction(
+    val id: String,
+    val titleHebrew: String,
+) {
+    NEXT("profile_next", "מעבר לפרופיל הבא"),
+    PREVIOUS("profile_previous", "מעבר לפרופיל הקודם"),
+    DEFAULT("profile_default", "חזרה לפרופיל ברירת המחדל"),
 }
 
 enum class ContextConditionType(val titleHebrew: String) {
@@ -128,6 +140,10 @@ data class KeyActionConfig(
         ActionType.APP -> "פתיחת " + targetAppName.ifBlank { "אפליקציה" }
         ActionType.APP_TAP -> "לחיצה אוטומטית ב-" + screenTapAppName.ifBlank { "אפליקציה" }
         ActionType.MULTI_POINT_TAP -> "שתי לחיצות אוטומטיות ב-" + screenTapAppName.ifBlank { "אפליקציה" }
+        ActionType.PROFILE -> {
+            ClickPlusProfileAction.entries.firstOrNull { it.id == systemActionId }?.titleHebrew
+                ?: "ניהול פרופיל ClickPlus"
+        }
     }
 
     fun contextSummary(): String {
@@ -171,7 +187,17 @@ data class KeyActionConfig(
             id = json.optString("id", java.util.UUID.randomUUID().toString()),
             name = json.optString("name", json.optString("customLabel", "")),
             pressCount = json.optInt("pressCount", json.optInt("tapCount", 1)).coerceIn(1, 10),
-            actionType = runCatching { ActionType.valueOf(json.optString("actionType", ActionType.SYSTEM.name)) }.getOrDefault(ActionType.SYSTEM),
+            actionType = run {
+                val storedType = runCatching {
+                    ActionType.valueOf(json.optString("actionType", ActionType.SYSTEM.name))
+                }.getOrDefault(ActionType.SYSTEM)
+                val storedSystemAction = json.optString("systemActionId", SystemActionPreset.HOME.id)
+                if (storedType == ActionType.SYSTEM && ClickPlusProfileAction.entries.any { it.id == storedSystemAction }) {
+                    ActionType.PROFILE
+                } else {
+                    storedType
+                }
+            },
             systemActionId = json.optString("systemActionId", SystemActionPreset.HOME.id),
             actionParameter = json.optString("actionParameter", ""),
             contactName = json.optString("contactName", ""),
