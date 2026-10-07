@@ -26,6 +26,7 @@ class TapDetector(
     private var lastLaunchTime = 0L
     private var pendingForegroundPackage = ""
     private var pendingEnteredPackage = ""
+    private var pendingTriggerType = TriggerType.CLICKPLUS_ENTRY
     private val handler = Handler(Looper.getMainLooper())
     private val resetRunnable = Runnable {
         resolveActivationLaunch()
@@ -39,13 +40,35 @@ class TapDetector(
         profiles = newProfiles.filter { it.enabled }
     }
 
+    fun processClickPlusEntry(previousForegroundPackage: String) {
+        registerTrigger(
+            triggerType = TriggerType.CLICKPLUS_ENTRY,
+            enteredPackage = "",
+            previousForegroundPackage = previousForegroundPackage,
+        )
+    }
+
     fun processAppEntry(enteredPackage: String, previousForegroundPackage: String) {
         if (enteredPackage.isBlank()) return
+        registerTrigger(
+            triggerType = TriggerType.APP_ENTRY,
+            enteredPackage = enteredPackage,
+            previousForegroundPackage = previousForegroundPackage,
+        )
+    }
+
+    private fun registerTrigger(
+        triggerType: TriggerType,
+        enteredPackage: String,
+        previousForegroundPackage: String,
+    ) {
         val all = profiles.filter {
             it.enabled &&
-                it.triggerType == TriggerType.APP_ENTRY &&
-                it.triggerPackage.isNotBlank() &&
-                it.triggerPackage == enteredPackage &&
+                it.triggerType == triggerType &&
+                (triggerType == TriggerType.CLICKPLUS_ENTRY || (
+                    it.triggerPackage.isNotBlank() &&
+                        it.triggerPackage == enteredPackage
+                )) &&
                 AdvancedRuleRepository.isRuleInActiveProfile(context, it.id)
         }
         if (all.isEmpty()) return
@@ -56,11 +79,16 @@ class TapDetector(
 
         if (tapCount == 0) {
             pendingEnteredPackage = enteredPackage
-        } else if (pendingEnteredPackage != enteredPackage) {
-            // A new target app starts a fresh entry sequence.
+            pendingTriggerType = triggerType
+        } else if (
+            pendingTriggerType != triggerType ||
+            (triggerType == TriggerType.APP_ENTRY && pendingEnteredPackage != enteredPackage)
+        ) {
+            // A different trigger source starts a fresh sequence.
             tapCount = 0
             pendingForegroundPackage = ""
             pendingEnteredPackage = enteredPackage
+            pendingTriggerType = triggerType
         }
         tapCount = (tapCount + 1).coerceAtMost(10)
         pendingForegroundPackage = previousForegroundPackage
@@ -70,22 +98,23 @@ class TapDetector(
     }
 
     fun processActivationLaunch(previousForegroundPackage: String) {
-        // Kept for the legacy launcher entry path.
-        processAppEntry("legacy_launcher", previousForegroundPackage)
+        // Launcher entry is the ClickPlus trigger.
+        processClickPlusEntry(previousForegroundPackage)
     }
 
     private fun resolveActivationLaunch() {
         val finalCount = tapCount.coerceIn(1, 10)
         val previousForegroundPackage = pendingForegroundPackage
         val enteredPackage = pendingEnteredPackage
+        val triggerType = pendingTriggerType
         tapCount = 0
         pendingForegroundPackage = ""
         pendingEnteredPackage = ""
 
         val all = profiles.filter {
             it.enabled &&
-                it.triggerType == TriggerType.APP_ENTRY &&
-                it.triggerPackage == enteredPackage &&
+                it.triggerType == triggerType &&
+                (triggerType == TriggerType.CLICKPLUS_ENTRY || it.triggerPackage == enteredPackage) &&
                 AdvancedRuleRepository.isRuleInActiveProfile(context, it.id)
         }
         val matchingSpecific = all
@@ -99,7 +128,11 @@ class TapDetector(
             .firstOrNull()
 
         if (chosen != null) {
-            actionExecutor.execute(chosen, previousForegroundPackage, "כניסה ל-ClickPlus")
+            val reason = when (triggerType) {
+                TriggerType.CLICKPLUS_ENTRY -> "לחיצות כניסה לקליק פלוס"
+                TriggerType.APP_ENTRY -> "לחיצות כניסה לאפליקציה אחרת"
+            }
+            actionExecutor.execute(chosen, previousForegroundPackage, reason)
         }
     }
 
