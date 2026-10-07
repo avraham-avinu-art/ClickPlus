@@ -241,6 +241,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         when {
             stage == 1 && prefs.getBoolean("tap_learning_multi", false) -> {
                 prefs.edit()
+                    .putBoolean("tap_capture_ready", true)
                     .putFloat("tap_capture_x_ratio", xRatio)
                     .putFloat("tap_capture_y_ratio", yRatio)
                     .putInt("tap_capture_stage", 1)
