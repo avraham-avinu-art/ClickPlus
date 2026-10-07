@@ -69,6 +69,7 @@ class RuleExecutionCoordinator(
                     message = actionMessage,
                     ruleId = config.id,
                     appPackage = sourcePackage,
+                    actionLabel = config.name.ifBlank { config.actionSummary() },
                     success = if (result.pending) null else result.success,
                     detail = if (test && result.success && result.reason.isBlank()) {
                         "בדיקה ידנית הסתיימה בהצלחה."
@@ -101,6 +102,7 @@ class RuleExecutionCoordinator(
                 config.id,
                 sourcePackage,
                 success = false,
+                actionLabel = config.name.ifBlank { config.actionSummary() },
                 detail = detail
             )
         )
