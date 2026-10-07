@@ -12,9 +12,11 @@ import com.example.clickplus.data.SystemActionPreset
 data class ActionExecutionResult(
     val success: Boolean,
     val reason: String = "",
+    val pending: Boolean = false,
 ) {
     companion object {
         fun success(reason: String = "הפעולה בוצעה בהצלחה") = ActionExecutionResult(true, reason)
+        fun pending(reason: String) = ActionExecutionResult(true, reason, pending = true)
         fun failure(reason: String) = ActionExecutionResult(false, reason)
     }
 }
