@@ -60,70 +60,56 @@
         android:fillAlpha="0.09"
         android:pathData="M54,41 A13,13 0,1 1,54,67 A13,13 0,1 1,54,41 Z" />
 
-    <!-- Crystalline emblem: identical pointed arms and jewel-like geometry -->
+    <!-- Crystalline inverted-T emblem: horizontal crown with pointed side arms and a descending jewel stem -->
     <path
         android:fillColor="#59C90A"
         android:fillAlpha="0.20"
-        android:pathData="M54,14 L63,29 L62,43 L94,48 L80,58 L62,54 L54,94 L46,54 L28,58 L14,48 L46,43 L45,29 Z" />
+        android:pathData="M22,36 L86,36 L98,48 L86,60 L62,60 L60,91 L54,99 L48,91 L46,60 L22,60 L10,48 Z" />
     <path
         android:fillColor="#8CFF22"
-        android:pathData="M54,17 L61,30 L60,44 L89,48 L78,55 L60,52 L54,90 L48,52 L30,55 L19,48 L48,44 L47,30 Z" />
+        android:pathData="M23,39 L85,39 L94,48 L84,56 L61,56 L59,90 L54,96 L49,90 L47,56 L24,56 L14,48 Z" />
 
-    <!-- Faceted top arm -->
-    <path
-        android:fillColor="#D8FF88"
-        android:fillAlpha="0.82"
-        android:pathData="M54,17 L61,30 L55,45 L48,30 Z" />
-    <path
-        android:fillColor="#39A606"
-        android:fillAlpha="0.85"
-        android:pathData="M61,30 L60,44 L55,45 Z" />
-    <path
-        android:fillColor="#5BDF0E"
-        android:fillAlpha="0.88"
-        android:pathData="M48,30 L54,17 L55,45 Z" />
-
-    <!-- Faceted right arm -->
+    <!-- Left half of the horizontal crown -->
     <path
         android:fillColor="#D7FF83"
-        android:fillAlpha="0.82"
-        android:pathData="M89,48 L78,55 L60,52 L60,47 Z" />
+        android:fillAlpha="0.86"
+        android:pathData="M14,48 L24,39 L54,39 L54,56 L24,56 Z" />
     <path
         android:fillColor="#42AF07"
         android:fillAlpha="0.90"
-        android:pathData="M60,47 L89,48 L60,52 Z" />
+        android:pathData="M14,48 L54,39 L54,48 Z" />
     <path
-        android:fillColor="#91FF2B"
-        android:fillAlpha="0.72"
-        android:pathData="M78,55 L60,52 L60,47 Z" />
+        android:fillColor="#92FF2C"
+        android:fillAlpha="0.74"
+        android:pathData="M54,48 L24,56 L14,48 Z" />
 
-    <!-- Faceted bottom arm -->
-    <path
-        android:fillColor="#D8FF88"
-        android:fillAlpha="0.78"
-        android:pathData="M54,90 L48,52 L54,47 L60,52 Z" />
-    <path
-        android:fillColor="#3DAA06"
-        android:fillAlpha="0.84"
-        android:pathData="M48,52 L54,90 L54,47 Z" />
-    <path
-        android:fillColor="#95FF2E"
-        android:fillAlpha="0.78"
-        android:pathData="M54,47 L60,52 L54,90 Z" />
-
-    <!-- Faceted left arm -->
+    <!-- Right half of the horizontal crown -->
     <path
         android:fillColor="#D7FF83"
-        android:fillAlpha="0.80"
-        android:pathData="M19,48 L48,44 L48,49 L30,55 Z" />
+        android:fillAlpha="0.86"
+        android:pathData="M54,39 L84,39 L94,48 L84,56 L54,56 Z" />
     <path
-        android:fillColor="#3DAC07"
+        android:fillColor="#42AF07"
         android:fillAlpha="0.90"
-        android:pathData="M19,48 L48,44 L48,49 Z" />
+        android:pathData="M54,39 L94,48 L54,48 Z" />
     <path
-        android:fillColor="#8FFF29"
-        android:fillAlpha="0.70"
-        android:pathData="M48,49 L30,55 L19,48 Z" />
+        android:fillColor="#92FF2C"
+        android:fillAlpha="0.74"
+        android:pathData="M54,48 L84,56 L94,48 Z" />
+
+    <!-- Descending faceted crystal stem -->
+    <path
+        android:fillColor="#D8FF88"
+        android:fillAlpha="0.84"
+        android:pathData="M47,48 L61,48 L59,90 L54,96 L49,90 Z" />
+    <path
+        android:fillColor="#3EAB06"
+        android:fillAlpha="0.90"
+        android:pathData="M47,48 L54,48 L49,90 Z" />
+    <path
+        android:fillColor="#95FF2E"
+        android:fillAlpha="0.80"
+        android:pathData="M54,48 L61,48 L59,90 L54,96 Z" />
 
     <!-- Central diamond core -->
     <path
