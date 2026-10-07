@@ -34,7 +34,7 @@ object StandaloneLauncherEngine {
         previousForegroundPackage = lastForegroundPackage(context)
 
         handler.removeCallbacksAndMessages("activation")
-        handler.postDelayed({
+        val resolve = Runnable {
             val finalCount = count.coerceIn(1, 10)
             val foreground = previousForegroundPackage
             count = 0
@@ -52,9 +52,12 @@ object StandaloneLauncherEngine {
                 val coordinator = RuleExecutionCoordinator(context.applicationContext, performer, advanced)
                 coordinator.execute(chosen, foreground, "כניסה ל-ClickPlus במצב בסיסי")
             }
-        }.also {
-            handler.postAtTime(it, "activation", System.currentTimeMillis() + AppPreferencesRepository.tapTimeoutSnapshot(context))
-        }, "activation")
+        }
+        handler.postAtTime(
+            resolve,
+            "activation",
+            System.currentTimeMillis() + AppPreferencesRepository.tapTimeoutSnapshot(context),
+        )
     }
 
     fun recordAccessibilityUnavailable(context: Context) {
