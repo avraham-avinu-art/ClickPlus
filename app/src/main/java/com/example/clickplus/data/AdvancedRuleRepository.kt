@@ -88,8 +88,10 @@ class AdvancedRuleRepository(private val context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LAST_PACKAGE, "").orEmpty()
 
         fun setLastExternalPackage(context: Context, packageName: String) {
-            if (packageName.isBlank()) return
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LAST_PACKAGE, packageName).apply()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(LAST_PACKAGE, packageName)
+                .apply()
         }
 
         fun logs(context: Context): List<ActivityLog> =
