@@ -25,6 +25,7 @@ class TapDetector(
     private var tapCount = 0
     private var lastLaunchTime = 0L
     private var pendingForegroundPackage = ""
+    private var pendingEnteredPackage = ""
     private val handler = Handler(Looper.getMainLooper())
     private val resetRunnable = Runnable {
         resolveActivationLaunch()
@@ -53,6 +54,14 @@ class TapDetector(
         if (now - lastLaunchTime < 100L) return
         lastLaunchTime = now
 
+        if (tapCount == 0) {
+            pendingEnteredPackage = enteredPackage
+        } else if (pendingEnteredPackage != enteredPackage) {
+            // A new target app starts a fresh entry sequence.
+            tapCount = 0
+            pendingForegroundPackage = ""
+            pendingEnteredPackage = enteredPackage
+        }
         tapCount = (tapCount + 1).coerceAtMost(10)
         pendingForegroundPackage = previousForegroundPackage
         handler.removeCallbacks(resetRunnable)
@@ -68,12 +77,15 @@ class TapDetector(
     private fun resolveActivationLaunch() {
         val finalCount = tapCount.coerceIn(1, 10)
         val previousForegroundPackage = pendingForegroundPackage
+        val enteredPackage = pendingEnteredPackage
         tapCount = 0
         pendingForegroundPackage = ""
+        pendingEnteredPackage = ""
 
         val all = profiles.filter {
             it.enabled &&
                 it.triggerType == TriggerType.APP_ENTRY &&
+                it.triggerPackage == enteredPackage &&
                 AdvancedRuleRepository.isRuleInActiveProfile(context, it.id)
         }
         val matchingSpecific = all
