@@ -51,9 +51,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             this,
             onTargetTap = { x, y -> captureLearningTap(x, y) },
             onCancel = {
-                getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
-                    .edit().putBoolean("tap_learning", false).remove("tap_learning_stage").apply()
-                tapLearningOverlay.hide()
+                cancelLearning()
             },
         )
         prefsRepository = AppPreferencesRepository(applicationContext)
