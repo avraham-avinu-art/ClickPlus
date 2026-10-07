@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.AdvancedRuleRepository
+import com.example.clickplus.data.AppMode
 import com.example.clickplus.data.ContextConditionType
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.TriggerType
