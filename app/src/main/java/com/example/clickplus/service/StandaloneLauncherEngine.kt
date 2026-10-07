@@ -19,6 +19,7 @@ object StandaloneLauncherEngine {
     private val handler = Handler(Looper.getMainLooper())
     private var count = 0
     private var lastTime = 0L
+    private var previousForegroundPackage = ""
 
     fun process(context: Context) {
         if (AdvancedRuleRepository.currentMode(context) != AppMode.BASIC) return
@@ -30,23 +31,73 @@ object StandaloneLauncherEngine {
         if (now - lastTime < 100L) return
         lastTime = now
         count = (count + 1).coerceAtMost(10)
+        previousForegroundPackage = lastForegroundPackage(context)
 
-        val foreground = lastForegroundPackage(context)
-        val advanced = AdvancedRuleRepository(context)
-        val chosen = mappings
-            .filter { it.pressCount == count }
-            .filter { matchesCondition(context, it, foreground) }
-            .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
-            .firstOrNull()
+        handler.removeCallbacksAndMessages("activation")
+        handler.postDelayed({
+            val finalCount = count.coerceIn(1, 10)
+            val foreground = previousForegroundPackage
+            count = 0
+            previousForegroundPackage = ""
 
-        if (chosen != null) {
-            val performer = BasicActionPerformer(context.applicationContext)
-            val coordinator = RuleExecutionCoordinator(context.applicationContext, performer, advanced)
-            coordinator.execute(chosen, foreground, "כניסה ל-ClickPlus במצב בסיסי")
+            val advanced = AdvancedRuleRepository(context)
+            val chosen = mappings
+                .filter { it.pressCount == finalCount }
+                .filter { matchesCondition(context, it, foreground) }
+                .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
+                .firstOrNull()
+
+            if (chosen != null) {
+                val performer = BasicActionPerformer(context.applicationContext)
+                val coordinator = RuleExecutionCoordinator(context.applicationContext, performer, advanced)
+                coordinator.execute(chosen, foreground, "כניסה ל-ClickPlus במצב בסיסי")
+            }
+        }.also {
+            handler.postAtTime(it, "activation", System.currentTimeMillis() + AppPreferencesRepository.tapTimeoutSnapshot(context))
+        }, "activation")
+    }
+
+    fun recordAccessibilityUnavailable(context: Context) {
+        if (AdvancedRuleRepository.currentMode(context) != AppMode.FULL) return
+        val mappings = AppPreferencesRepository.mappingsSnapshot(context)
+            .filter { it.enabled && it.triggerType == TriggerType.APP_ENTRY }
+        if (mappings.isEmpty()) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastTime < 100L) return
+        lastTime = now
+        count = (count + 1).coerceAtMost(10)
+        previousForegroundPackage = AdvancedRuleRepository.lastExternalPackage(context)
+
+        handler.removeCallbacksAndMessages("missing_accessibility")
+        val resolve = Runnable {
+            val finalCount = count.coerceIn(1, 10)
+            val foreground = previousForegroundPackage
+            count = 0
+            previousForegroundPackage = ""
+
+            val advanced = AdvancedRuleRepository(context)
+            mappings
+                .filter { it.pressCount == finalCount }
+                .filter { matchesCondition(context, it, foreground) }
+                .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
+                .firstOrNull()
+                ?.let { rule ->
+                    AdvancedRuleRepository.addLog(
+                        context,
+                        com.example.clickplus.data.ActivityLog(
+                            timestamp = System.currentTimeMillis(),
+                            type = "ACTION",
+                            message = "הפעולה נכשלה",
+                            ruleId = rule.id,
+                            appPackage = foreground,
+                            success = false,
+                            detail = "הכלל הופעל, אך שירות הנגישות אינו פעיל ולכן אי אפשר לבצע את הפעולה במצב מלא.",
+                        ),
+                    )
+                }
         }
-
-        handler.removeCallbacksAndMessages(null)
-        handler.postDelayed({ count = 0 }, 650L)
+        handler.postDelayed(resolve, AppPreferencesRepository.tapTimeoutSnapshot(context))
     }
 
     private fun lastForegroundPackage(context: Context): String {
