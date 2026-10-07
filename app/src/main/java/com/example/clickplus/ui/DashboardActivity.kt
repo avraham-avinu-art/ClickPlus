@@ -876,6 +876,16 @@ private fun StatusCard(
 private fun LogsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var items by remember { mutableStateOf(AdvancedRuleRepository.logs(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                items = AdvancedRuleRepository.logs(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
@@ -905,7 +915,7 @@ private fun LogsScreen(onBack: () -> Unit) {
                     val (statusText, statusColor, statusTextColor) = when (log.success) {
                         true -> Triple("הצליח", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
                         false -> Triple("נכשל", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-                        null -> Triple("מידע", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                        null -> Triple("ממתין", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
                     }
 
                     OutlinedCard(
