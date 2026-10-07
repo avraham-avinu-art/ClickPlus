@@ -28,7 +28,8 @@ class TapCountOverlay(private val context: Context) {
 
     private var attached = false
     private var hideRunnable: Runnable? = null
-    private var positionPercentFromBottom = 35
+    private var xPercentFromLeft = 50
+    private var yPercentFromTop = 65
 
     fun show(count: Int, durationMs: Long = 900L) {
         textView.text = count.toString()
@@ -65,11 +66,17 @@ class TapCountOverlay(private val context: Context) {
         textView.postDelayed(hide, durationMs.coerceIn(300L, 1500L))
     }
 
-    fun setPositionPercentFromBottom(percent: Int) {
-        positionPercentFromBottom = percent.coerceIn(5, 90)
+    fun setPosition(percentFromLeft: Int, percentFromTop: Int) {
+        xPercentFromLeft = percentFromLeft.coerceIn(0, 100)
+        yPercentFromTop = percentFromTop.coerceIn(0, 100)
         if (attached) {
             val params = textView.layoutParams as? WindowManager.LayoutParams ?: return
-            params.y = (context.resources.displayMetrics.heightPixels * positionPercentFromBottom / 100f).toInt()
+            val density = context.resources.displayMetrics.density
+            params.gravity = Gravity.TOP or Gravity.START
+            params.x = ((context.resources.displayMetrics.widthPixels - (64 * density).toInt())
+                .coerceAtLeast(0) * xPercentFromLeft / 100f).toInt()
+            params.y = ((context.resources.displayMetrics.heightPixels - (48 * density).toInt())
+                .coerceAtLeast(0) * yPercentFromTop / 100f).toInt()
             runCatching { windowManager.updateViewLayout(textView, params) }
         }
     }
