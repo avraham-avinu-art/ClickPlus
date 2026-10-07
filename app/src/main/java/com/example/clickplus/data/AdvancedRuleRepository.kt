@@ -214,7 +214,8 @@ data class ActivityLog(
     val appPackage: String = "",
     val xRatio: Float = -1f,
     val yRatio: Float = -1f,
-    val success: Boolean = true,
+    val success: Boolean? = null,
+    val detail: String = "",
 ) {
     fun toJson() = JSONObject()
         .put("timestamp", timestamp)
@@ -225,17 +226,27 @@ data class ActivityLog(
         .put("xRatio", xRatio)
         .put("yRatio", yRatio)
         .put("success", success)
+        .put("detail", detail)
 
     companion object {
-        fun fromJson(o: JSONObject) = ActivityLog(
-            timestamp = o.optLong("timestamp"),
-            type = o.optString("type"),
-            message = o.optString("message"),
-            ruleId = o.optString("ruleId"),
-            appPackage = o.optString("appPackage"),
-            xRatio = o.optDouble("xRatio", -1.0).toFloat(),
-            yRatio = o.optDouble("yRatio", -1.0).toFloat(),
-            success = o.optBoolean("success", true),
-        )
+        fun fromJson(o: JSONObject): ActivityLog {
+            val type = o.optString("type")
+            val storedSuccess = if (o.has("success") && !o.isNull("success")) {
+                o.optBoolean("success")
+            } else {
+                null
+            }
+            return ActivityLog(
+                timestamp = o.optLong("timestamp"),
+                type = type,
+                message = o.optString("message"),
+                ruleId = o.optString("ruleId"),
+                appPackage = o.optString("appPackage"),
+                xRatio = o.optDouble("xRatio", -1.0).toFloat(),
+                yRatio = o.optDouble("yRatio", -1.0).toFloat(),
+                success = if (type == "TRIGGER") null else storedSuccess,
+                detail = o.optString("detail"),
+            )
+        }
     }
 }
