@@ -160,6 +160,7 @@ private sealed interface DashboardRoute {
 class DashboardActivity : ComponentActivity() {
     private var settingsStepActive = false
     private var runtimeRequestActive = false
+    private var showPermissionIntro by mutableStateOf(false)
 
     private val runtimePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -171,12 +172,22 @@ class DashboardActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
-            .edit()
+        val runtimePrefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+        showPermissionIntro = !runtimePrefs.getBoolean("permission_intro_completed", false)
+        runtimePrefs.edit()
             .putBoolean("first_ui_opened", true)
             .putBoolean("background_only", false)
             .apply()
-        setContent { ClickPlusDashboard() }
+        setContent {
+            ClickPlusDashboard(
+                showPermissionIntro = showPermissionIntro,
+                onBeginPermissionSetup = {
+                    runtimePrefs.edit().putBoolean("permission_intro_completed", true).apply()
+                    showPermissionIntro = false
+                    continueFirstLaunchPermissions()
+                },
+            )
+        }
     }
 
     override fun onResume() {
@@ -184,7 +195,8 @@ class DashboardActivity : ComponentActivity() {
         if (runtimeRequestActive) return
         val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
         if (!prefs.getBoolean("first_ui_opened", false) ||
-            prefs.getBoolean("permission_bootstrap_done", false)
+            prefs.getBoolean("permission_bootstrap_done", false) ||
+            !prefs.getBoolean("permission_intro_completed", false)
         ) return
 
         if (settingsStepActive) {
@@ -242,12 +254,21 @@ class DashboardActivity : ComponentActivity() {
 }
 
 @Composable
-private fun ClickPlusDashboard() {
+private fun ClickPlusDashboard(
+    showPermissionIntro: Boolean,
+    onBeginPermissionSetup: () -> Unit,
+) {
+    if (showPermissionIntro) {
+        PermissionIntroScreen(onBeginPermissionSetup)
+        return
+    }
+
     val context = LocalContext.current
     val prefs = remember { AppPreferencesRepository(context.applicationContext) }
     val advanced = remember { AdvancedRuleRepository(context.applicationContext) }
     val mappings by prefs.mappingsFlow.collectAsState(initial = emptyList())
-    val timeout by prefs.tapTimeoutFlow.collectAsState(initial = 650L)
+    val timeout by prefs.tapTimeoutFlow.collectAsState(initial = 1200L)
+    val actionDelay by prefs.actionDelayFlow.collectAsState(initial = 0L)
     val showTapCount by prefs.showTapCountFlow.collectAsState(initial = false)
     var route by remember { mutableStateOf<DashboardRoute>(DashboardRoute.Home) }
     var themeMode by remember { mutableStateOf(advanced.themeMode()) }
@@ -274,6 +295,12 @@ private fun ClickPlusDashboard() {
                 mappings = mappings,
                 onAdd = { route = DashboardRoute.Editor(null) },
                 onEdit = { route = DashboardRoute.Editor(it) },
+                onDelete = { item ->
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                        prefs.saveMappings(mappings.filterNot { it.id == item.id })
+                        advanced.removeRuleMetadata(item.id)
+                    }
+                },
                 onStatus = { route = DashboardRoute.Status },
                 onLogs = { route = DashboardRoute.Logs },
                 onProfiles = { route = DashboardRoute.Profiles },
@@ -292,10 +319,12 @@ private fun ClickPlusDashboard() {
             )
             DashboardRoute.Settings -> SettingsScreen(
                 timeout = timeout,
+                actionDelay = actionDelay,
                 showTapCount = showTapCount,
                 themeMode = themeMode,
                 onBack = { route = DashboardRoute.Home },
                 onTimeout = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapTimeout(value) } },
+                onActionDelay = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveActionDelay(value) } },
                 onShowTapCount = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveShowTapCount(value) } },
                 onTheme = {
                     themeMode = it
