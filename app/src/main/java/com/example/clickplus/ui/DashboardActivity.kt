@@ -515,15 +515,23 @@ private fun HomeDashboard(
             item {
                 Spacer(Modifier.height(6.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onAdd, Modifier.weight(1f)) {
-                        Icon(Icons.Outlined.Add, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("הוספת פעולה")
+                    Button(
+                        onClick = onAdd,
+                        Modifier.weight(1f).height(54.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                    ) {
+                        Icon(Icons.Outlined.Add, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("הוספת פעולה", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    OutlinedButton(onClick = onLogs, Modifier.weight(1f)) {
-                        Icon(Icons.Outlined.History, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("יומן")
+                    OutlinedButton(
+                        onClick = onLogs,
+                        Modifier.weight(1f).height(54.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                    ) {
+                        Icon(Icons.Outlined.History, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("יומן", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -578,9 +586,15 @@ private fun RuleCard(
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     Text(
                         item.name.ifBlank { "פעולה" },
                         fontWeight = FontWeight.Bold,
@@ -590,7 +604,7 @@ private fun RuleCard(
                     Text(
                         item.pressSummary() + " · " + item.actionSummary(),
                         style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -605,9 +619,16 @@ private fun RuleCard(
                     Icon(Icons.Outlined.Delete, "מחיקה")
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                AssistSummaryChip("פרופיל: " + profileName)
-                AssistSummaryChip(if (item.enabled) "מופעלת" else "מושבתת")
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(Modifier.weight(1f)) {
+                    AssistSummaryChip("פרופיל: " + profileName)
+                }
+                Box(Modifier.weight(1f)) {
+                    AssistSummaryChip(if (item.enabled) "מופעלת" else "מושבתת")
+                }
             }
         }
     }
@@ -2416,7 +2437,7 @@ private fun ProfileActionPicker(
 ) {
     val context = LocalContext.current
     val repo = remember { AdvancedRuleRepository(context) }
-    val profiles = repo.profiles()
+    val profiles = repo.profiles().filter { it.enabled }
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text("בחירת פרופיל", fontWeight = FontWeight.Bold)
         Text(
