@@ -158,7 +158,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
             appPackage = targetPackage,
             success = success,
             detail = detail,
-        ))
+        )
     }
 
     private fun executeSystem(actionId: String): ActionExecutionResult = when (actionId) {
