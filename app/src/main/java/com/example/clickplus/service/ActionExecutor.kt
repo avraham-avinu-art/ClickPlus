@@ -21,6 +21,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         return config.actionType == ActionType.APP_TAP ||
             config.actionType == ActionType.MULTI_POINT_TAP ||
             config.actionType == ActionType.APP ||
+            config.actionType == ActionType.PROFILE ||
             SystemActionPreset.entries.any { it.id == config.systemActionId }
     }
 
@@ -42,6 +43,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                     service.startActivity(intent)
                     ActionExecutionResult.success("אפליקציית היעד נפתחה")
                 }
+                ActionType.PROFILE -> executeProfile(config.systemActionId)
                 ActionType.SYSTEM -> executeSystem(
                     config.systemActionId,
                     if (config.systemActionId == SystemActionPreset.DIAL_CONTACT.id) {
@@ -260,6 +262,20 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         )
     }
 
+
+    private fun executeProfile(profileActionId: String): ActionExecutionResult {
+        return when (profileActionId) {
+            "profile_next" ->
+                ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(service, 1))
+            "profile_previous" ->
+                ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(service, -1))
+            "profile_default" -> {
+                AdvancedRuleRepository.setActiveProfileId(service, "default")
+                ActionExecutionResult.success("חזר לפרופיל ברירת המחדל")
+            }
+            else -> ActionExecutionResult.failure("פעולת פרופיל ClickPlus אינה מוכרת")
+        }
+    }
 
     private fun executeSystem(actionId: String, actionParameter: String = ""): ActionExecutionResult = when (actionId) {
         SystemActionPreset.HOME.id ->
