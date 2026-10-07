@@ -16,6 +16,8 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -152,20 +154,39 @@ private sealed interface DashboardRoute {
 }
 
 class DashboardActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_FLASH_ONLY = "flash_only"
+        private const val UI_PROCESS_PID = "clickplus_ui_process_pid"
+        private const val FLASH_DURATION_MS = 280L
+    }
+
     private var runtimeRequestActive = false
     private var showPermissionIntro by mutableStateOf(false)
     private var notificationRequestAttempted = false
+    private var openAccessibilityAfterNotification = false
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
         runtimeRequestActive = false
+        if (openAccessibilityAfterNotification && !isAccessibilityEnabled(this)) {
+            openAccessibilityAfterNotification = false
+            openAccessibilitySettings()
+        }
+    }
+
+    private fun openAccessibilitySettings() {
+        runCatching {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val flashOnly = intent.getBooleanExtra(EXTRA_FLASH_ONLY, false)
         val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+        prefs.edit().putInt(UI_PROCESS_PID, android.os.Process.myPid()).apply()
         showPermissionIntro = !prefs.getBoolean("permission_intro_completed", false)
         prefs.edit()
             .putBoolean("first_ui_opened", true)
@@ -181,16 +202,25 @@ class DashboardActivity : ComponentActivity() {
                         .putBoolean("permission_bootstrap_done", true)
                         .apply()
                     showPermissionIntro = false
-                    if (Build.VERSION.SDK_INT >= 33 &&
+
+                    if (isAccessibilityEnabled(this@DashboardActivity)) {
+                        return@ClickPlusDashboard
+                    }
+
+                    val notificationNeeded = Build.VERSION.SDK_INT >= 33 &&
                         ContextCompat.checkSelfPermission(
                             this@DashboardActivity,
                             Manifest.permission.POST_NOTIFICATIONS,
                         ) != PackageManager.PERMISSION_GRANTED &&
                         !notificationRequestAttempted
-                    ) {
+
+                    if (notificationNeeded) {
+                        openAccessibilityAfterNotification = true
                         notificationRequestAttempted = true
                         runtimeRequestActive = true
                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        openAccessibilitySettings()
                     }
                 },
                 onLaterPermissionSetup = {
@@ -202,6 +232,14 @@ class DashboardActivity : ComponentActivity() {
                 },
             )
         }
+
+        if (flashOnly) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (!isFinishing) {
+                    runCatching { finishAndRemoveTask() }
+                }
+            }, FLASH_DURATION_MS)
+        }
     }
 
     override fun onResume() {
@@ -209,7 +247,16 @@ class DashboardActivity : ComponentActivity() {
         getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
             .edit()
             .putBoolean("background_only", false)
+            .putInt(UI_PROCESS_PID, android.os.Process.myPid())
             .apply()
+    }
+
+    override fun onDestroy() {
+        val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+        if (prefs.getInt(UI_PROCESS_PID, -1) == android.os.Process.myPid()) {
+            prefs.edit().remove(UI_PROCESS_PID).apply()
+        }
+        super.onDestroy()
     }
 }
 
@@ -360,18 +407,7 @@ private fun HomeDashboard(
     val activeProfileName = remember(activeProfile) {
         repo.profiles().firstOrNull { it.id == activeProfile }?.name ?: "כללי"
     }
-    var query by remember { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<KeyActionConfig?>(null) }
-
-    val filtered = mappings.filter {
-        val q = query.trim()
-        q.isBlank() || listOf(
-            it.name,
-            it.pressSummary(),
-            it.actionSummary(),
-            it.contextSummary(),
-        ).any { value -> value.contains(q, ignoreCase = true) }
-    }
 
     Scaffold(
         topBar = {
@@ -444,16 +480,6 @@ private fun HomeDashboard(
                 }
             }
             item {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                    label = { Text("חיפוש פעולות") },
-                )
-            }
-            item {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -476,10 +502,10 @@ private fun HomeDashboard(
                     }
                 }
             }
-            if (filtered.isEmpty()) {
+            if (mappings.isEmpty()) {
                 item { EmptyState(onAdd) }
             } else {
-                items(filtered, key = { it.id }) { item ->
+                items(mappings, key = { it.id }) { item ->
                     val profileName = repo.profiles().firstOrNull {
                         it.id == repo.getRuleMetadata(item.id).profileId
                     }?.name ?: "כללי"
