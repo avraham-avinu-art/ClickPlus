@@ -903,21 +903,26 @@ private fun LogsScreen(
                             }
                             val rule = mappings.firstOrNull { it.id == log.ruleId }
                             val ruleDetails = if (rule != null) {
-                                when (rule.actionType) {
-                                    ActionType.APP -> "פתיחת אפליקציה: " + rule.targetAppName.ifBlank { rule.targetPackage }
-                                    ActionType.APP_TAP -> "פתיחה ולחיצה באפליקציה: " + rule.screenTapAppName.ifBlank { rule.screenTapPackage }
-                                    ActionType.MULTI_POINT_TAP -> "פתיחה ושתי לחיצות באפליקציה: " + rule.screenTapAppName.ifBlank { rule.screenTapPackage }
+                                val baseDetails = when (rule.actionType) {
+                                    ActionType.SYSTEM -> rule.actionSummary()
+                                    ActionType.APP -> "פתיחת " + rule.targetAppName.ifBlank { rule.targetPackage }
+                                    ActionType.APP_TAP -> "פתיחת " + rule.screenTapAppName.ifBlank { rule.screenTapPackage }) + " ולחיצה במיקום שנלמד"
+                                    ActionType.MULTI_POINT_TAP -> "פתיחת " + rule.screenTapAppName.ifBlank { rule.screenTapPackage }) + " ושתי לחיצות במיקומים שנלמדו"
                                     ActionType.PROFILE -> {
                                         val targetProfileId = profileIdFromActionId(rule.systemActionId)
                                         val targetProfile = targetProfileId?.let { id ->
                                             AdvancedRuleRepository(context).profiles().firstOrNull { it.id == id }
                                         }
-                                        "החלפת פרופיל: " + (targetProfile?.name ?: "הפרופיל שנבחר")
+                                        "מעבר לפרופיל " + (targetProfile?.name ?: "שנבחר")
                                     }
-                                    ActionType.SYSTEM -> rule.actionSummary()
+                                }
+                                if (log.detail.startsWith("בדיקה ידנית")) {
+                                    "בדיקה ידנית · " + baseDetails
+                                } else {
+                                    baseDetails
                                 }
                             } else {
-                                log.actionLabel.ifBlank { log.message }
+                                if (log.detail.startsWith("בדיקה ידנית")) "בדיקה ידנית" else log.actionLabel.ifBlank { log.message }
                             }
                             Text(
                                 "שם הפעולה: " + (rule?.name?.ifBlank { null } ?: log.actionLabel.ifBlank { "פעולה" }),
@@ -928,19 +933,13 @@ private fun LogsScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             Text(
-                                "תוצאה: " + (when (log.success) {
-                                    true -> "הצלחה"
-                                    false -> "כישלון"
-                                    null -> "ממתין"
-                                }),
+                                "סטטוס: " + when (log.success) {
+                                    true -> "הפעולה הצליחה"
+                                    false -> "הפעולה לא הצליחה"
+                                    null -> "הפעולה בביצוע"
+                                },
                                 style = MaterialTheme.typography.bodyMedium,
                             )
-                            if (log.success == false) {
-                                Text("סיבת הכישלון: " + log.detail.ifBlank { "לא נמסר הסבר." })
-                            } else if (log.detail.isNotBlank()) {
-                                Text(log.detail, style = MaterialTheme.typography.bodySmall)
-                            }
-                            if (log.appPackage.isNotBlank()) Text(log.appPackage, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
