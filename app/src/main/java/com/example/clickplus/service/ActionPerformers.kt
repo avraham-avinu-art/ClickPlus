@@ -6,6 +6,7 @@ import android.media.AudioManager
 import android.provider.Settings
 import android.view.KeyEvent
 import com.example.clickplus.data.ActionType
+import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.SystemActionPreset
 
@@ -74,6 +75,7 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
 
         return try {
             when (config.actionType) {
+                ActionType.MULTI_POINT_TAP -> ActionExecutionResult.failure("שתי לחיצות אוטומטיות דורשות מצב מלא עם שירות נגישות")
                 ActionType.APP_TAP -> ActionExecutionResult.failure("לחיצה בתוך אפליקציה דורשת מצב מלא עם שירות נגישות")
                 ActionType.APP -> {
                     if (config.targetPackage.isBlank()) {
@@ -207,6 +209,13 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
             AudioManager.FLAG_SHOW_UI,
         )
         return ActionExecutionResult.success(reason)
+    }
+
+    private fun openSettings(action: String, reason: String): ActionExecutionResult = try {
+        context.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        ActionExecutionResult.success(reason)
+    } catch (error: Throwable) {
+        ActionExecutionResult.failure("לא ניתן לפתוח את ההגדרה: " + (error.message ?: "שגיאה"))
     }
 
     private fun currentVolumeText(): String {
