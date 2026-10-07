@@ -191,12 +191,14 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
                 when {
                     isLauncherPackage(eventPackage) -> {
+                        tapDetector.resetOpenAppState()
                         // Leaving an app for the launcher must break the foreground
                         // package identity so the next return to the same app is a new entry.
                         lastExternalPackage = ""
                         AdvancedRuleRepository.setLastExternalPackage(applicationContext, "")
                     }
                     eventPackage == "com.android.systemui" -> {
+                        tapDetector.resetOpenAppState()
                         // System UI is not a target app; clear the previous foreground
                         // package so the next external app is always treated as a new entry.
                         lastExternalPackage = ""
