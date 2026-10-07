@@ -369,6 +369,7 @@ private fun HomeDashboard(
     mappings: List<KeyActionConfig>,
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
+    onDelete: (KeyActionConfig) -> Unit,
     onStatus: () -> Unit,
     onLogs: () -> Unit,
     onProfiles: () -> Unit,
@@ -377,7 +378,9 @@ private fun HomeDashboard(
 ) {
     val context = LocalContext.current
     val mode = AdvancedRuleRepository.currentMode(context)
+    val accessibilityEnabled = isAccessibilityEnabled(context)
     var query by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<KeyActionConfig?>(null) }
     val active = mappings.count { it.enabled }
     val apps = mappings.mapNotNull {
         when {
@@ -397,14 +400,8 @@ private fun HomeDashboard(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text("קליק פלוס", fontWeight = FontWeight.Bold)
-                        Text("מרכז שליטה", style = MaterialTheme.typography.labelSmall)
-                    }
-                },
+                title = { Text("קליק פלוס", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = onStatus) { Icon(Icons.Outlined.Tune, "מצב השירות") }
                     IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "הגדרות") }
                 },
             )
@@ -466,7 +463,10 @@ private fun HomeDashboard(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 ) {
                     Row(
-                        Modifier.fillMaxWidth().padding(20.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onStatus)
+                            .padding(20.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Surface(Modifier.size(52.dp), CircleShape, color = MaterialTheme.colorScheme.primary) {
@@ -476,9 +476,19 @@ private fun HomeDashboard(
                         Column(Modifier.weight(1f)) {
                             Text("ClickPlus פעילה", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Text(
-                                if (mode == AppMode.FULL) "מצב מלא · נגישות פעילה" else "מצב בסיסי · ללא נגישות",
+                                when {
+                                    mode == AppMode.BASIC -> "מצב בסיסי · ללא נגישות"
+                                    accessibilityEnabled -> "מצב מלא · נגישות פעילה"
+                                    else -> "מצב מלא · נגישות לא פעילה"
+                                },
                                 style = MaterialTheme.typography.bodyMedium
                             )
+                            if (mode == AppMode.FULL && !accessibilityEnabled) {
+                                Text(
+                                    "יש להפעיל את שירות הנגישות כדי שפעולות שדורשות אותו יעבדו.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                         }
                     }
                 }
@@ -517,10 +527,31 @@ private fun HomeDashboard(
                 }
             } else {
                 items(filtered, key = { it.id }) { item ->
-                    RuleCard(item = item, onEdit = { onEdit(item.id) })
+                    RuleCard(
+                        item = item,
+                        onEdit = { onEdit(item.id) },
+                        onDelete = { deleteTarget = item },
+                    )
                 }
             }
         }
+    }
+
+    deleteTarget?.let { item ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("למחוק את הפעולה?") },
+            text = { Text("הפעולה וההגדרות המתקדמות שלה יוסרו.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteTarget = null
+                    onDelete(item)
+                }) { Text("מחיקה") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) { Text("ביטול") }
+            },
+        )
     }
 }
 
@@ -556,7 +587,7 @@ private fun StatCard(title: String, value: String, modifier: Modifier) {
 }
 
 @Composable
-private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit) {
+private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit, onDelete: () -> Unit) {
     val meta = AdvancedRuleRepository(LocalContext.current).getRuleMetadata(item.id)
     OutlinedCard(
         modifier = Modifier
@@ -592,6 +623,9 @@ private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit) {
                 IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Outlined.Edit, "עריכה")
                 }
+                IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Outlined.Delete, "מחיקה")
+                }
             }
             Row(
                 Modifier
@@ -611,11 +645,6 @@ private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit) {
                             overflow = TextOverflow.Ellipsis,
                         )
                     },
-                    modifier = Modifier.height(34.dp),
-                )
-                AssistChip(
-                    onClick = {},
-                    label = { Text("עדיפות " + meta.priority, maxLines = 1) },
                     modifier = Modifier.height(34.dp),
                 )
                 AssistChip(
