@@ -417,13 +417,6 @@ private fun HomeDashboard(
                         LocalLayoutDirection provides LayoutDirection.Ltr
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            HelpIconButton(
-                                "הסבר על המסך הראשי",
-                                "כאן נמצאות הפעולות שהגדרת. אפשר לערוך פעולה, למחוק אותה או להפעיל ולהשבית אותה ישירות מהרשימה."
-                            )
-                            IconButton(onClick = onStatus) {
-                                Icon(Icons.Outlined.Tune, "סטטוס השירות")
-                            }
                             IconButton(onClick = onSettings) {
                                 Icon(Icons.Outlined.Settings, "הגדרות")
                             }
@@ -439,65 +432,33 @@ private fun HomeDashboard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
-                Card(
-                    Modifier.fillMaxWidth().clickable(onClick = onStatus),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Surface(
-                            Modifier.size(48.dp),
-                            CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
-                        ) {
-                            Icon(
-                                Icons.Outlined.CheckCircle,
-                                null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(11.dp),
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("קליק פלוס פעיל", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            Text(
-                                if (mode == AppMode.FULL && accessibility) {
-                                    "מצב מלא · זיהוי כניסות לאפליקציות פעיל"
-                                } else if (mode == AppMode.FULL) {
-                                    "מצב מלא · שירות הנגישות אינו פעיל"
-                                } else {
-                                    "מצב בסיסי · ללא שירות נגישות"
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Text("פרופיל פעיל: " + activeProfileName, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-            item {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     OutlinedButton(
                         onClick = onStatus,
-                        Modifier.weight(1f).heightIn(min = 44.dp),
+                        Modifier.weight(1f).height(54.dp),
                     ) {
-                        Icon(Icons.Outlined.Tune, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("סטטוס השירות")
+                        Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("סטטוס השירות", maxLines = 2, textAlign = TextAlign.Center)
                     }
                     OutlinedButton(
                         onClick = onProfiles,
-                        Modifier.weight(1f).heightIn(min = 44.dp),
+                        Modifier.weight(1f).height(54.dp),
                     ) {
-                        Icon(Icons.Outlined.Settings, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("פרופילים")
+                        Icon(Icons.Outlined.Settings, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("פרופילים", maxLines = 2, textAlign = TextAlign.Center)
+                    }
+                    OutlinedButton(
+                        onClick = onStatus,
+                        Modifier.weight(1f).height(54.dp),
+                    ) {
+                        Icon(Icons.Outlined.CheckCircle, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("קליק פלוס פעיל", maxLines = 2, textAlign = TextAlign.Center)
                     }
                 }
             }
@@ -579,7 +540,7 @@ private fun RuleCard(
     onEnabledChange: (Boolean) -> Unit,
 ) {
     OutlinedCard(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().clickable(onClick = onEdit),
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -680,12 +641,6 @@ private fun PermissionIntroScreen(
                         Text("נתוני שימוש – רק אם משתמשים במצב בסיסי שזקוק לזיהוי אפליקציה פעילה.")
                     }
                 }
-            }
-            item {
-                HelpIconButton(
-                    "למה יש הרשאות?",
-                    "ההרשאות אינן מטרה בפני עצמן. כל אחת מהן משמשת רק לתכונה שמצריכה אותה, והאפליקציה נשארת זמינה גם בלי להעניק את כולן מיד."
-                )
             }
             item {
                 Button(onClick = onBegin, Modifier.fillMaxWidth().height(52.dp)) {
@@ -817,7 +772,10 @@ private fun StatusCard(title: String, ok: Boolean, detail: String) {
 }
 
 @Composable
-private fun LogsScreen(onBack: () -> Unit) {
+private fun LogsScreen(
+    mappings: List<KeyActionConfig>,
+    onBack: () -> Unit,
+) {
     val context = LocalContext.current
     var logs by remember { mutableStateOf(AdvancedRuleRepository.logs(context)) }
     val lifecycle = LocalLifecycleOwner.current
@@ -873,9 +831,23 @@ private fun LogsScreen(onBack: () -> Unit) {
                                     Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(log.timestamp)), style = MaterialTheme.typography.labelSmall)
                                 }
                             }
-                            Text(log.actionLabel.ifBlank { log.message }, fontWeight = FontWeight.Bold)
-                            if (log.message.isNotBlank() && log.message != log.actionLabel) Text(log.message, style = MaterialTheme.typography.bodyMedium)
-                            if (log.success == false) Text("סיבת הכישלון: " + log.detail.ifBlank { "לא נמסר הסבר." })
+                            val rule = mappings.firstOrNull { it.id == log.ruleId }
+                            Text(
+                                "שם הפעולה: " + log.actionLabel.ifBlank { log.message },
+                                fontWeight = FontWeight.Bold,
+                            )
+                            if (rule != null) {
+                                Text(
+                                    "הפעולה שהיה צריך לבצע: " + rule.actionSummary(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                            if (log.message.isNotBlank() && log.message != log.actionLabel) {
+                                Text(log.message, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            if (log.success == false) {
+                                Text("סיבת הכישלון: " + log.detail.ifBlank { "לא נמסר הסבר." })
+                            }
                             else if (log.detail.isNotBlank()) Text(log.detail, style = MaterialTheme.typography.bodySmall)
                             if (log.appPackage.isNotBlank()) Text(log.appPackage, style = MaterialTheme.typography.labelSmall)
                         }
@@ -1123,7 +1095,7 @@ private fun SettingsScreen(
                         Switch(checked = showTapCount, onCheckedChange = onShowTapCount)
                     }
                     Spacer(Modifier.height(6.dp))
-                    Text("מיקום אופקי: " + tapCountX + "% משמאל")
+                    Text("מיקום אופקי: " + tapCountX + "% מימין")
                     Slider(
                         value = tapCountX.toFloat(),
                         onValueChange = { onTapCountX(it.toInt()) },
