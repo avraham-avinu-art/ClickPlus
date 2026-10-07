@@ -906,8 +906,8 @@ private fun LogsScreen(
                                 val baseDetails = when (rule.actionType) {
                                     ActionType.SYSTEM -> rule.actionSummary()
                                     ActionType.APP -> "פתיחת " + rule.targetAppName.ifBlank { rule.targetPackage }
-                                    ActionType.APP_TAP -> "פתיחת " + rule.screenTapAppName.ifBlank { rule.screenTapPackage }) + " ולחיצה במיקום שנלמד"
-                                    ActionType.MULTI_POINT_TAP -> "פתיחת " + rule.screenTapAppName.ifBlank { rule.screenTapPackage }) + " ושתי לחיצות במיקומים שנלמדו"
+                                    ActionType.APP_TAP -> "פתיחת " + rule.screenTapAppName.ifBlank { rule.screenTapPackage } + " ולחיצה במיקום שנלמד"
+                                    ActionType.MULTI_POINT_TAP -> "פתיחת " + rule.screenTapAppName.ifBlank { rule.screenTapPackage } + " ושתי לחיצות במיקומים שנלמדו"
                                     ActionType.PROFILE -> {
                                         val targetProfileId = profileIdFromActionId(rule.systemActionId)
                                         val targetProfile = targetProfileId?.let { id ->
