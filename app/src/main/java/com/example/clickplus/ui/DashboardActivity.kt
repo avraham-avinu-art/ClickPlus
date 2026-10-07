@@ -1398,15 +1398,9 @@ private fun EditorScreen(
     var appDialog by remember { mutableStateOf(false) }
     var screenAppDialog by remember { mutableStateOf(false) }
     var learning by remember { mutableStateOf(false) }
-    var orientation by remember {
-        mutableStateOf(
-            if (context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
-                "landscape"
-            } else {
-                "portrait"
-            }
-        )
-    }
+    var learningStage by remember { mutableIntStateOf(1) }
+    var actionTypeChosen by remember(existing?.id) { mutableStateOf(existing != null) }
+    val runtimePrefs = remember { context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE) }
     var showDelete by remember { mutableStateOf(false) }
 
     LaunchedEffect(draft.triggerType, draft.actionType) {
@@ -1420,56 +1414,46 @@ private fun EditorScreen(
 
     LaunchedEffect(draft.id) {
         while (true) {
-            val p = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            if (p.getBoolean("tap_capture_ready", false)) {
-                val capturedX = p.getFloat("tap_capture_x_ratio", -1f)
-                val capturedY = p.getFloat("tap_capture_y_ratio", -1f)
-                val pkg = p.getString("tap_capture_package", "").orEmpty()
-                val name = p.getString("tap_capture_app_name", "").orEmpty()
+            if (runtimePrefs.getBoolean("tap_capture_ready", false)) {
+                val capturedX = runtimePrefs.getFloat("tap_capture_x_ratio", -1f)
+                val capturedY = runtimePrefs.getFloat("tap_capture_y_ratio", -1f)
+                val capturedStage = runtimePrefs.getInt("tap_capture_stage", 1)
+                val pkg = runtimePrefs.getString("tap_capture_package", "").orEmpty()
+                val name = runtimePrefs.getString("tap_capture_app_name", "").orEmpty()
                 if (capturedX >= 0f && capturedY >= 0f) {
-                    draft = if (draft.actionType == ActionType.APP_TAP) {
-                        draft.copy(
+                    if (capturedStage == 2) {
+                        draft = draft.copy(screenTapSecondXRatio = capturedX, screenTapSecondYRatio = capturedY)
+                        learning = false
+                        learningStage = 1
+                    } else {
+                        draft = draft.copy(
                             screenTapPackage = pkg,
                             screenTapAppName = name,
                             screenTapXRatio = capturedX,
                             screenTapYRatio = capturedY,
                         )
-                    } else {
-                        draft.copy(
-                            triggerType = TriggerType.SCREEN_TAP,
-                            screenTapPackage = pkg,
-                            screenTapAppName = name,
-                            screenTapXRatio = capturedX,
-                            screenTapYRatio = capturedY,
-                        )
-                    }
-                    metadata = if (orientation == "landscape") {
-                        metadata.copy(landscapeX = capturedX, landscapeY = capturedY)
-                    } else {
-                        metadata.copy(portraitX = capturedX, portraitY = capturedY)
+                        if (draft.actionType == ActionType.MULTI_POINT_TAP) {
+                            learningStage = 2
+                            learning = true
+                            runtimePrefs.edit()
+                                .putBoolean("tap_learning", true)
+                                .putInt("tap_learning_stage", 2)
+                                .putString("tap_learning_package", pkg)
+                                .apply()
+                        } else {
+                            learning = false
+                            learningStage = 1
+                        }
                     }
                 }
-                p.edit().putBoolean("tap_capture_ready", false).apply()
-                learning = false
+                runtimePrefs.edit().putBoolean("tap_capture_ready", false).remove("tap_capture_stage").apply()
             }
-            kotlinx.coroutines.delay(250)
+            kotlinx.coroutines.delay(200)
         }
     }
 
-    val rawX = if (orientation == "landscape" && metadata.landscapeX >= 0f) {
-        metadata.landscapeX
-    } else if (metadata.portraitX >= 0f) {
-        metadata.portraitX
-    } else {
-        draft.screenTapXRatio.coerceAtLeast(0f)
-    }
-    val rawY = if (orientation == "landscape" && metadata.landscapeY >= 0f) {
-        metadata.landscapeY
-    } else if (metadata.portraitY >= 0f) {
-        metadata.portraitY
-    } else {
-        draft.screenTapYRatio.coerceAtLeast(0f)
-    }
+    val rawX = draft.screenTapXRatio.coerceAtLeast(0f)
+    val rawY = draft.screenTapYRatio.coerceAtLeast(0f)
     val x = rawX.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
     val y = rawY.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
 
