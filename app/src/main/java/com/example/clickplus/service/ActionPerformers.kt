@@ -145,13 +145,18 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
                         }
                     }
                     SystemActionPreset.DIAL_CONTACT.id -> {
-                        context.startActivity(
-                            Intent(
-                                Intent.ACTION_PICK,
-                                android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                        ActionExecutionResult.success("בחירת איש קשר נפתחה")
+                        val number = config.contactNumber.ifBlank { config.actionParameter }.trim()
+                        if (number.isBlank()) {
+                            ActionExecutionResult.failure("לא נבחר איש קשר")
+                        } else {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_DIAL,
+                                    android.net.Uri.parse("tel:" + android.net.Uri.encode(number))
+                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                            ActionExecutionResult.success("מסך החיוג לאיש הקשר נפתח")
+                        }
                     }
                     SystemActionPreset.ANSWER_CALL.id,
                     SystemActionPreset.DECLINE_CALL.id ->
