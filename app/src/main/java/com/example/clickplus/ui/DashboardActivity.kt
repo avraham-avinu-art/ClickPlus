@@ -1221,7 +1221,6 @@ private fun EditorScreen(
     onDelete: (KeyActionConfig) -> Unit,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val repo = remember { AdvancedRuleRepository(context) }
     var draft by remember(existing?.id) {
         mutableStateOf(existing ?: KeyActionConfig(
@@ -1236,29 +1235,37 @@ private fun EditorScreen(
     var appDialog by remember { mutableStateOf(false) }
     var screenAppDialog by remember { mutableStateOf(false) }
     var learning by remember { mutableStateOf(false) }
-    var orientation by remember { mutableStateOf(if (context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait") }
+    var orientation by remember {
+        mutableStateOf(
+            if (context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+                "landscape"
+            } else {
+                "portrait"
+            }
+        )
+    }
     var showDelete by remember { mutableStateOf(false) }
 
     LaunchedEffect(draft.id) {
         while (true) {
             val p = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
             if (p.getBoolean("tap_capture_ready", false)) {
-                val x = p.getFloat("tap_capture_x_ratio", -1f)
-                val y = p.getFloat("tap_capture_y_ratio", -1f)
+                val capturedX = p.getFloat("tap_capture_x_ratio", -1f)
+                val capturedY = p.getFloat("tap_capture_y_ratio", -1f)
                 val pkg = p.getString("tap_capture_package", "").orEmpty()
                 val name = p.getString("tap_capture_app_name", "").orEmpty()
-                if (x >= 0f && y >= 0f) {
+                if (capturedX >= 0f && capturedY >= 0f) {
                     draft = draft.copy(
                         triggerType = TriggerType.SCREEN_TAP,
                         screenTapPackage = pkg,
                         screenTapAppName = name,
-                        screenTapXRatio = x,
-                        screenTapYRatio = y,
+                        screenTapXRatio = capturedX,
+                        screenTapYRatio = capturedY,
                     )
                     metadata = if (orientation == "landscape") {
-                        metadata.copy(landscapeX = x, landscapeY = y)
+                        metadata.copy(landscapeX = capturedX, landscapeY = capturedY)
                     } else {
-                        metadata.copy(portraitX = x, portraitY = y)
+                        metadata.copy(portraitX = capturedX, portraitY = capturedY)
                     }
                 }
                 p.edit().putBoolean("tap_capture_ready", false).apply()
@@ -1268,8 +1275,20 @@ private fun EditorScreen(
         }
     }
 
-    val rawX = if (orientation == "landscape" && metadata.landscapeX >= 0f) metadata.landscapeX else if (metadata.portraitX >= 0f) metadata.portraitX else draft.screenTapXRatio.coerceAtLeast(0f)
-    val rawY = if (orientation == "landscape" && metadata.landscapeY >= 0f) metadata.landscapeY else if (metadata.portraitY >= 0f) metadata.portraitY else draft.screenTapYRatio.coerceAtLeast(0f)
+    val rawX = if (orientation == "landscape" && metadata.landscapeX >= 0f) {
+        metadata.landscapeX
+    } else if (metadata.portraitX >= 0f) {
+        metadata.portraitX
+    } else {
+        draft.screenTapXRatio.coerceAtLeast(0f)
+    }
+    val rawY = if (orientation == "landscape" && metadata.landscapeY >= 0f) {
+        metadata.landscapeY
+    } else if (metadata.portraitY >= 0f) {
+        metadata.portraitY
+    } else {
+        draft.screenTapYRatio.coerceAtLeast(0f)
+    }
     val x = rawX.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
     val y = rawY.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
 
@@ -1277,9 +1296,17 @@ private fun EditorScreen(
         topBar = {
             TopAppBar(
                 title = { Text(if (existing == null) "הוספת פעולה" else "עריכת פעולה") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Outlined.ArrowForward, "חזרה")
+                    }
+                },
                 actions = {
-                    if (existing != null) IconButton(onClick = { showDelete = true }) { Icon(Icons.Outlined.Delete, "מחיקה") }
+                    if (existing != null) {
+                        IconButton(onClick = { showDelete = true }) {
+                            Icon(Icons.Outlined.Delete, "מחיקה")
+                        }
+                    }
                 },
             )
         },
@@ -1287,68 +1314,104 @@ private fun EditorScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        if (draft.name.isBlank()) draft = draft.copy(name = draft.triggerType.titleHebrew)
+                        if (draft.name.isBlank()) {
+                            draft = draft.copy(name = draft.triggerType.titleHebrew)
+                        }
                         onSave(
                             draft.copy(
                                 screenTapXRatio = if (draft.screenTapXRatio >= 0f) draft.screenTapXRatio else x,
                                 screenTapYRatio = if (draft.screenTapYRatio >= 0f) draft.screenTapYRatio else y,
-                                screenTapToleranceRatio = maxOf(metadata.toleranceXRatio, metadata.toleranceYRatio),
+                                screenTapToleranceRatio = maxOf(
+                                    metadata.toleranceXRatio,
+                                    metadata.toleranceYRatio,
+                                ),
                             ),
                             metadata,
                         )
                     },
-                    Modifier.fillMaxWidth().padding(8.dp).height(48.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                        .height(50.dp),
                 ) {
-                    Icon(Icons.Outlined.Save, null); Spacer(Modifier.width(8.dp)); Text("שמירת פעולה")
+                    Icon(Icons.Outlined.Save, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("שמירת פעולה", fontWeight = FontWeight.Bold)
                 }
             }
         },
     ) { padding ->
         LazyColumn(
-            Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(10.dp, 6.dp, 10.dp, 14.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
+            Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
-                SettingCard("פרטי הכלל", "שם הפעולה שיופיע ברשימה.") {
+                EditorSectionCard(
+                    number = "1",
+                    title = "פרטי הפעולה",
+                    subtitle = "השם שיוצג ביומן וברשימת הפעולות.",
+                ) {
                     OutlinedTextField(
                         value = draft.name,
                         onValueChange = { draft = draft.copy(name = it) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        label = { Text("שם פעולה") },
+                        label = { Text("שם הפעולה") },
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("פעולה פעילה", Modifier.weight(1f))
-                        Switch(checked = draft.enabled, onCheckedChange = { draft = draft.copy(enabled = it) })
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("הפעלת הפעולה", fontWeight = FontWeight.Medium)
+                            Text(
+                                if (draft.enabled) "הפעולה פעילה וזמינה להפעלה."
+                                else "הפעולה שמורה אך לא תופעל.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Switch(
+                            checked = draft.enabled,
+                            onCheckedChange = { draft = draft.copy(enabled = it) },
+                        )
                     }
                 }
             }
+
             item {
-                SettingCard("מתי להפעיל?", "בחר סוג טריגר ואת מספר הכניסות/לחיצות.") {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
+                EditorSectionCard(
+                    number = "2",
+                    title = "מתי להפעיל?",
+                    subtitle = "בחר את סוג ההפעלה ואת מספר הכניסות או הלחיצות.",
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         ChoiceChip(
                             selected = draft.triggerType == TriggerType.APP_ENTRY,
                             onClick = { draft = draft.copy(triggerType = TriggerType.APP_ENTRY) },
-                            label = "כניסה",
+                            label = "כניסה לאפליקציה",
                             modifier = Modifier.weight(1f),
                         )
                         ChoiceChip(
                             selected = draft.triggerType == TriggerType.SCREEN_TAP,
                             onClick = { draft = draft.copy(triggerType = TriggerType.SCREEN_TAP) },
-                            label = "מיקום מסך",
+                            label = "לחיצה במיקום",
                             modifier = Modifier.weight(1f),
                         )
                     }
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        maxItemsInEachRow = 5,
+                    Text(
+                        "מספר הפעלות רצופות",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         (1..10).forEach { n ->
                             CompactChoiceChip(
@@ -1360,180 +1423,391 @@ private fun EditorScreen(
                     }
                 }
             }
-            if (draft.triggerType == TriggerType.APP_ENTRY) {
-                item {
-                    SettingCard("באיזה מצב?", "התאמה לאפליקציה/מצב לפני הכניסה ל־ClickPlus.") {
+
+            item {
+                EditorSectionCard(
+                    number = "3",
+                    title = "באיזה מצב?",
+                    subtitle = if (draft.triggerType == TriggerType.APP_ENTRY) {
+                        "קבע מתי הכלל מתאים לפי האפליקציה והמצב לפני ClickPlus."
+                    } else {
+                        "בחר באיזו אפליקציה ובאיזה מיקום לחיצה הכלל יזוהה."
+                    },
+                ) {
+                    if (draft.triggerType == TriggerType.APP_ENTRY) {
                         FlowRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
+                            maxItemsInEachRow = 2,
                         ) {
                             ContextConditionType.entries.forEach { type ->
                                 ChoiceChip(
                                     selected = draft.contextConditionType == type,
-                                    onClick = { draft = draft.copy(contextConditionType = type) },
+                                    onClick = {
+                                        draft = draft.copy(contextConditionType = type)
+                                    },
                                     label = type.titleHebrew,
-                                    modifier = Modifier.widthIn(min = 118.dp),
+                                    modifier = Modifier.widthIn(min = 120.dp).weight(1f),
                                 )
                             }
                         }
-                        if (draft.contextConditionType == ContextConditionType.APP || draft.contextConditionType == ContextConditionType.RADIO) {
-                            Button(onClick = { appDialog = true }, Modifier.fillMaxWidth()) {
+
+                        if (
+                            draft.contextConditionType == ContextConditionType.APP ||
+                            draft.contextConditionType == ContextConditionType.RADIO
+                        ) {
+                            OutlinedButton(
+                                onClick = { appDialog = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(Icons.Outlined.Apps, null)
+                                Spacer(Modifier.width(8.dp))
                                 Text(
-                                    if (draft.contextConditionName.isBlank()) "בחירת אפליקציה"
-                                    else draft.contextConditionName
+                                    if (draft.contextConditionName.isBlank()) {
+                                        "בחירת אפליקציה"
+                                    } else {
+                                        draft.contextConditionName
+                                    },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            Text("הבדיקה מתבצעת מול האפליקציה שהייתה פתוחה לפני ClickPlus.", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "ההתאמה נבדקת לפי האפליקציה שהייתה פתוחה לפני ClickPlus.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         }
-                    }
-                }
-            } else {
-                item {
-                    SettingCard("לימוד מיקום", "בחר אפליקציה ולמד את נקודת הלחיצה.") {
-                        Button(
+                    } else {
+                        OutlinedButton(
                             onClick = {
                                 if (!isAccessibilityEnabled(context)) {
                                     context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                                 } else if (draft.screenTapPackage.isBlank()) {
                                     screenAppDialog = true
                                 } else {
-                                    val p = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                                    p.edit().putBoolean("tap_learning", true).putString("tap_learning_package", draft.screenTapPackage).apply()
-                                    context.packageManager.getLaunchIntentForPackage(draft.screenTapPackage)?.let {
-                                        it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        context.startActivity(it)
-                                        learning = true
-                                    }
+                                    val p = context.getSharedPreferences(
+                                        "clickplus_runtime",
+                                        Context.MODE_PRIVATE,
+                                    )
+                                    p.edit()
+                                        .putBoolean("tap_learning", true)
+                                        .putString("tap_learning_package", draft.screenTapPackage)
+                                        .apply()
+                                    context.packageManager
+                                        .getLaunchIntentForPackage(draft.screenTapPackage)
+                                        ?.let {
+                                            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            context.startActivity(it)
+                                            learning = true
+                                        }
                                 }
                             },
-                            Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(Icons.Outlined.LocationOn, null); Spacer(Modifier.width(8.dp))
-                            Text(if (draft.screenTapPackage.isBlank()) "בחירת אפליקציה ולימוד" else "למד מיקום לחיצה")
-                        }
-                        if (learning) Text("שכבת לימוד פעילה: לחץ על היעד באפליקציה שנפתחה.", fontWeight = FontWeight.Bold)
-                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            ChoiceChip(
-                                selected = orientation == "portrait",
-                                onClick = { orientation = "portrait" },
-                                label = "אנכי",
-                                modifier = Modifier.weight(1f),
-                            )
-                            ChoiceChip(
-                                selected = orientation == "landscape",
-                                onClick = { orientation = "landscape" },
-                                label = "אופקי",
-                                modifier = Modifier.weight(1f),
+                            Icon(Icons.Outlined.LocationOn, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (draft.screenTapPackage.isBlank()) {
+                                    "בחירת אפליקציה ולימוד מיקום"
+                                } else {
+                                    "לימוד מחדש של מיקום הלחיצה"
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (draft.screenTapPackage.isNotBlank()) {
-                            Text(draft.screenTapAppName, fontWeight = FontWeight.Bold)
-                            Text(
-                                "X " + (x * 100f).toInt() + "% · Y " + (y * 100f).toInt() + "%",
+
+                        if (learning) {
+                            Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Center,
-                                fontWeight = FontWeight.Medium,
-                            )
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                            ) {
+                                Text(
+                                    "מצב לימוד פעיל: האפליקציה נפתחה. לחץ על היעד שברצונך לשמור.",
+                                    modifier = Modifier.padding(12.dp),
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        }
+
+                        if (draft.screenTapPackage.isNotBlank()) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        draft.screenTapAppName.ifBlank { "האפליקציה שנבחרה" },
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        "מיקום שמור: X " + (x * 100f).toInt() + "% · Y " + (y * 100f).toInt() + "%",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                                ChoiceChip(
+                                    selected = false,
+                                    onClick = { screenAppDialog = true },
+                                    label = "החלפה",
+                                    modifier = Modifier.widthIn(min = 88.dp),
+                                )
+                            }
+
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                ChoiceChip(
+                                    selected = orientation == "portrait",
+                                    onClick = { orientation = "portrait" },
+                                    label = "אנכי",
+                                    modifier = Modifier.weight(1f),
+                                )
+                                ChoiceChip(
+                                    selected = orientation == "landscape",
+                                    onClick = { orientation = "landscape" },
+                                    label = "אופקי",
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+
                             PointEditor(
                                 x = x,
                                 y = y,
                                 toleranceX = metadata.toleranceXRatio,
                                 toleranceY = metadata.toleranceYRatio,
                                 onChange = { nx, ny ->
-                                    draft = draft.copy(screenTapXRatio = nx, screenTapYRatio = ny)
-                                    metadata = if (orientation == "landscape") metadata.copy(landscapeX = nx, landscapeY = ny)
-                                    else metadata.copy(portraitX = nx, portraitY = ny)
+                                    draft = draft.copy(
+                                        screenTapXRatio = nx,
+                                        screenTapYRatio = ny,
+                                    )
+                                    metadata = if (orientation == "landscape") {
+                                        metadata.copy(
+                                            landscapeX = nx,
+                                            landscapeY = ny,
+                                        )
+                                    } else {
+                                        metadata.copy(
+                                            portraitX = nx,
+                                            portraitY = ny,
+                                        )
+                                    }
                                 },
                             )
                         }
                     }
                 }
             }
+
             item {
-                SettingCard("מה לבצע?", "הפעולה עצמה לאחר התאמת הכלל.") {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
+                EditorSectionCard(
+                    number = "4",
+                    title = "מה לבצע?",
+                    subtitle = "בחר מה ClickPlus יעשה לאחר שהכלל הופעל.",
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         ChoiceChip(
                             selected = draft.actionType == ActionType.SYSTEM,
                             onClick = { draft = draft.copy(actionType = ActionType.SYSTEM) },
-                            label = "מערכת",
+                            label = "פעולת מערכת",
                             modifier = Modifier.weight(1f),
                         )
                         ChoiceChip(
                             selected = draft.actionType == ActionType.APP,
                             onClick = { draft = draft.copy(actionType = ActionType.APP) },
-                            label = "אפליקציה",
+                            label = "פתיחת אפליקציה",
                             modifier = Modifier.weight(1f),
                         )
                     }
+
                     if (draft.actionType == ActionType.SYSTEM) {
-                        Column(Modifier.fillMaxWidth()) {
-                            SystemActionPreset.entries.forEach { item ->
-                                Row(
-                                    Modifier.fillMaxWidth()
-                                        .clickable { draft = draft.copy(systemActionId = item.id) }
-                                        .padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    ChoiceChip(
-                                        selected = draft.systemActionId == item.id,
-                                        onClick = { draft = draft.copy(systemActionId = item.id) },
-                                        label = item.titleHebrew,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                }
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            SystemActionPreset.entries.forEach { action ->
+                                ChoiceChip(
+                                    selected = draft.systemActionId == action.id,
+                                    onClick = {
+                                        draft = draft.copy(systemActionId = action.id)
+                                    },
+                                    label = action.titleHebrew,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             }
                         }
                     } else {
-                        Button(onClick = { appDialog = true }, Modifier.fillMaxWidth()) {
-                            Text(if (draft.targetAppName.isBlank()) "בחירת אפליקציית יעד" else draft.targetAppName)
+                        OutlinedButton(
+                            onClick = { appDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.Outlined.Apps, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (draft.targetAppName.isBlank()) {
+                                    "בחירת אפליקציית יעד"
+                                } else {
+                                    draft.targetAppName
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
+                    }
+
+                    if (
+                        draft.actionType == ActionType.APP &&
+                        draft.targetPackage.isNotBlank()
+                    ) {
+                        Text(
+                            "יעד: " + draft.targetAppName.ifBlank { draft.targetPackage },
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
             }
+
             item {
-                SettingCard("אפשרויות מתקדמות", "עדיפות, השהיה, ניסיונות וסבילות.") {
-                    Text("עדיפות: " + metadata.priority)
-                    Slider(value = metadata.priority.coerceIn(0, 10).toFloat(), onValueChange = { metadata = metadata.copy(priority = it.toInt().coerceIn(0, 10)) }, valueRange = 0f..10f, steps = 9)
-                    Text("Cooldown: " + metadata.cooldownMs + "ms")
-                    Slider(value = metadata.cooldownMs.coerceIn(0L, 10000L).toFloat(), onValueChange = { metadata = metadata.copy(cooldownMs = it.toLong().coerceIn(0L, 60000L)) }, valueRange = 0f..10000f, steps = 9)
-                    Text("השהיה לפני פעולה: " + metadata.delayMs + "ms")
-                    Slider(value = metadata.delayMs.coerceIn(0L, 5000L).toFloat(), onValueChange = { metadata = metadata.copy(delayMs = it.toLong().coerceIn(0L, 10000L)) }, valueRange = 0f..5000f, steps = 9)
-                    Text("ניסיונות: " + metadata.retries)
-                    Slider(value = metadata.retries.coerceIn(1, 3).toFloat(), onValueChange = { metadata = metadata.copy(retries = it.toInt().coerceIn(1, 3)) }, valueRange = 1f..3f, steps = 1)
-                    if (draft.triggerType == TriggerType.SCREEN_TAP) {
-                        Text("רוחב אזור התאמה: " + (metadata.toleranceXRatio * 100f).toInt() + "%")
-                        Slider(value = metadata.toleranceXRatio.coerceIn(0.01f, 0.25f), onValueChange = { metadata = metadata.copy(toleranceXRatio = it.coerceIn(0.01f, 0.25f)) }, valueRange = 0.01f..0.25f)
-                        Text("גובה אזור התאמה: " + (metadata.toleranceYRatio * 100f).toInt() + "%")
-                        Slider(value = metadata.toleranceYRatio.coerceIn(0.01f, 0.25f), onValueChange = { metadata = metadata.copy(toleranceYRatio = it.coerceIn(0.01f, 0.25f)) }, valueRange = 0.01f..0.25f)
+                EditorSectionCard(
+                    number = "5",
+                    title = "הגדרות מתקדמות",
+                    subtitle = "עדיפות, תזמון, ניסיונות ואזור התאמה.",
+                ) {
+                    EditorSliderRow(
+                        title = "עדיפות",
+                        valueText = metadata.priority.toString(),
+                    ) {
+                        Slider(
+                            value = metadata.priority.coerceIn(0, 10).toFloat(),
+                            onValueChange = {
+                                metadata = metadata.copy(
+                                    priority = it.toInt().coerceIn(0, 10),
+                                )
+                            },
+                            valueRange = 0f..10f,
+                            steps = 9,
+                        )
                     }
+
+                    EditorSliderRow(
+                        title = "זמן המתנה לפני הפעולה",
+                        valueText = metadata.delayMs.toString() + "ms",
+                    ) {
+                        Slider(
+                            value = metadata.delayMs.coerceIn(0L, 5000L).toFloat(),
+                            onValueChange = {
+                                metadata = metadata.copy(
+                                    delayMs = it.toLong().coerceIn(0L, 10_000L),
+                                )
+                            },
+                            valueRange = 0f..5000f,
+                            steps = 9,
+                        )
+                    }
+
+                    EditorSliderRow(
+                        title = "Cooldown",
+                        valueText = metadata.cooldownMs.toString() + "ms",
+                    ) {
+                        Slider(
+                            value = metadata.cooldownMs.coerceIn(0L, 10_000L).toFloat(),
+                            onValueChange = {
+                                metadata = metadata.copy(
+                                    cooldownMs = it.toLong().coerceIn(0L, 60_000L),
+                                )
+                            },
+                            valueRange = 0f..10_000f,
+                            steps = 9,
+                        )
+                    }
+
+                    EditorSliderRow(
+                        title = "מספר ניסיונות",
+                        valueText = metadata.retries.toString(),
+                    ) {
+                        Slider(
+                            value = metadata.retries.coerceIn(1, 3).toFloat(),
+                            onValueChange = {
+                                metadata = metadata.copy(
+                                    retries = it.toInt().coerceIn(1, 3),
+                                )
+                            },
+                            valueRange = 1f..3f,
+                            steps = 1,
+                        )
+                    }
+
+                    if (draft.triggerType == TriggerType.SCREEN_TAP) {
+                        EditorSliderRow(
+                            title = "רוחב אזור התאמה",
+                            valueText = (metadata.toleranceXRatio * 100f).toInt().toString() + "%",
+                        ) {
+                            Slider(
+                                value = metadata.toleranceXRatio.coerceIn(0.01f, 0.25f),
+                                onValueChange = {
+                                    metadata = metadata.copy(
+                                        toleranceXRatio = it.coerceIn(0.01f, 0.25f),
+                                    )
+                                },
+                                valueRange = 0.01f..0.25f,
+                            )
+                        }
+
+                        EditorSliderRow(
+                            title = "גובה אזור התאמה",
+                            valueText = (metadata.toleranceYRatio * 100f).toInt().toString() + "%",
+                        ) {
+                            Slider(
+                                value = metadata.toleranceYRatio.coerceIn(0.01f, 0.25f),
+                                onValueChange = {
+                                    metadata = metadata.copy(
+                                        toleranceYRatio = it.coerceIn(0.01f, 0.25f),
+                                    )
+                                },
+                                valueRange = 0.01f..0.25f,
+                            )
+                        }
+                    }
+
                     ProfileSelector(
                         profiles = repo.profiles(),
                         selectedId = metadata.profileId,
                         onSelect = { metadata = metadata.copy(profileId = it) },
                     )
+
                     OutlinedButton(
                         onClick = {
                             val performer = if (isAccessibilityEnabled(context)) {
                                 KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
-                            } else null
-                            if (performer != null) {
-                                RuleExecutionCoordinator(context, performer).execute(draft, test = true, reason = "בדיקה ידנית")
                             } else {
-                                RuleExecutionCoordinator(context, BasicActionPerformer(context)).execute(draft, test = true, reason = "בדיקה במצב בסיסי")
+                                null
+                            }
+                            if (performer != null) {
+                                RuleExecutionCoordinator(context, performer).execute(
+                                    draft,
+                                    test = true,
+                                    reason = "בדיקה ידנית",
+                                )
+                            } else {
+                                RuleExecutionCoordinator(
+                                    context,
+                                    BasicActionPerformer(context),
+                                ).execute(
+                                    draft,
+                                    test = true,
+                                    reason = "בדיקה במצב בסיסי",
+                                )
                             }
                         },
-                        Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Icon(Icons.Outlined.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text("בדיקת פעולה")
+                        Icon(Icons.Outlined.PlayArrow, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("בדיקת הפעולה")
                     }
                 }
             }
@@ -1545,36 +1819,148 @@ private fun EditorScreen(
             title = "בחירת אפליקציה",
             onDismiss = { appDialog = false },
             onSelect = { app ->
-                if (draft.contextConditionType == ContextConditionType.APP || draft.contextConditionType == ContextConditionType.RADIO) {
-                    draft = draft.copy(contextConditionValue = app.packageName, contextConditionName = app.label)
+                if (
+                    draft.triggerType == TriggerType.APP_ENTRY &&
+                    (
+                        draft.contextConditionType == ContextConditionType.APP ||
+                            draft.contextConditionType == ContextConditionType.RADIO
+                    )
+                ) {
+                    draft = draft.copy(
+                        contextConditionValue = app.packageName,
+                        contextConditionName = app.label,
+                    )
                 } else {
-                    draft = draft.copy(targetPackage = app.packageName, targetAppName = app.label)
+                    draft = draft.copy(
+                        targetPackage = app.packageName,
+                        targetAppName = app.label,
+                    )
                 }
                 appDialog = false
             },
         )
     }
+
     if (screenAppDialog) {
         AppPickerDialog(
-            title = "אפליקציית יעד ללימוד",
+            title = "בחירת אפליקציה לזיהוי הלחיצה",
             onDismiss = { screenAppDialog = false },
             onSelect = { app ->
-                draft = draft.copy(screenTapPackage = app.packageName, screenTapAppName = app.label)
+                draft = draft.copy(
+                    screenTapPackage = app.packageName,
+                    screenTapAppName = app.label,
+                )
                 screenAppDialog = false
             },
         )
     }
+
     if (showDelete && existing != null) {
         AlertDialog(
             onDismissRequest = { showDelete = false },
             title = { Text("למחוק את הפעולה?") },
             text = { Text("הכלל וההגדרות המתקדמות שלו יוסרו.") },
-            confirmButton = { TextButton(onClick = { showDelete = false; onDelete(existing) }) { Text("מחיקה") } },
-            dismissButton = { TextButton(onClick = { showDelete = false }) { Text("ביטול") } },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDelete = false
+                        onDelete(existing)
+                    },
+                ) {
+                    Text("מחיקה")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDelete = false }) {
+                    Text("ביטול")
+                }
+            },
         )
     }
 }
 
+@Composable
+private fun EditorSectionCard(
+    number: String,
+    title: String,
+    subtitle: String,
+    content: @Composable () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant,
+        ),
+    ) {
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    modifier = Modifier.size(34.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            number,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            HorizontalDivider()
+            content()
+        }
+    }
+}
+
+@Composable
+private fun EditorSliderRow(
+    title: String,
+    valueText: String,
+    content: @Composable () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, fontWeight = FontWeight.Medium)
+            Text(
+                valueText,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        content()
+    }
+}
 private data class InstalledApp(
     val packageName: String,
     val label: String,
