@@ -45,7 +45,15 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         actionExecutor = ActionExecutor(this)
         executionCoordinator = RuleExecutionCoordinator(applicationContext, actionExecutor)
         tapCountOverlay = TapCountOverlay(this)
-        tapLearningOverlay = TapLearningOverlay(this)
+        tapLearningOverlay = TapLearningOverlay(
+            this,
+            onTargetTap = { x, y -> captureLearningTap(x, y) },
+            onCancel = {
+                getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+                    .edit().putBoolean("tap_learning", false).remove("tap_learning_stage").apply()
+                tapLearningOverlay.hide()
+            },
+        )
         prefsRepository = AppPreferencesRepository(applicationContext)
         tapDetector = TapDetector(applicationContext, executionCoordinator) { count ->
             if (tapCountOverlayEnabled) tapCountOverlay.show(count)
@@ -124,6 +132,11 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             }
         }
         serviceScope.launch {
+            prefsRepository.tapCountPositionFlow.collectLatest { position ->
+                tapCountOverlay.setPositionPercentFromBottom(position)
+            }
+        }
+        serviceScope.launch {
             prefsRepository.mappingsFlow.collectLatest { tapDetector.updateProfiles(it) }
         }
     }
@@ -161,7 +174,8 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         val learning = prefs.getBoolean("tap_learning", false)
         val target = prefs.getString("tap_learning_package", "").orEmpty()
         if (learning && target.isNotBlank() && target == eventPackage) {
-            tapLearningOverlay.show()
+            val stage = prefs.getInt("tap_learning_stage", 1).coerceIn(1, 2)
+            tapLearningOverlay.show(stage)
         } else if (!learning) {
             tapLearningOverlay.hide()
         }
@@ -171,6 +185,85 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         val defaultIme = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
             ?.substringBefore('/').orEmpty()
         return eventPackage != defaultIme && eventPackage != "com.android.systemui"
+    }
+
+    private fun captureLearningTap(screenX: Float, screenY: Float) {
+        val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+        if (!prefs.getBoolean("tap_learning", false)) return
+
+        val metrics = resources.displayMetrics
+        val width = metrics.widthPixels.coerceAtLeast(1).toFloat()
+        val height = metrics.heightPixels.coerceAtLeast(1).toFloat()
+        val xRatio = (screenX / width).coerceIn(0f, 1f)
+        val yRatio = (screenY / height).coerceIn(0f, 1f)
+        val targetPackage = prefs.getString("tap_learning_package", "").orEmpty()
+        val stage = prefs.getInt("tap_learning_stage", 1).coerceIn(1, 2)
+
+        if (targetPackage.isBlank()) {
+            prefs.edit().putBoolean("tap_learning", false).remove("tap_learning_stage").apply()
+            tapLearningOverlay.hide()
+            return
+        }
+
+        if (stage == 1 && prefs.getBoolean("tap_learning_multi", false)) {
+            prefs.edit()
+                .putFloat("tap_capture_x_ratio", xRatio)
+                .putFloat("tap_capture_y_ratio", yRatio)
+                .putInt("tap_capture_stage", 1)
+                .putString("tap_capture_package", targetPackage)
+                .putString(
+                    "tap_capture_app_name",
+                    runCatching {
+                        packageManager.getApplicationLabel(
+                            packageManager.getApplicationInfo(targetPackage, 0)
+                        ).toString()
+                    }.getOrDefault("")
+                )
+                .putInt("tap_learning_stage", 2)
+                .apply()
+            tapLearningOverlay.show(2)
+        } else if (stage == 1) {
+            prefs.edit()
+                .putBoolean("tap_learning", false)
+                .putBoolean("tap_capture_ready", true)
+                .putInt("tap_capture_stage", 1)
+                .putFloat("tap_capture_x_ratio", xRatio)
+                .putFloat("tap_capture_y_ratio", yRatio)
+                .putString("tap_capture_package", targetPackage)
+                .putString(
+                    "tap_capture_app_name",
+                    runCatching {
+                        packageManager.getApplicationLabel(
+                            packageManager.getApplicationInfo(targetPackage, 0)
+                        ).toString()
+                    }.getOrDefault("")
+                )
+                .remove("tap_learning_stage")
+                .apply()
+            tapLearningOverlay.hide()
+            runCatching { startActivity(Intent(this, DashboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)) }
+        } else {
+            prefs.edit()
+                .putBoolean("tap_learning", false)
+                .putBoolean("tap_capture_ready", true)
+                .putInt("tap_capture_stage", 2)
+                .putFloat("tap_capture_x_ratio", xRatio)
+                .putFloat("tap_capture_y_ratio", yRatio)
+                .putString("tap_capture_package", targetPackage)
+                .putString(
+                    "tap_capture_app_name",
+                    runCatching {
+                        packageManager.getApplicationLabel(
+                            packageManager.getApplicationInfo(targetPackage, 0)
+                        ).toString()
+                    }.getOrDefault("")
+                )
+                .remove("tap_learning_stage")
+                .remove("tap_learning_multi")
+                .apply()
+            tapLearningOverlay.hide()
+            runCatching { startActivity(Intent(this, DashboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)) }
+        }
     }
 
     private fun captureTapLocationIfRequested(event: AccessibilityEvent): Boolean {
