@@ -264,6 +264,14 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
             globalAction(AccessibilityService.GLOBAL_ACTION_RECENTS, "מסך היישומים האחרונים נפתח")
         SystemActionPreset.NOTIFICATIONS.id ->
             globalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS, "חלונית ההתראות נפתחה")
+        SystemActionPreset.LOCK_SCREEN.id ->
+            globalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN, "המסך ננעל")
+        SystemActionPreset.POWER_MENU.id ->
+            globalAction(AccessibilityService.GLOBAL_ACTION_POWER_DIALOG, "תפריט הכיבוי נפתח")
+        SystemActionPreset.SCREENSHOT.id ->
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                globalAction(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT, "צילום המסך בוצע")
+            } else ActionExecutionResult.failure("צילום מסך באמצעות שירות הנגישות דורש Android 11 ומעלה")
         SystemActionPreset.MEDIA_STOP.id ->
             dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_STOP, "עצירת השמעה")
         SystemActionPreset.MEDIA_PLAY.id ->
