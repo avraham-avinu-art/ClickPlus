@@ -48,7 +48,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
-import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DarkMode
@@ -69,6 +69,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -111,6 +112,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -521,15 +523,17 @@ private fun StatusScreen(
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("מצב עבודה", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
+                            ChoiceChip(
                                 selected = mode == AppMode.FULL,
                                 onClick = { onMode(AppMode.FULL) },
-                                label = { Text("מלא") },
+                                label = "מלא",
+                                modifier = Modifier.weight(1f),
                             )
-                            FilterChip(
+                            ChoiceChip(
                                 selected = mode == AppMode.BASIC,
                                 onClick = { onMode(AppMode.BASIC) },
-                                label = { Text("Basic ללא נגישות") },
+                                label = "Basic ללא נגישות",
+                                modifier = Modifier.weight(1f),
                             )
                         }
                         Text(
@@ -590,6 +594,8 @@ private fun StatusCard(title: String, ok: Boolean, detail: String, onClick: () -
                 Text(
                     "Android יפתח את „גישה לנתוני שימוש”. יש להפעיל שם את ClickPlus.",
                     style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
                 )
             }
         }
@@ -604,7 +610,7 @@ private fun LogsScreen(onBack: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text("יומן פעילות") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBack, "חזרה") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
                 actions = {
                     TextButton(onClick = {
                         AdvancedRuleRepository.clearLogs(context)
@@ -640,6 +646,8 @@ private fun LogsScreen(onBack: () -> Unit) {
                                 Text(
                                     "מיקום: X " + (log.xRatio * 100f).toInt() + "% · Y " + (log.yRatio * 100f).toInt() + "%",
                                     style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center,
                                 )
                             }
                         }
@@ -662,7 +670,7 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
         topBar = {
             TopAppBar(
                 title = { Text("פרופילים ומצבים") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBack, "חזרה") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
                 actions = { IconButton(onClick = { newName = ""; dialog = true }) { Icon(Icons.Outlined.Add, "פרופיל חדש") } },
             )
         },
@@ -726,6 +734,42 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
             dismissButton = { TextButton(onClick = { dialog = false }) { Text("ביטול") } },
         )
     }
+}
+
+@Composable
+private fun ChoiceChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        modifier = modifier.height(48.dp),
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            labelColor = MaterialTheme.colorScheme.onSurface,
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
+            selectedTrailingIconColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+        label = {
+            Box(
+                Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -796,9 +840,26 @@ private fun ThemeChip(label: String, value: String, selectedValue: String, onThe
     FilterChip(
         selected = selectedValue == value,
         onClick = { onTheme(value) },
-        label = { Text(label) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            labelColor = MaterialTheme.colorScheme.onSurface,
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
+            selectedTrailingIconColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+        label = {
+            Box(
+                Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            }
+        },
         leadingIcon = { Icon(icon, null) },
-        modifier = Modifier.fillMaxWidth(),
     )
 }
 
@@ -1005,7 +1066,7 @@ private fun EditorScreen(
         topBar = {
             TopAppBar(
                 title = { Text(if (existing == null) "הוספת פעולה" else "עריכת פעולה") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBack, "חזרה") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
                 actions = {
                     if (existing != null) IconButton(onClick = { showDelete = true }) { Icon(Icons.Outlined.Delete, "מחיקה") }
                 },
@@ -1059,15 +1120,17 @@ private fun EditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        FilterChip(
+                        ChoiceChip(
                             selected = draft.triggerType == TriggerType.APP_ENTRY,
                             onClick = { draft = draft.copy(triggerType = TriggerType.APP_ENTRY) },
-                            label = { Text("כניסה", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            label = "כניסה",
+                            modifier = Modifier.weight(1f),
                         )
-                        FilterChip(
+                        ChoiceChip(
                             selected = draft.triggerType == TriggerType.SCREEN_TAP,
                             onClick = { draft = draft.copy(triggerType = TriggerType.SCREEN_TAP) },
-                            label = { Text("מיקום מסך", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            label = "מיקום מסך",
+                            modifier = Modifier.weight(1f),
                         )
                     }
                     FlowRow(
@@ -1076,10 +1139,11 @@ private fun EditorScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         (1..5).forEach { n ->
-                            FilterChip(
+                            ChoiceChip(
                                 selected = draft.pressCount == n,
                                 onClick = { draft = draft.copy(pressCount = n) },
-                                label = { Text(n.toString(), maxLines = 1) },
+                                label = n.toString(),
+                                modifier = Modifier.widthIn(min = 48.dp),
                             )
                         }
                     }
@@ -1094,10 +1158,11 @@ private fun EditorScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             ContextConditionType.entries.forEach { type ->
-                                FilterChip(
+                                ChoiceChip(
                                     selected = draft.contextConditionType == type,
                                     onClick = { draft = draft.copy(contextConditionType = type) },
-                                    label = { Text(type.titleHebrew, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                    label = type.titleHebrew,
+                                    modifier = Modifier.widthIn(min = 118.dp),
                                 )
                             }
                         }
@@ -1142,12 +1207,27 @@ private fun EditorScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            FilterChip(selected = orientation == "portrait", onClick = { orientation = "portrait" }, label = { Text("אנכי", maxLines = 1) })
-                            FilterChip(selected = orientation == "landscape", onClick = { orientation = "landscape" }, label = { Text("אופקי", maxLines = 1) })
+                            ChoiceChip(
+                                selected = orientation == "portrait",
+                                onClick = { orientation = "portrait" },
+                                label = "אנכי",
+                                modifier = Modifier.weight(1f),
+                            )
+                            ChoiceChip(
+                                selected = orientation == "landscape",
+                                onClick = { orientation = "landscape" },
+                                label = "אופקי",
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                         if (draft.screenTapPackage.isNotBlank()) {
                             Text(draft.screenTapAppName, fontWeight = FontWeight.Bold)
-                            Text("X " + (x * 100f).toInt() + "% · Y " + (y * 100f).toInt() + "%")
+                            Text(
+                                "X " + (x * 100f).toInt() + "% · Y " + (y * 100f).toInt() + "%",
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Medium,
+                            )
                             PointEditor(
                                 x = x,
                                 y = y,
@@ -1170,8 +1250,18 @@ private fun EditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        FilterChip(selected = draft.actionType == ActionType.SYSTEM, onClick = { draft = draft.copy(actionType = ActionType.SYSTEM) }, label = { Text("מערכת", maxLines = 1) })
-                        FilterChip(selected = draft.actionType == ActionType.APP, onClick = { draft = draft.copy(actionType = ActionType.APP) }, label = { Text("אפליקציה", maxLines = 1) })
+                        ChoiceChip(
+                            selected = draft.actionType == ActionType.SYSTEM,
+                            onClick = { draft = draft.copy(actionType = ActionType.SYSTEM) },
+                            label = "מערכת",
+                            modifier = Modifier.weight(1f),
+                        )
+                        ChoiceChip(
+                            selected = draft.actionType == ActionType.APP,
+                            onClick = { draft = draft.copy(actionType = ActionType.APP) },
+                            label = "אפליקציה",
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                     if (draft.actionType == ActionType.SYSTEM) {
                         Column(Modifier.fillMaxWidth()) {
@@ -1182,10 +1272,10 @@ private fun EditorScreen(
                                         .padding(10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    FilterChip(
+                                    ChoiceChip(
                                         selected = draft.systemActionId == item.id,
                                         onClick = { draft = draft.copy(systemActionId = item.id) },
-                                        label = { Text(item.titleHebrew, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                        label = item.titleHebrew,
                                         modifier = Modifier.fillMaxWidth(),
                                     )
                                 }
@@ -1359,10 +1449,10 @@ private fun ProfileSelector(profiles: List<ClickPlusProfile>, selectedId: String
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("פרופיל")
         profiles.forEach { profile ->
-            FilterChip(
+            ChoiceChip(
                 selected = selectedId == profile.id,
                 onClick = { onSelect(profile.id) },
-                label = { Text(profile.name) },
+                label = profile.name,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -1427,7 +1517,7 @@ private fun PointEditor(
 private fun SimpleTopBar(title: String, onBack: () -> Unit) {
     TopAppBar(
         title = { Text(title) },
-        navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBack, "חזרה") } },
+        navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
     )
 }
 
