@@ -134,8 +134,15 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             }
         }
         serviceScope.launch {
-            prefsRepository.tapCountPositionFlow.collectLatest { position ->
-                tapCountOverlay.setPositionPercentFromBottom(position)
+            prefsRepository.tapCountXFlow.collectLatest { x ->
+                val y = AppPreferencesRepository.tapCountYSnapshot(applicationContext)
+                tapCountOverlay.setPosition(x, y)
+            }
+        }
+        serviceScope.launch {
+            prefsRepository.tapCountYFlow.collectLatest { y ->
+                val x = AppPreferencesRepository.tapCountXSnapshot(applicationContext)
+                tapCountOverlay.setPosition(x, y)
             }
         }
         serviceScope.launch {
@@ -158,15 +165,20 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
-                if (shouldTrackExternalPackage(eventPackage)) {
+                if (shouldTrackExternalPackage(eventPackage) && !isLauncherPackage(eventPackage)) {
+                    val previousApp = lastExternalPackage
+                    if (eventPackage != lastExternalPackage) {
+                        tapDetector.processAppEntry(eventPackage, previousApp)
+                    }
                     lastExternalPackage = eventPackage
                     AdvancedRuleRepository.setLastExternalPackage(applicationContext, eventPackage)
                 }
                 updateLearningOverlay(eventPackage)
             }
             AccessibilityEvent.TYPE_VIEW_CLICKED -> {
-                if (captureTapLocationIfRequested(event)) return
-                tapDetector.processViewClicked(event)
+                // Normal clicks inside other apps are deliberately not a trigger.
+                // The trigger is app entry; click gestures are actions only.
+                captureTapLocationIfRequested(event)
             }
         }
     }
@@ -186,7 +198,18 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     private fun shouldTrackExternalPackage(eventPackage: String): Boolean {
         val defaultIme = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
             ?.substringBefore('/').orEmpty()
-        return eventPackage != defaultIme && eventPackage != "com.android.systemui"
+        return eventPackage != defaultIme &&
+            eventPackage != "com.android.systemui" &&
+            eventPackage != packageName
+    }
+
+    private fun isLauncherPackage(eventPackage: String): Boolean {
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val homePackage = packageManager.resolveActivity(
+            homeIntent,
+            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
+        )?.activityInfo?.packageName
+        return !homePackage.isNullOrBlank() && homePackage == eventPackage
     }
 
     private fun captureLearningTap(screenX: Float, screenY: Float) {
@@ -200,141 +223,91 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         val yRatio = (screenY / height).coerceIn(0f, 1f)
         val targetPackage = prefs.getString("tap_learning_package", "").orEmpty()
         val stage = prefs.getInt("tap_learning_stage", 1).coerceIn(1, 2)
-
         if (targetPackage.isBlank()) {
-            prefs.edit().putBoolean("tap_learning", false).remove("tap_learning_stage").apply()
-            tapLearningOverlay.hide()
+            cancelLearning()
             return
         }
 
-        if (stage == 1 && prefs.getBoolean("tap_learning_multi", false)) {
-            prefs.edit()
-                .putBoolean("tap_capture_ready", true)
-                .putFloat("tap_capture_x_ratio", xRatio)
-                .putFloat("tap_capture_y_ratio", yRatio)
-                .putInt("tap_capture_stage", 1)
-                .putString("tap_capture_package", targetPackage)
-                .putString(
-                    "tap_capture_app_name",
-                    runCatching {
-                        packageManager.getApplicationLabel(
-                            packageManager.getApplicationInfo(targetPackage, 0)
-                        ).toString()
-                    }.getOrDefault("")
+        val appName = runCatching {
+            packageManager.getApplicationLabel(
+                packageManager.getApplicationInfo(targetPackage, 0)
+            ).toString()
+        }.getOrDefault("")
+
+        // Consume this tap exactly once. This prevents the first point from
+        // being processed repeatedly while the editor is switching to stage 2.
+        prefs.edit().putBoolean("tap_capture_ready", false).apply()
+
+        when {
+            stage == 1 && prefs.getBoolean("tap_learning_multi", false) -> {
+                prefs.edit()
+                    .putFloat("tap_capture_x_ratio", xRatio)
+                    .putFloat("tap_capture_y_ratio", yRatio)
+                    .putInt("tap_capture_stage", 1)
+                    .putString("tap_capture_package", targetPackage)
+                    .putString("tap_capture_app_name", appName)
+                    .putInt("tap_learning_stage", 2)
+                    .apply()
+                // Keep the target app and overlay open. Do not navigate home.
+                tapLearningOverlay.show(2)
+            }
+            stage == 1 -> {
+                prefs.edit()
+                    .putBoolean("tap_learning", false)
+                    .putBoolean("tap_capture_ready", true)
+                    .putFloat("tap_capture_x_ratio", xRatio)
+                    .putFloat("tap_capture_y_ratio", yRatio)
+                    .putInt("tap_capture_stage", 1)
+                    .putString("tap_capture_package", targetPackage)
+                    .putString("tap_capture_app_name", appName)
+                    .remove("tap_learning_stage")
+                    .remove("tap_learning_multi")
+                    .apply()
+                tapLearningOverlay.hide()
+                openEditor()
+            }
+            else -> {
+                prefs.edit()
+                    .putBoolean("tap_learning", false)
+                    .putBoolean("tap_capture_ready", true)
+                    .putFloat("tap_capture_x_ratio", xRatio)
+                    .putFloat("tap_capture_y_ratio", yRatio)
+                    .putInt("tap_capture_stage", 2)
+                    .putString("tap_capture_package", targetPackage)
+                    .putString("tap_capture_app_name", appName)
+                    .remove("tap_learning_stage")
+                    .remove("tap_learning_multi")
+                    .apply()
+                tapLearningOverlay.hide()
+                openEditor()
+            }
+        }
+    }
+
+    private fun cancelLearning() {
+        getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+            .edit()
+            .putBoolean("tap_learning", false)
+            .putBoolean("tap_capture_ready", false)
+            .remove("tap_learning_stage")
+            .remove("tap_learning_multi")
+            .apply()
+        tapLearningOverlay.hide()
+    }
+
+    private fun openEditor() {
+        runCatching {
+            startActivity(
+                Intent(this, DashboardActivity::class.java).addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
                 )
-                .putInt("tap_learning_stage", 2)
-                .apply()
-            tapLearningOverlay.show(2)
-            replayLearningTouch(screenX, screenY)
-        } else if (stage == 1) {
-            prefs.edit()
-                .putBoolean("tap_learning", false)
-                .putBoolean("tap_capture_ready", true)
-                .putInt("tap_capture_stage", 1)
-                .putFloat("tap_capture_x_ratio", xRatio)
-                .putFloat("tap_capture_y_ratio", yRatio)
-                .putString("tap_capture_package", targetPackage)
-                .putString(
-                    "tap_capture_app_name",
-                    runCatching {
-                        packageManager.getApplicationLabel(
-                            packageManager.getApplicationInfo(targetPackage, 0)
-                        ).toString()
-                    }.getOrDefault("")
-                )
-                .remove("tap_learning_stage")
-                .remove("tap_learning_multi")
-                .apply()
-            tapLearningOverlay.hide()
-            replayLearningTouch(screenX, screenY)
-            runCatching { startActivity(Intent(this, DashboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)) }
-        } else {
-            prefs.edit()
-                .putBoolean("tap_learning", false)
-                .putBoolean("tap_capture_ready", true)
-                .putInt("tap_capture_stage", 2)
-                .putFloat("tap_capture_x_ratio", xRatio)
-                .putFloat("tap_capture_y_ratio", yRatio)
-                .putString("tap_capture_package", targetPackage)
-                .putString(
-                    "tap_capture_app_name",
-                    runCatching {
-                        packageManager.getApplicationLabel(
-                            packageManager.getApplicationInfo(targetPackage, 0)
-                        ).toString()
-                    }.getOrDefault("")
-                )
-                .remove("tap_learning_stage")
-                .remove("tap_learning_multi")
-                .apply()
-            tapLearningOverlay.hide()
-            replayLearningTouch(screenX, screenY)
-            runCatching { startActivity(Intent(this, DashboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)) }
+            )
         }
     }
 
     private fun replayLearningTouch(screenX: Float, screenY: Float) {
-        val width = resources.displayMetrics.widthPixels.coerceAtLeast(1).toFloat()
-        val height = resources.displayMetrics.heightPixels.coerceAtLeast(1).toFloat()
-        val x = screenX.coerceIn(0f, width - 1f)
-        val y = screenY.coerceIn(0f, height - 1f)
-        val path = Path().apply { moveTo(x, y) }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0L, 45L))
-            .build()
-        runCatching { dispatchGesture(gesture, null, null) }
+        // Intentionally unused: learning captures the point without replaying
+        // a click into the target app.
     }
-
-    private fun captureTapLocationIfRequested(event: AccessibilityEvent): Boolean {
-        val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
-        if (!prefs.getBoolean("tap_learning", false)) return false
-        val requestedPackage = prefs.getString("tap_learning_package", "").orEmpty()
-        if (requestedPackage.isNotBlank() && requestedPackage != event.packageName?.toString()) return true
-
-        val source = event.source ?: return true
-        val bounds = Rect()
-        runCatching { source.getBoundsInScreen(bounds) }.getOrNull() ?: return true
-        if (bounds.isEmpty) return true
-
-        val width = resources.displayMetrics.widthPixels.coerceAtLeast(1).toFloat()
-        val height = resources.displayMetrics.heightPixels.coerceAtLeast(1).toFloat()
-        val xRatio = (bounds.centerX() / width).coerceIn(0f, 1f)
-        val yRatio = (bounds.centerY() / height).coerceIn(0f, 1f)
-        val appPackage = event.packageName?.toString().orEmpty()
-
-        prefs.edit()
-            .putBoolean("tap_learning", false)
-            .putBoolean("tap_capture_ready", true)
-            .putFloat("tap_capture_x_ratio", xRatio)
-            .putFloat("tap_capture_y_ratio", yRatio)
-            .putString("tap_capture_package", appPackage)
-            .putString(
-                "tap_capture_app_name",
-                runCatching {
-                    packageManager.getApplicationLabel(packageManager.getApplicationInfo(appPackage, 0)).toString()
-                }.getOrDefault("")
-            )
-            .apply()
-        tapLearningOverlay.hide()
-
-        runCatching {
-            startActivity(
-                Intent(this, DashboardActivity::class.java).addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                )
-            )
-        }
-        return true
-    }
-
-    override fun onInterrupt() = Unit
-    override fun onUnbind(intent: Intent?): Boolean = true
-
-    override fun onDestroy() {
-        tapLearningOverlay.destroy()
-        tapCountOverlay.destroy()
-        if (instance === this) instance = null
-        serviceScope.cancel()
-        super.onDestroy()
-    }
-}
