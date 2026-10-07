@@ -1708,170 +1708,150 @@ private fun EditorScreen(
                 EditorSectionCard(
                     number = "4",
                     title = "מה לבצע?",
-                    subtitle = "בחר מה קליק פלוס יבצע לאחר שהטריגר זוהה.",
+                    subtitle = "בחר קודם את סוג הפעולה. האפשרויות המפורטות ייפתחו רק לאחר הבחירה.",
                 ) {
-                    Column(
+                    FlowRow(
                         Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        maxItemsInEachRow = 2,
                     ) {
                         ChoiceChip(
-                            selected = draft.actionType == ActionType.SYSTEM,
+                            selected = actionTypeChosen && draft.actionType == ActionType.SYSTEM,
                             onClick = {
-                                draft = draft.copy(
-                                    actionType = ActionType.SYSTEM,
-                                    systemActionId = draft.systemActionId.ifBlank { SystemActionPreset.HOME.id },
-                                )
+                                actionTypeChosen = true
+                                draft = draft.copy(actionType = ActionType.SYSTEM)
                             },
-                            label = "פעולת מערכת",
-                            modifier = Modifier.fillMaxWidth(),
+                            label = "פעולת מכשיר",
+                            modifier = Modifier.fillMaxWidth(0.48f),
                         )
                         ChoiceChip(
-                            selected = draft.actionType == ActionType.APP,
-                            onClick = { draft = draft.copy(actionType = ActionType.APP, systemActionId = "") },
+                            selected = actionTypeChosen && draft.actionType == ActionType.APP,
+                            onClick = {
+                                actionTypeChosen = true
+                                draft = draft.copy(actionType = ActionType.APP, systemActionId = "")
+                            },
                             label = "פתיחת אפליקציה",
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth(0.48f),
                         )
                         ChoiceChip(
-                            selected = draft.actionType == ActionType.APP_TAP,
-                            onClick = { draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "") },
-                            label = "פתיחת אפליקציה + לחיצה",
-                            modifier = Modifier.fillMaxWidth(),
+                            selected = actionTypeChosen && draft.actionType == ActionType.APP_TAP,
+                            onClick = {
+                                actionTypeChosen = true
+                                draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "")
+                            },
+                            label = "פתיחה + לחיצה",
+                            modifier = Modifier.fillMaxWidth(0.48f),
+                        )
+                        ChoiceChip(
+                            selected = actionTypeChosen && draft.actionType == ActionType.MULTI_POINT_TAP,
+                            onClick = {
+                                actionTypeChosen = true
+                                draft = draft.copy(actionType = ActionType.MULTI_POINT_TAP, systemActionId = "")
+                            },
+                            label = "שתי לחיצות אוטומטיות",
+                            modifier = Modifier.fillMaxWidth(0.48f),
                         )
                     }
 
-                    when (draft.actionType) {
-                        ActionType.SYSTEM -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                SystemActionPreset.entries.forEach { action ->
-                                    ChoiceChip(
-                                        selected = draft.systemActionId == action.id,
-                                        onClick = { draft = draft.copy(systemActionId = action.id) },
-                                        label = action.titleHebrew,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                }
-                            }
-                        }
-                        ActionType.APP -> {
-                            OutlinedButton(onClick = { appDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                                Icon(Icons.Outlined.Apps, null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    if (draft.targetAppName.isBlank()) "בחירת אפליקציית יעד" else draft.targetAppName,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                        ActionType.APP_TAP -> {
-                            OutlinedButton(
-                                onClick = {
-                                    if (!isAccessibilityEnabled(context)) {
-                                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                                    } else if (draft.screenTapPackage.isBlank()) {
-                                        screenAppDialog = true
-                                    } else {
-                                        val p = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                                        p.edit()
-                                            .putBoolean("tap_learning", true)
-                                            .putString("tap_learning_package", draft.screenTapPackage)
-                                            .apply()
-                                        context.packageManager.getLaunchIntentForPackage(draft.screenTapPackage)?.let {
-                                            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            context.startActivity(it)
-                                            learning = true
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Icon(Icons.Outlined.LocationOn, null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    if (draft.screenTapPackage.isBlank()) "בחירת אפליקציה ולימוד נקודת לחיצה" else "לימוד מחדש של נקודת הלחיצה",
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-
-                            if (learning) {
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                ) {
-                                    Text(
-                                        "מצב לימוד פעיל: לחץ באפליקציה על היעד שבו תתבצע הלחיצה האוטומטית.",
-                                        modifier = Modifier.padding(12.dp),
-                                        fontWeight = FontWeight.Medium,
-                                    )
-                                }
-                            }
-
-                            if (draft.screenTapPackage.isNotBlank()) {
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            draft.screenTapAppName.ifBlank { "האפליקציה שנבחרה" },
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        Text(
-                                            "נקודת לחיצה: X " + (x * 100f).toInt() + "% · Y " + (y * 100f).toInt() + "%",
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                    }
-                                    ChoiceChip(
-                                        selected = false,
-                                        onClick = { screenAppDialog = true },
-                                        label = "החלפה",
-                                        modifier = Modifier.widthIn(min = 88.dp),
-                                    )
-                                }
-
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    ChoiceChip(
-                                        selected = orientation == "portrait",
-                                        onClick = { orientation = "portrait" },
-                                        label = "אנכי",
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    ChoiceChip(
-                                        selected = orientation == "landscape",
-                                        onClick = { orientation = "landscape" },
-                                        label = "אופקי",
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
-
-                                PointEditor(
-                                    x = x,
-                                    y = y,
-                                    toleranceX = metadata.toleranceXRatio,
-                                    toleranceY = metadata.toleranceYRatio,
-                                    onChange = { nx, ny ->
-                                        draft = draft.copy(screenTapXRatio = nx, screenTapYRatio = ny)
-                                        metadata = if (orientation == "landscape") {
-                                            metadata.copy(landscapeX = nx, landscapeY = ny)
-                                        } else {
-                                            metadata.copy(portraitX = nx, portraitY = ny)
-                                        }
-                                    },
-                                )
-                                Text(
-                                    "בעת ההפעלה האפליקציה תיפתח על המסך, תזוהה בחזית, ואז ClickPlus יבצע את הלחיצה בנקודה הזו.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                        }
-                    }
-
-                    if (draft.actionType == ActionType.APP && draft.targetPackage.isNotBlank()) {
+                    if (!actionTypeChosen) {
+                        Spacer(Modifier.height(10.dp))
                         Text(
-                            "יעד: " + draft.targetAppName.ifBlank { draft.targetPackage },
+                            "בחר סוג פעולה כדי לפתוח את הבחירה הבאה.",
                             style = MaterialTheme.typography.bodySmall,
                         )
+                    } else {
+                        Spacer(Modifier.height(12.dp))
+                        when (draft.actionType) {
+                            ActionType.SYSTEM -> {
+                                val grouped = SystemActionPreset.entries.groupBy { it.categoryHebrew }
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    grouped.forEach { (category, actions) ->
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Text(category, fontWeight = FontWeight.Bold)
+                                            FlowRow(
+                                                Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                                maxItemsInEachRow = 3,
+                                            ) {
+                                                actions.forEach { action ->
+                                                    ChoiceChip(
+                                                        selected = draft.systemActionId == action.id,
+                                                        onClick = { draft = draft.copy(systemActionId = action.id) },
+                                                        label = action.titleHebrew,
+                                                        modifier = Modifier.widthIn(min = 100.dp),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                when (draft.systemActionId) {
+                                    SystemActionPreset.DIAL_NUMBER.id -> {
+                                        Spacer(Modifier.height(4.dp))
+                                        OutlinedTextField(
+                                            value = draft.actionParameter,
+                                            onValueChange = {
+                                                draft = draft.copy(
+                                                    actionParameter = it.filter { c -> c.isDigit() || c == '+' || c == '-' || c == ' ' }
+                                                )
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            singleLine = true,
+                                            label = { Text("מספר לחיוג") },
+                                        )
+                                    }
+                                    SystemActionPreset.BRIGHTNESS_SET.id -> {
+                                        Spacer(Modifier.height(4.dp))
+                                        OutlinedTextField(
+                                            value = draft.actionParameter,
+                                            onValueChange = { draft = draft.copy(actionParameter = it.filter(Char::isDigit).take(3)) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            singleLine = true,
+                                            label = { Text("בהירות באחוזים · 1–100") },
+                                        )
+                                    }
+                                }
+                            }
+                            ActionType.APP -> {
+                                OutlinedButton(
+                                    onClick = { appDialog = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Icon(Icons.Outlined.Apps, null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(draft.targetAppName.ifBlank { "בחירת אפליקציית יעד" })
+                                }
+                            }
+                            ActionType.APP_TAP,
+                            ActionType.MULTI_POINT_TAP -> {
+                                OutlinedButton(
+                                    onClick = { appDialog = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Icon(Icons.Outlined.LocationOn, null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        if (draft.screenTapPackage.isBlank()) {
+                                            "בחירת אפליקציה ולימוד מיקום"
+                                        } else {
+                                            "לימוד מחדש של מקום הלחיצה"
+                                        }
+                                    )
+                                }
+                                if (draft.screenTapPackage.isNotBlank()) {
+                                    Text(
+                                        if (draft.actionType == ActionType.MULTI_POINT_TAP) {
+                                            "לאחר הנקודה הראשונה יילמד גם המקום השני. זמן ההפרש יוגדר מתחת."
+                                        } else {
+                                            "בחרת אפליקציה. אפשר ללמד מחדש את נקודת הלחיצה בכל עת."
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
