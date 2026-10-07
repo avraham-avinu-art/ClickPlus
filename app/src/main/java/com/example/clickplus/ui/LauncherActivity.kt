@@ -16,18 +16,17 @@ class LauncherActivity : Activity() {
         val uiProcessPid = prefs.getInt("clickplus_ui_process_pid", -1)
         val uiIsInThisProcess = uiProcessPid == android.os.Process.myPid()
 
-        // Until Accessibility is granted, the launcher behaves like a normal
-        // app icon: the first (and every later) tap opens the app UI.
-        if (!accessibilityEnabled) {
-            openMainInterface(flashOnly = false)
-            return
+        // Every launcher tap is the dedicated "ClickPlus entry" trigger.
+        // The app UI remains usable normally even without Accessibility.
+        if (accessibilityEnabled) {
+            KeyInterceptorAccessibilityService.instance?.onClickPlusEntry()
+        } else {
+            com.example.clickplus.service.StandaloneLauncherEngine.process(this)
         }
 
-        // Once Accessibility is enabled, entering another app is detected by the
-        // AccessibilityService. The launcher icon is no longer used as a click
-        // trigger. If the UI process is already alive, open it normally; if the
-        // app was fully killed, show the UI briefly and remove the task again.
-        openMainInterface(flashOnly = !uiIsInThisProcess)
+        // With Accessibility enabled, keep the brief-flash behavior after the UI
+        // process has been recreated. Without Accessibility always open normally.
+        openMainInterface(flashOnly = accessibilityEnabled && !uiIsInThisProcess)
     }
 
     private fun openMainInterface(flashOnly: Boolean) {
