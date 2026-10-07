@@ -203,21 +203,19 @@ class DashboardActivity : ComponentActivity() {
                         .apply()
                     showPermissionIntro = false
 
-                    if (isAccessibilityEnabled(this@DashboardActivity)) {
-                        // Already enabled; there is nothing more to grant.
-                    } else {
+                    if (!isAccessibilityEnabled(this@DashboardActivity)) {
                         val notificationNeeded = Build.VERSION.SDK_INT >= 33 &&
-                        ContextCompat.checkSelfPermission(
-                            this@DashboardActivity,
-                            Manifest.permission.POST_NOTIFICATIONS,
-                        ) != PackageManager.PERMISSION_GRANTED &&
-                        !notificationRequestAttempted
+                            ContextCompat.checkSelfPermission(
+                                this@DashboardActivity,
+                                Manifest.permission.POST_NOTIFICATIONS,
+                            ) != PackageManager.PERMISSION_GRANTED &&
+                            !notificationRequestAttempted
 
-                    if (notificationNeeded) {
-                        openAccessibilityAfterNotification = true
-                        notificationRequestAttempted = true
-                        runtimeRequestActive = true
-                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        if (notificationNeeded) {
+                            openAccessibilityAfterNotification = true
+                            notificationRequestAttempted = true
+                            runtimeRequestActive = true
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         } else {
                             openAccessibilitySettings()
                         }
