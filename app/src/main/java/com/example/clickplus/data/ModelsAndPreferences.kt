@@ -13,7 +13,7 @@ import org.json.JSONObject
 
 val Context.dataStore by preferencesDataStore(name = "clickplus_settings")
 
-enum class ActionType(val titleHebrew: String) { SYSTEM("פעולת מערכת"), APP("פתיחת אפליקציה") }
+enum class ActionType(val titleHebrew: String) { SYSTEM("פעולת מערכת"), APP("פתיחת אפליקציה"), APP_TAP("לחיצה באפליקציה") }
 enum class TriggerType(val titleHebrew: String) { APP_ENTRY("כניסה לאפליקציה"), SCREEN_TAP("לחיצה במיקום במסך") }
 
 enum class ContextConditionType(val titleHebrew: String) {
@@ -52,6 +52,7 @@ data class KeyActionConfig(
     fun actionSummary(): String = when (actionType) {
         ActionType.SYSTEM -> SystemActionPreset.entries.firstOrNull { it.id == systemActionId }?.titleHebrew ?: "פעולת מערכת"
         ActionType.APP -> "פתיחת " + targetAppName.ifBlank { "אפליקציה" }
+        ActionType.APP_TAP -> "לחיצה ב-" + screenTapAppName.ifBlank { "אפליקציה" }
     }
     fun contextSummary(): String {
         if (triggerType == TriggerType.SCREEN_TAP) {
