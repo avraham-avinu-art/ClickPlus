@@ -147,7 +147,10 @@ data class KeyActionConfig(
     }
 
     fun contextSummary(): String {
-        val entryText = "בכניסה ל-" + triggerAppName.ifBlank { "אפליקציה" }
+        val entryText = when (triggerType) {
+            TriggerType.CLICKPLUS_ENTRY -> "בלחיצה על ClickPlus"
+            TriggerType.APP_ENTRY -> "בכניסה ל-" + triggerAppName.ifBlank { "אפליקציה" }
+        }
         val conditionText = when (contextConditionType) {
             ContextConditionType.ANY -> "בכל מצב"
             ContextConditionType.APP -> "כשהאפליקציה הקודמת פתוחה: " + contextConditionName.ifBlank { contextConditionValue }
@@ -208,7 +211,9 @@ data class KeyActionConfig(
             contextConditionValue = json.optString("contextConditionValue", ""),
             contextConditionName = json.optString("contextConditionName", ""),
             enabled = json.optBoolean("enabled", json.optBoolean("isEnabled", true)),
-            triggerType = runCatching { TriggerType.valueOf(json.optString("triggerType", TriggerType.APP_ENTRY.name)) }.getOrDefault(TriggerType.APP_ENTRY),
+            triggerType = runCatching {
+                TriggerType.valueOf(json.optString("triggerType", TriggerType.CLICKPLUS_ENTRY.name))
+            }.getOrDefault(TriggerType.CLICKPLUS_ENTRY),
             triggerPackage = json.optString("triggerPackage", ""),
             triggerAppName = json.optString("triggerAppName", ""),
             screenTapPackage = json.optString("screenTapPackage", ""),
