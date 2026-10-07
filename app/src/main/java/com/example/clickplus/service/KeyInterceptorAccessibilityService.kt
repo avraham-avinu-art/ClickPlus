@@ -169,13 +169,27 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
-                if (shouldTrackExternalPackage(eventPackage) && !isLauncherPackage(eventPackage)) {
-                    val previousApp = lastExternalPackage
-                    if (eventPackage != lastExternalPackage) {
-                        tapDetector.processAppEntry(eventPackage, previousApp)
+                when {
+                    isLauncherPackage(eventPackage) -> {
+                        // Leaving an app for the launcher must break the foreground
+                        // package identity so the next return to the same app is a new entry.
+                        lastExternalPackage = ""
+                        AdvancedRuleRepository.setLastExternalPackage(applicationContext, "")
                     }
-                    lastExternalPackage = eventPackage
-                    AdvancedRuleRepository.setLastExternalPackage(applicationContext, eventPackage)
+                    eventPackage == "com.android.systemui" -> {
+                        // System UI is not a target app; clear the previous foreground
+                        // package so the next external app is always treated as a new entry.
+                        lastExternalPackage = ""
+                        AdvancedRuleRepository.setLastExternalPackage(applicationContext, "")
+                    }
+                    shouldTrackExternalPackage(eventPackage) -> {
+                        val previousApp = lastExternalPackage
+                        if (eventPackage != lastExternalPackage) {
+                            tapDetector.processAppEntry(eventPackage, previousApp)
+                        }
+                        lastExternalPackage = eventPackage
+                        AdvancedRuleRepository.setLastExternalPackage(applicationContext, eventPackage)
+                    }
                 }
                 updateLearningOverlay(eventPackage)
             }
