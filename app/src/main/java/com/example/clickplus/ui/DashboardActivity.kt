@@ -933,8 +933,9 @@ private fun LogsScreen(
                                 }
                             }
                             val rule = mappings.firstOrNull { it.id == log.ruleId }
+                            val isManualTest = log.detail == "בדיקה ידנית"
                             val actualActionDetails = log.detail
-                                .takeIf { it.isNotBlank() && !it.startsWith("לא נמסר הסבר") }
+                                .takeIf { it.isNotBlank() && !isManualTest && !it.startsWith("לא נמסר הסבר") }
                                 ?: rule?.let { currentRule ->
                                     when (currentRule.actionType) {
                                         ActionType.SYSTEM -> when (currentRule.systemActionId) {
@@ -959,7 +960,7 @@ private fun LogsScreen(
                                         }
                                     }
                                 } ?: "הפעולה שבוצעה"
-                            val ruleDetails = if (log.detail == "בדיקה ידנית") {
+                            val ruleDetails = if (isManualTest) {
                                 "בדיקה ידנית · " + actualActionDetails
                             } else {
                                 actualActionDetails
