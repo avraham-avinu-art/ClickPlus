@@ -28,6 +28,8 @@ class TapCountOverlay(private val context: Context) {
 
     private var attached = false
     private var hideRunnable: Runnable? = null
+    private var xPercentFromLeft = 50
+    private var yPercentFromTop = 65
 
     fun show(count: Int, durationMs: Long = 900L) {
         textView.text = count.toString()
@@ -45,8 +47,10 @@ class TapCountOverlay(private val context: Context) {
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT,
             ).apply {
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                y = (height * 0.35f).toInt()
+                gravity = Gravity.TOP or Gravity.START
+                x = ((context.resources.displayMetrics.widthPixels - (64 * density).toInt())
+                    .coerceAtLeast(0) * xPercentFromLeft.coerceIn(0, 100) / 100f).toInt()
+                y = ((height - (48 * density).toInt()).coerceAtLeast(0) * yPercentFromTop.coerceIn(0, 100) / 100f).toInt()
             }
 
             runCatching {
@@ -62,6 +66,21 @@ class TapCountOverlay(private val context: Context) {
         val hide = Runnable { textView.visibility = View.GONE }
         hideRunnable = hide
         textView.postDelayed(hide, durationMs.coerceIn(300L, 1500L))
+    }
+
+    fun setPosition(percentFromLeft: Int, percentFromTop: Int) {
+        xPercentFromLeft = percentFromLeft.coerceIn(0, 100)
+        yPercentFromTop = percentFromTop.coerceIn(0, 100)
+        if (attached) {
+            val params = textView.layoutParams as? WindowManager.LayoutParams ?: return
+            val density = context.resources.displayMetrics.density
+            params.gravity = Gravity.TOP or Gravity.START
+            params.x = ((context.resources.displayMetrics.widthPixels - (64 * density).toInt())
+                .coerceAtLeast(0) * xPercentFromLeft / 100f).toInt()
+            params.y = ((context.resources.displayMetrics.heightPixels - (48 * density).toInt())
+                .coerceAtLeast(0) * yPercentFromTop / 100f).toInt()
+            runCatching { windowManager.updateViewLayout(textView, params) }
+        }
     }
 
     fun hide() {

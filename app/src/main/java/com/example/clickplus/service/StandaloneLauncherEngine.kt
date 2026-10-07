@@ -151,6 +151,24 @@ object StandaloneLauncherEngine {
             ContextConditionType.MUTED,
             ContextConditionType.RINGING,
             ContextConditionType.RADIO -> false
+            ContextConditionType.BRIGHTNESS_LOW -> {
+                val brightness = runCatching {
+                    Settings.System.getInt(
+                        context.contentResolver,
+                        Settings.System.SCREEN_BRIGHTNESS,
+                        255,
+                    )
+                }.getOrDefault(255)
+                brightness <= 64
+            }
+            ContextConditionType.VOLUME_LEVEL -> {
+                val audio = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                    ?: return false
+                val expected = config.contextConditionValue.toIntOrNull()?.coerceIn(1, 30) ?: return false
+                val max = audio.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                val current = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                kotlin.math.round(current.toDouble() / max.toDouble() * 30.0).toInt().coerceIn(0, 30) == expected
+            }
         }
     }
 }
