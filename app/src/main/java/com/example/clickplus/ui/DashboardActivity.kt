@@ -1721,11 +1721,15 @@ private fun EditorScreen(
                             selected = actionTypeChosen && draft.actionType == ActionType.SYSTEM,
                             onClick = {
                                 actionTypeChosen = true
-                                draft = draft.copy(actionType = ActionType.SYSTEM)
-                                if (selectedSystemCategory == null) {
-                                    selectedSystemCategory = "ניווט"
-                                    draft = draft.copy(systemActionId = SystemActionPreset.HOME.id)
+                                selectedSystemCategory = existing?.let {
+                                    SystemActionPreset.entries.firstOrNull { preset ->
+                                        preset.id == it.systemActionId
+                                    }?.categoryHebrew
                                 }
+                                draft = draft.copy(
+                                    actionType = ActionType.SYSTEM,
+                                    systemActionId = if (existing != null) draft.systemActionId else "",
+                                )
                             },
                             label = "פעולת מכשיר",
                             modifier = Modifier.weight(1f),
