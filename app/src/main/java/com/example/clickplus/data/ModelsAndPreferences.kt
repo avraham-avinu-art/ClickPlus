@@ -21,8 +21,6 @@ enum class ActionType(val titleHebrew: String) {
 }
 enum class TriggerType(val titleHebrew: String) {
     APP_ENTRY("כניסה לאפליקציה"),
-    SCREEN_TAP("לחיצה במיקום במסך"),
-    APP_TAP("לחיצה באפליקציה פתוחה"),
 }
 
 enum class ContextConditionType(val titleHebrew: String) {
@@ -93,6 +91,8 @@ data class KeyActionConfig(
     val actionType: ActionType = ActionType.SYSTEM,
     val systemActionId: String = SystemActionPreset.HOME.id,
     val actionParameter: String = "",
+    val contactName: String = "",
+    val contactNumber: String = "",
     val targetPackage: String = "",
     val targetAppName: String = "",
     val contextConditionType: ContextConditionType = ContextConditionType.ANY,
@@ -118,6 +118,8 @@ data class KeyActionConfig(
             when (action?.id) {
                 SystemActionPreset.DIAL_NUMBER.id ->
                     "חיוג ל-" + actionParameter.ifBlank { "מספר" }
+                SystemActionPreset.DIAL_CONTACT.id ->
+                    "חיוג ל-" + contactName.ifBlank { "איש קשר" }
                 else -> action?.titleHebrew ?: "פעולת מערכת"
             }
         }
@@ -127,10 +129,8 @@ data class KeyActionConfig(
     }
 
     fun contextSummary(): String {
-        if (triggerType == TriggerType.SCREEN_TAP || triggerType == TriggerType.APP_TAP) {
-            val x = if (screenTapXRatio >= 0f) (screenTapXRatio * 100f).toInt().toString() + "%" else "לא הוגדר"
-            val y = if (screenTapYRatio >= 0f) (screenTapYRatio * 100f).toInt().toString() + "%" else "לא הוגדר"
-            return "לחיצה אוטומטית ב-" + screenTapAppName.ifBlank { "אפליקציה" } + " · X " + x + " · Y " + y
+        if (triggerType == TriggerType.APP_ENTRY && actionType == ActionType.SYSTEM && systemActionId == SystemActionPreset.DIAL_CONTACT.id) {
+            return "כניסה לאפליקציה · חיוג לאיש הקשר " + contactName.ifBlank { "שנבחר" }
         }
         return when (contextConditionType) {
             ContextConditionType.ANY -> "בכל מצב"
@@ -148,6 +148,7 @@ data class KeyActionConfig(
         put("id", id); put("name", name); put("pressCount", pressCount)
         put("actionType", actionType.name); put("systemActionId", systemActionId)
         put("actionParameter", actionParameter)
+        put("contactName", contactName); put("contactNumber", contactNumber)
         put("targetPackage", targetPackage); put("targetAppName", targetAppName)
         put("contextConditionType", contextConditionType.name)
         put("contextConditionValue", contextConditionValue); put("contextConditionName", contextConditionName)
@@ -167,6 +168,8 @@ data class KeyActionConfig(
             actionType = runCatching { ActionType.valueOf(json.optString("actionType", ActionType.SYSTEM.name)) }.getOrDefault(ActionType.SYSTEM),
             systemActionId = json.optString("systemActionId", SystemActionPreset.HOME.id),
             actionParameter = json.optString("actionParameter", ""),
+            contactName = json.optString("contactName", ""),
+            contactNumber = json.optString("contactNumber", ""),
             targetPackage = json.optString("targetPackage", ""),
             targetAppName = json.optString("targetAppName", ""),
             contextConditionType = runCatching { ContextConditionType.valueOf(json.optString("contextConditionType", ContextConditionType.ANY.name)) }.getOrDefault(ContextConditionType.ANY),
@@ -192,6 +195,8 @@ class AppPreferencesRepository(private val context: Context) {
         val TAP_TIMEOUT_MS = longPreferencesKey("tap_timeout_ms")
         val ACTION_DELAY_MS = longPreferencesKey("action_delay_ms")
         val SHOW_TAP_COUNT = booleanPreferencesKey("show_tap_count")
+        val TAP_COUNT_X = longPreferencesKey("tap_count_x")
+        val TAP_COUNT_Y = longPreferencesKey("tap_count_y")
         val TAP_COUNT_POSITION = longPreferencesKey("tap_count_position")
         val MAPPINGS_JSON = stringPreferencesKey("mappings_json")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
@@ -206,11 +211,20 @@ class AppPreferencesRepository(private val context: Context) {
                 .getLong("action_delay_ms", 0L)
                 .coerceIn(0L, 5000L)
 
-        fun tapCountPositionSnapshot(context: Context): Int =
+        fun tapCountXSnapshot(context: Context): Int =
             context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                .getLong("tap_count_position", 35L)
+                .getLong("tap_count_x", 50L)
                 .toInt()
-                .coerceIn(5, 90)
+                .coerceIn(0, 100)
+
+        fun tapCountYSnapshot(context: Context): Int =
+            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                .getLong("tap_count_y", 65L)
+                .toInt()
+                .coerceIn(0, 100)
+
+        fun tapCountPositionSnapshot(context: Context): Int =
+            (100 - tapCountYSnapshot(context)).coerceIn(0, 100)
 
         fun mappingsSnapshot(context: Context): List<KeyActionConfig> {
             val raw = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
@@ -230,7 +244,12 @@ class AppPreferencesRepository(private val context: Context) {
     val tapTimeoutFlow: Flow<Long> = context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 1200L }
     val actionDelayFlow: Flow<Long> = context.dataStore.data.map { it[ACTION_DELAY_MS] ?: 0L }
     val showTapCountFlow: Flow<Boolean> = context.dataStore.data.map { it[SHOW_TAP_COUNT] ?: false }
-    val tapCountPositionFlow: Flow<Int> = context.dataStore.data.map { it[TAP_COUNT_POSITION]?.toInt()?.coerceIn(5, 90) ?: 35 }
+    val tapCountXFlow: Flow<Int> = context.dataStore.data.map { it[TAP_COUNT_X]?.toInt()?.coerceIn(0, 100) ?: 50 }
+    val tapCountYFlow: Flow<Int> = context.dataStore.data.map {
+        it[TAP_COUNT_Y]?.toInt()?.coerceIn(0, 100)
+            ?: (100 - (it[TAP_COUNT_POSITION]?.toInt()?.coerceIn(5, 90) ?: 35))
+    }
+    val tapCountPositionFlow: Flow<Int> = tapCountYFlow.map { (100 - it).coerceIn(0, 100) }
     val mappingsFlow: Flow<List<KeyActionConfig>> = context.dataStore.data.map { prefs ->
         val array = runCatching { JSONArray(prefs[MAPPINGS_JSON] ?: "[]") }.getOrDefault(JSONArray())
         buildList {
@@ -263,10 +282,28 @@ class AppPreferencesRepository(private val context: Context) {
             .edit().putBoolean("show_tap_count", enabled).apply()
     }
     suspend fun saveTapCountPosition(percentFromBottom: Int) {
-        val safe = percentFromBottom.coerceIn(5, 90)
-        context.dataStore.edit { it[TAP_COUNT_POSITION] = safe.toLong() }
+        val safe = percentFromBottom.coerceIn(0, 100)
+        saveTapCountY(100 - safe)
+    }
+
+    suspend fun saveTapCountX(percentFromLeft: Int) {
+        val safe = percentFromLeft.coerceIn(0, 100)
+        context.dataStore.edit { it[TAP_COUNT_X] = safe.toLong() }
         context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit().putLong("tap_count_position", safe.toLong()).apply()
+            .edit().putLong("tap_count_x", safe.toLong()).apply()
+    }
+
+    suspend fun saveTapCountY(percentFromTop: Int) {
+        val safe = percentFromTop.coerceIn(0, 100)
+        context.dataStore.edit {
+            it[TAP_COUNT_Y] = safe.toLong()
+            it[TAP_COUNT_POSITION] = (100 - safe).toLong()
+        }
+        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+            .edit()
+            .putLong("tap_count_y", safe.toLong())
+            .putLong("tap_count_position", (100 - safe).toLong())
+            .apply()
     }
     suspend fun setOnboardingCompleted(completed: Boolean) { context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed } }
     suspend fun saveMappings(mappings: List<KeyActionConfig>) {
