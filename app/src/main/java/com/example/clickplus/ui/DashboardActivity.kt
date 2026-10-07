@@ -125,7 +125,8 @@ import com.example.clickplus.data.AppMode
 import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.ClickPlusProfile
-import com.example.clickplus.data.ClickPlusProfileAction
+import com.example.clickplus.data.profileActionId
+import com.example.clickplus.data.profileIdFromActionId
 import com.example.clickplus.data.ContextConditionType
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.RuleAdvancedMetadata
@@ -411,7 +412,7 @@ private fun HomeDashboard(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("קליק פלוס", fontWeight = FontWeight.Bold) },
+                title = { Text("קליק פלוס פועל", fontWeight = FontWeight.Bold) },
                 actions = {
                     androidx.compose.runtime.CompositionLocalProvider(
                         LocalLayoutDirection provides LayoutDirection.Ltr
@@ -438,27 +439,60 @@ private fun HomeDashboard(
                 ) {
                     OutlinedButton(
                         onClick = onStatus,
-                        Modifier.weight(1f).height(54.dp),
+                        Modifier.weight(1f).height(68.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
                     ) {
-                        Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text("סטטוס השירות", maxLines = 2, textAlign = TextAlign.Center)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
+                            Text(
+                                "סטטוס השירות",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
                     }
                     OutlinedButton(
                         onClick = onProfiles,
-                        Modifier.weight(1f).height(54.dp),
+                        Modifier.weight(1f).height(68.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
                     ) {
-                        Icon(Icons.Outlined.Settings, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text("פרופילים", maxLines = 2, textAlign = TextAlign.Center)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Icon(Icons.Outlined.Settings, null, Modifier.size(18.dp))
+                            Text(
+                                "פרופילים",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
                     }
                     OutlinedButton(
                         onClick = onStatus,
-                        Modifier.weight(1f).height(54.dp),
+                        Modifier.weight(1f).height(68.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
                     ) {
-                        Icon(Icons.Outlined.CheckCircle, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text("קליק פלוס פעיל", maxLines = 2, textAlign = TextAlign.Center)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Icon(Icons.Outlined.CheckCircle, null, Modifier.size(18.dp))
+                            Text(
+                                "קליק פלוס פעיל",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
                     }
                 }
             }
@@ -691,6 +725,21 @@ private fun StatusScreen(
         ) {
             item {
                 SettingCard(
+                    "הבדל בין סוגי הטריגר",
+                    "הסבר קבוע על אופן הספירה של שני סוגי הכניסה.",
+                ) {
+                    Text(
+                        "לחיצות כניסה לקליק פלוס: הלחיצה על הסמל אינה נועדה לפתוח מחדש את ממשק ClickPlus, ולכן היא מוגדרת כטריגר כבר מהלחיצה הראשונה. כל כניסה דרך הסמל נספרת מיד.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "לחיצות כניסה לאפליקציה אחרת: הכניסה תלויה בכך שהאפליקציה שנבחרה כבר פתוחה וזמינה. אם היא לא פתוחה, הכניסה הראשונה רק פותחת אותה ואינה נספרת לטריגר. רק כניסות חוזרות לאחר שהאפליקציה כבר נפתחה נספרות.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            item {
+                SettingCard(
                     "מצב עבודה",
                     if (mode == AppMode.FULL) {
                         "מצב מלא משתמש בשירות נגישות כדי לזהות כניסות לאפליקציות ולבצע יכולות מתקדמות."
@@ -832,23 +881,44 @@ private fun LogsScreen(
                                 }
                             }
                             val rule = mappings.firstOrNull { it.id == log.ruleId }
+                            val ruleDetails = if (rule != null) {
+                                when (rule.actionType) {
+                                    ActionType.APP -> "פתיחת אפליקציה: " + rule.targetAppName.ifBlank { rule.targetPackage }
+                                    ActionType.APP_TAP -> "פתיחה ולחיצה באפליקציה: " + rule.screenTapAppName.ifBlank { rule.screenTapPackage }
+                                    ActionType.MULTI_POINT_TAP -> "פתיחה ושתי לחיצות באפליקציה: " + rule.screenTapAppName.ifBlank { rule.screenTapPackage }
+                                    ActionType.PROFILE -> {
+                                        val targetProfileId = profileIdFromActionId(rule.systemActionId)
+                                        val targetProfile = targetProfileId?.let { id ->
+                                            AdvancedRuleRepository(context).profiles().firstOrNull { it.id == id }
+                                        }
+                                        "החלפת פרופיל: " + (targetProfile?.name ?: "הפרופיל שנבחר")
+                                    }
+                                    ActionType.SYSTEM -> rule.actionSummary()
+                                }
+                            } else {
+                                log.actionLabel.ifBlank { log.message }
+                            }
                             Text(
-                                "שם הפעולה: " + log.actionLabel.ifBlank { log.message },
+                                "שם הפעולה: " + (rule?.name?.ifBlank { null } ?: log.actionLabel.ifBlank { "פעולה" }),
                                 fontWeight = FontWeight.Bold,
                             )
-                            if (rule != null) {
-                                Text(
-                                    "הפעולה שהיה צריך לבצע: " + rule.actionSummary(),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            }
-                            if (log.message.isNotBlank() && log.message != log.actionLabel) {
-                                Text(log.message, style = MaterialTheme.typography.bodyMedium)
-                            }
+                            Text(
+                                "פרטי הפעולה: " + ruleDetails,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                "תוצאה: " + (when (log.success) {
+                                    true -> "הצלחה"
+                                    false -> "כישלון"
+                                    null -> "ממתין"
+                                }),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                             if (log.success == false) {
                                 Text("סיבת הכישלון: " + log.detail.ifBlank { "לא נמסר הסבר." })
+                            } else if (log.detail.isNotBlank()) {
+                                Text(log.detail, style = MaterialTheme.typography.bodySmall)
                             }
-                            else if (log.detail.isNotBlank()) Text(log.detail, style = MaterialTheme.typography.bodySmall)
                             if (log.appPackage.isNotBlank()) Text(log.appPackage, style = MaterialTheme.typography.labelSmall)
                         }
                     }
@@ -1095,10 +1165,11 @@ private fun SettingsScreen(
                         Switch(checked = showTapCount, onCheckedChange = onShowTapCount)
                     }
                     Spacer(Modifier.height(6.dp))
-                    Text("מיקום אופקי: " + tapCountX + "% מימין")
+                    val tapCountXFromRight = (100 - tapCountX).coerceIn(0, 100)
+                    Text("מיקום אופקי: " + tapCountXFromRight + "% מימין")
                     Slider(
-                        value = tapCountX.toFloat(),
-                        onValueChange = { onTapCountX(it.toInt()) },
+                        value = tapCountXFromRight.toFloat(),
+                        onValueChange = { onTapCountX((100 - it.toInt()).coerceIn(0, 100)) },
                         valueRange = 0f..100f,
                     )
                     Text("מיקום אנכי: " + tapCountY + "% מלמעלה")
@@ -1605,10 +1676,7 @@ private fun EditorScreen(
                     "מתי להפעיל?",
                     "בחר אם הרצף יופעל בעקבות כניסות לקליק פלוס עצמו או בעקבות כניסות לאפליקציה אחרת.",
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         ChoiceChip(
                             selected = draft.triggerType == TriggerType.CLICKPLUS_ENTRY,
                             onClick = {
@@ -1620,7 +1688,7 @@ private fun EditorScreen(
                                 validationMessage = ""
                             },
                             label = "לחיצות כניסה לקליק פלוס",
-                            modifier = Modifier.weight(1f).height(62.dp),
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
                         )
                         ChoiceChip(
                             selected = draft.triggerType == TriggerType.APP_ENTRY,
@@ -1629,7 +1697,7 @@ private fun EditorScreen(
                                 validationMessage = ""
                             },
                             label = "לחיצות כניסה לאפליקציה אחרת",
-                            modifier = Modifier.weight(1f).height(62.dp),
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
                         )
                     }
 
@@ -1637,7 +1705,7 @@ private fun EditorScreen(
 
                     if (draft.triggerType == TriggerType.CLICKPLUS_ENTRY) {
                         Text(
-                            "הטריגר פועל לפי לחיצות על סמל קליק פלוס: כל כניסה דרך הסמל נחשבת לחיצה אחת. לאחר מספר הלחיצות שהוגדר, הפעולה מופעלת. הוא אינו תלוי בלחיצות בתוך אפליקציה אחרת.",
+                            "כניסה לקליק פלוס אינה נועדה לפתוח את הממשק מחדש, ולכן היא נחשבת טריגר כבר מהלחיצה הראשונה. כל כניסה דרך הסמל נספרת מיד.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     } else {
@@ -1657,7 +1725,7 @@ private fun EditorScreen(
                             if (draft.triggerPackage.isBlank()) {
                                 "יש לבחור אפליקציה. הטריגר נספר בעת כניסה אליה, באמצעות זיהוי שינוי החלון של Android. אין צורך ללחוץ בתוך האפליקציה."
                             } else {
-                                "הטריגר נספר בעת מעבר לאפליקציה שנבחרה. לחיצה רגילה בתוך האפליקציה אינה מפעילה את הרצף."
+                                "אם האפליקציה אינה פתוחה, הכניסה הראשונה רק פותחת אותה ואינה נספרת לטריגר. לאחר שהאפליקציה כבר נפתחה, כניסות חוזרות אליה יכולות להיספר כרצף. לחיצה רגילה בתוך האפליקציה אינה מפעילה את הטריגר."
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = if (draft.triggerPackage.isBlank()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
@@ -1822,13 +1890,14 @@ private fun EditorScreen(
                                     selectedSystemCategory = null
                                     draft = draft.copy(
                                         actionType = ActionType.PROFILE,
-                                        systemActionId = if (
-                                            draft.actionType == ActionType.PROFILE &&
-                                                ClickPlusProfileAction.entries.any { it.id == draft.systemActionId }
-                                        ) draft.systemActionId else ClickPlusProfileAction.NEXT.id,
+                                        systemActionId = if (draft.actionType == ActionType.PROFILE && profileIdFromActionId(draft.systemActionId) != null) {
+                                            draft.systemActionId
+                                        } else {
+                                            ""
+                                        },
                                     )
                                 },
-                                label = "פרופילי ClickPlus",
+                                label = "החלפת פרופיל",
                                 modifier = Modifier.weight(1f).height(54.dp),
                             )
                             Spacer(Modifier.weight(1f).height(54.dp))
@@ -2345,22 +2414,31 @@ private fun ProfileActionPicker(
     selectedId: String,
     onActionSelected: (String) -> Unit,
 ) {
+    val context = LocalContext.current
+    val repo = remember { AdvancedRuleRepository(context) }
+    val profiles = repo.profiles()
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Text("בחירת פרופיל", fontWeight = FontWeight.Bold)
         Text(
-            "החלפת פרופיל פנימי של ClickPlus",
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            "הפעולות כאן משנות רק את הפרופיל הפעיל בתוך ClickPlus עצמו.",
+            "בחר את הפרופיל המסוים שאליו ClickPlus יעבור כאשר הפעולה מופעלת.",
             style = MaterialTheme.typography.bodySmall,
         )
-        ClickPlusProfileAction.entries.forEach { action ->
-            ChoiceChip(
-                selected = selectedId == action.id,
-                onClick = { onActionSelected(action.id) },
-                label = action.titleHebrew,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+        if (profiles.isEmpty()) {
+            Text(
+                "לא נמצאו פרופילים לבחירה.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
             )
+        } else {
+            profiles.forEach { profile ->
+                val id = profileActionId(profile.id)
+                ChoiceChip(
+                    selected = selectedId == id,
+                    onClick = { onActionSelected(id) },
+                    label = if (profile.enabled) profile.name else profile.name + " · מושבת",
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                )
+            }
         }
     }
 }
@@ -2372,9 +2450,7 @@ private fun SystemActionPicker(
     onCategorySelected: (String?) -> Unit,
     onActionSelected: (String) -> Unit,
 ) {
-    val systemActions = SystemActionPreset.entries.filterNot {
-        ClickPlusProfileAction.entries.any { profileAction -> profileAction.id == it.id }
-    }
+    val systemActions = SystemActionPreset.entries
     val categories = systemActions.map { it.categoryHebrew }.distinct()
     val selected = selectedCategory
     if (selected == null) {
@@ -2740,8 +2816,9 @@ private fun ChoiceChip(
                 }
                 Text(
                     label,
+                    modifier = Modifier.weight(1f),
                     color = labelColor,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
