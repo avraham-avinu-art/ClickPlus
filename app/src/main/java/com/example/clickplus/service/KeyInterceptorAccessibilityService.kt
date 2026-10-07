@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Rect
+import android.graphics.Path
+import android.accessibilityservice.GestureDescription
 import android.os.Build
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
@@ -207,6 +209,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
 
         if (stage == 1 && prefs.getBoolean("tap_learning_multi", false)) {
             prefs.edit()
+                .putBoolean("tap_capture_ready", true)
                 .putFloat("tap_capture_x_ratio", xRatio)
                 .putFloat("tap_capture_y_ratio", yRatio)
                 .putInt("tap_capture_stage", 1)
@@ -222,6 +225,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
                 .putInt("tap_learning_stage", 2)
                 .apply()
             tapLearningOverlay.show(2)
+            replayLearningTouch(screenX, screenY)
         } else if (stage == 1) {
             prefs.edit()
                 .putBoolean("tap_learning", false)
@@ -239,8 +243,10 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
                     }.getOrDefault("")
                 )
                 .remove("tap_learning_stage")
+                .remove("tap_learning_multi")
                 .apply()
             tapLearningOverlay.hide()
+            replayLearningTouch(screenX, screenY)
             runCatching { startActivity(Intent(this, DashboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)) }
         } else {
             prefs.edit()
@@ -262,8 +268,21 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
                 .remove("tap_learning_multi")
                 .apply()
             tapLearningOverlay.hide()
+            replayLearningTouch(screenX, screenY)
             runCatching { startActivity(Intent(this, DashboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)) }
         }
+    }
+
+    private fun replayLearningTouch(screenX: Float, screenY: Float) {
+        val width = resources.displayMetrics.widthPixels.coerceAtLeast(1).toFloat()
+        val height = resources.displayMetrics.heightPixels.coerceAtLeast(1).toFloat()
+        val x = screenX.coerceIn(0f, width - 1f)
+        val y = screenY.coerceIn(0f, height - 1f)
+        val path = Path().apply { moveTo(x, y) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0L, 45L))
+            .build()
+        runCatching { dispatchGesture(gesture, null, null) }
     }
 
     private fun captureTapLocationIfRequested(event: AccessibilityEvent): Boolean {
