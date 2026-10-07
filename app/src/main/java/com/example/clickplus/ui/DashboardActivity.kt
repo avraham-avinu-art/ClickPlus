@@ -1121,7 +1121,9 @@ private fun SettingsScreen(
     onTheme: (String) -> Unit,
     onBackup: () -> Unit,
 ) {
-    Scaffold(topBar = { SimpleTopBar("הגדרות", onBack, "כאן אפשר לשנות את מצב העבודה, מונה הלחיצות, חלון הלחיצות, מראה וגיבוי.") }) { padding ->
+    var selectedMode by remember(currentMode) { mutableStateOf(currentMode) }
+    val context = LocalContext.current
+    Scaffold(topBar = { SimpleTopBar("הגדרות", onBack, "כאן אפשר לשנות את מצב העבודה, מונה הלחיצות, חלון הלחיצות, מראה, גיבוי והרשאות.") }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
@@ -1130,20 +1132,31 @@ private fun SettingsScreen(
             item {
                 SettingCard(
                     "מצב עבודה",
-                    "בחר איך קליק פלוס יפעל. מצב מלא משתמש בשירות הנגישות; מצב בסיסי אינו דורש אותו.",
+                    "הבחירה נמצאת כאן בלבד. מצב מלא משתמש בשירות הנגישות; מצב בסיסי אינו דורש אותו.",
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        maxItemsInEachRow = 2,
+                    ) {
                         ChoiceChip(
-                            selected = currentMode == AppMode.FULL,
-                            onClick = { onMode(AppMode.FULL) },
+                            selected = selectedMode == AppMode.FULL,
+                            onClick = {
+                                selectedMode = AppMode.FULL
+                                onMode(AppMode.FULL)
+                            },
                             label = "מצב מלא",
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.widthIn(min = 130.dp),
                         )
                         ChoiceChip(
-                            selected = currentMode == AppMode.BASIC,
-                            onClick = { onMode(AppMode.BASIC) },
+                            selected = selectedMode == AppMode.BASIC,
+                            onClick = {
+                                selectedMode = AppMode.BASIC
+                                onMode(AppMode.BASIC)
+                            },
                             label = "מצב בסיסי ללא נגישות",
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.widthIn(min = 180.dp),
                         )
                     }
                 }
@@ -1151,7 +1164,7 @@ private fun SettingsScreen(
             item {
                 SettingCard(
                     "זמן חלון לחיצות",
-                    "הזמן שבו קליק פלוס מחכה ללחיצות אוטומטיות נוספות לפני שהוא מפעיל את ההתאמה. לדוגמה: 4 לחיצות בתוך החלון.",
+                    "הזמן המקסימלי בין לחיצה אחת לבין הלחיצה הבאה באותו רצף. הוא קובע מתי רצף נסגר.",
                 ) {
                     Text("${timeout}ms", style = MaterialTheme.typography.titleMedium)
                     Slider(
@@ -1165,7 +1178,7 @@ private fun SettingsScreen(
             item {
                 SettingCard(
                     "השהיה לפני פעולה",
-                    "המתנה לאחר שהרצף כבר זוהה ולפני שקליק פלוס מבצע את הפעולה. היא אינה משנה את חלון זיהוי הלחיצות.",
+                    "המתנה אחרי שהרצף כבר הוכר ולפני ביצוע הפעולה. היא לא משנה את זיהוי הרצף.",
                 ) {
                     Text("${actionDelay}ms", style = MaterialTheme.typography.titleMedium)
                     Slider(
@@ -1177,12 +1190,14 @@ private fun SettingsScreen(
                 }
             }
             item {
-                SettingCard("מונה לחיצות על המסך", "מציג זמנית את מספר הלחיצות האוטומטיות גם מעל אפליקציות אחרות כאשר מצב מלא ושירות הנגישות פעילים.") {
+                SettingCard(
+                    "מונה לחיצות אוטומטיות",
+                    "מציג את מספר הלחיצות האוטומטיות מעל כל אפליקציה. נדרש מצב מלא ושירות נגישות פעיל.",
+                ) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("הצג מונה", Modifier.weight(1f))
                         Switch(checked = showTapCount, onCheckedChange = onShowTapCount)
                     }
-                    Spacer(Modifier.height(4.dp))
                     Text("מיקום: ${tapCountPosition}% מתחתית המסך", style = MaterialTheme.typography.bodySmall)
                     Slider(
                         value = tapCountPosition.toFloat(),
@@ -1193,17 +1208,35 @@ private fun SettingsScreen(
                 }
             }
             item {
-                SettingCard("מראה", "בחר את ערכת הצבעים.") {
+                SettingCard("מראה", "בחירת מראה") {
                     Row(
-                        Modifier.fillMaxWidth(),
+                        Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        ThemeChip("מערכת", "system", themeMode, onTheme, Icons.Outlined.BrightnessAuto, Modifier.weight(1f))
-                        ThemeChip("בהיר", "light", themeMode, onTheme, Icons.Outlined.LightMode, Modifier.weight(1f))
-                        ThemeChip("כהה", "dark", themeMode, onTheme, Icons.Outlined.DarkMode, Modifier.weight(1f))
-                        if (Build.VERSION.SDK_INT >= 31) {
-                            ThemeChip("דינמי", "dynamic", themeMode, onTheme, Icons.Outlined.BrightnessAuto, Modifier.weight(1f))
-                        }
+                        ThemeChip("מערכת", "system", themeMode, onTheme, Icons.Outlined.BrightnessAuto)
+                        ThemeChip("בהיר", "light", themeMode, onTheme, Icons.Outlined.LightMode)
+                        ThemeChip("כהה", "dark", themeMode, onTheme, Icons.Outlined.DarkMode)
+                        if (Build.VERSION.SDK_INT >= 31) ThemeChip("דינמי", "dynamic", themeMode, onTheme, Icons.Outlined.BrightnessAuto)
+                    }
+                }
+            }
+            item {
+                SettingCard("הרשאות ופרטי אפליקציה", "ההרשאות ניתנות לפי צורך; אין מסך מצב שירות שמכריח אותך לעבור דרכו.") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = android.net.Uri.parse("package:" + context.packageName)
+                                    }
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("פרטי האפליקציה ב-Android") }
+                        Text(
+                            "הגדרות Android אינן מאפשרות לאפליקציה להוסיף כפתור מותאם אישית בתוך דף 'פרטי האפליקציה'. הכפתור הזה פותח ישירות את אותו דף.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
             }
@@ -2328,9 +2361,7 @@ private fun ThemeChip(
             selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
             selectedTrailingIconColor = MaterialTheme.colorScheme.onPrimary,
         ),
-        label = {
-            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-        },
+        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingIcon = { Icon(icon, null, Modifier.size(17.dp)) },
     )
 }
