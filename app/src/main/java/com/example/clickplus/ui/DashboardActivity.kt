@@ -475,6 +475,24 @@ private fun HomeDashboard(
                     )
                 }
             }
+            item {
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(onClick = onAdd, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Outlined.Add, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("הוספת פעולה")
+                    }
+                    OutlinedButton(onClick = onTest, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Outlined.History, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("יומן")
+                    }
+                }
+            }
         }
     }
 
@@ -606,7 +624,11 @@ private fun EmptyState(onAdd: () -> Unit) {
             Icon(Icons.Outlined.Add, null, Modifier.size(42.dp))
             Spacer(Modifier.height(8.dp))
             Text("עדיין אין פעולות", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("צור את הכלל הראשון שלך ובנה פעולה לפי כניסה או מיקום לחיצה.")
+            Text(
+                "צור את הפעולה הראשונה שלך ובנה אותה לפי כניסה או לפי לחיצה אוטומטית.",
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
             Spacer(Modifier.height(12.dp))
             Button(onClick = onAdd) { Text("יצירת הפעולה הראשונה") }
         }
