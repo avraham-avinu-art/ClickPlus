@@ -1138,7 +1138,7 @@ private fun EditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        (1..5).forEach { n ->
+                        (1..10).forEach { n ->
                             ChoiceChip(
                                 selected = draft.pressCount == n,
                                 onClick = { draft = draft.copy(pressCount = n) },
