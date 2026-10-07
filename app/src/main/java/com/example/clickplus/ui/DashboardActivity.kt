@@ -1107,7 +1107,7 @@ private fun SettingsScreen(
             item {
                 SettingCard(
                     "הרשאות וגישה",
-                    "כאן נמצאות רק כניסות להגדרות Android שנדרשות לתכונות המתקדמות. אין צורך בקישור נפרד ל'פרטי האפליקציה'.",
+                    "כאן נמצאות רק כניסות להגדרות Android שנדרשות לתכונות המתקדמות. אין כאן קישור מיותר להגדרות שאינן קשורות ישירות לתכונות האפליקציה.",
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
@@ -1209,7 +1209,9 @@ private fun BackupScreen(
                     if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 1200L))
                     if (it.has("actionDelayMs")) basePrefs.saveActionDelay(it.optLong("actionDelayMs", 0L))
                     if (it.has("showTapCount")) basePrefs.saveShowTapCount(it.optBoolean("showTapCount", false))
-                    if (it.has("tapCountPosition")) basePrefs.saveTapCountPosition(it.optInt("tapCountPosition", 35))
+                    if (it.has("tapCountX")) basePrefs.saveTapCountX(it.optInt("tapCountX", 50))
+                    if (it.has("tapCountY")) basePrefs.saveTapCountY(it.optInt("tapCountY", 65))
+                    else if (it.has("tapCountPosition")) basePrefs.saveTapCountPosition(it.optInt("tapCountPosition", 35))
                 }
                 advanced.importBundle(root)
                 message = "הגיבוי יובא בהצלחה."
@@ -1255,6 +1257,8 @@ private fun BackupScreen(
                                             .put("tapTimeoutMs", timeout)
                                             .put("actionDelayMs", actionDelay)
                                             .put("showTapCount", showTapCount)
+                                            .put("tapCountX", AppPreferencesRepository.tapCountXSnapshot(context))
+                                            .put("tapCountY", AppPreferencesRepository.tapCountYSnapshot(context))
                                             .put("tapCountPosition", AppPreferencesRepository.tapCountPositionSnapshot(context)),
                                     )
                                 )
