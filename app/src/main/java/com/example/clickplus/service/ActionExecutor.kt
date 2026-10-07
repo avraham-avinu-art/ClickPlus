@@ -11,7 +11,6 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.KeyEvent
 import com.example.clickplus.data.ActionType
-import com.example.clickplus.data.ActivityLog
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.SystemActionPreset
@@ -153,20 +152,13 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         success: Boolean,
         detail: String,
     ) {
-        AdvancedRuleRepository.addLog(
-            service,
-            ActivityLog(
-                timestamp = System.currentTimeMillis(),
-                type = "ACTION",
-                message = if (success) "הפעולה הצליחה" else "הפעולה נכשלה",
-                ruleId = config.id,
-                appPackage = targetPackage,
-                xRatio = config.screenTapXRatio,
-                yRatio = config.screenTapYRatio,
-                success = success,
-                detail = detail,
-            ),
-        )
+        AdvancedRuleRepository.updateLatestPendingActionLog(
+            context = service,
+            ruleId = config.id,
+            appPackage = targetPackage,
+            success = success,
+            detail = detail,
+        ))
     }
 
     private fun executeSystem(actionId: String): ActionExecutionResult = when (actionId) {
