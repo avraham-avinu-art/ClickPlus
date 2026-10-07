@@ -24,7 +24,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.animation.animateContentSize
@@ -2307,14 +2309,33 @@ private fun PointEditor(
             ),
         ) {
             Canvas(
-                Modifier.fillMaxSize().padding(14.dp).pointerInput(Unit) {
-                    detectDragGestures { change, _ ->
-                        val nx = if (size.width > 0f) (change.position.x / size.width).coerceIn(0f, 1f) else safeX
-                        val ny = if (size.height > 0f) (change.position.y / size.height).coerceIn(0f, 1f) else safeY
-                        onChange(nx, ny)
-                        change.consume()
+                Modifier
+                    .fillMaxSize()
+                    .padding(14.dp)
+                    .pointerInput(safeX, safeY) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val pointX = safeX * size.width
+                            val pointY = safeY * size.height
+                            val dx = down.position.x - pointX
+                            val dy = down.position.y - pointY
+                            val handleRadius = 40.dp.toPx()
+                            val startsOnHandle = dx * dx + dy * dy <= handleRadius * handleRadius
+                            if (!startsOnHandle) return@awaitEachGesture
+
+                            down.consume()
+                            drag(down.id) { change ->
+                                val nx = if (size.width > 0f) {
+                                    (change.position.x / size.width).coerceIn(0f, 1f)
+                                } else safeX
+                                val ny = if (size.height > 0f) {
+                                    (change.position.y / size.height).coerceIn(0f, 1f)
+                                } else safeY
+                                onChange(nx, ny)
+                                change.consume()
+                            }
+                        }
                     }
-                }
             ) {
                 val px = safeX * size.width
                 val py = safeY * size.height
