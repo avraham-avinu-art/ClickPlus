@@ -630,7 +630,7 @@ private fun StatusScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    val mode = AdvancedRuleRepository.currentMode(context)
+    var mode by remember(refreshKey) { mutableStateOf(AdvancedRuleRepository.currentMode(context)) }
     val service = remember(refreshKey) { isAccessibilityEnabled(context) }
     val usage = remember(refreshKey) { hasUsageAccess(context) }
     val screenRules = mappings.count { it.triggerType == TriggerType.SCREEN_TAP && it.enabled }
@@ -663,13 +663,13 @@ private fun StatusScreen(
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             ChoiceChip(
                                 selected = mode == AppMode.FULL,
-                                onClick = { onMode(AppMode.FULL) },
+                                onClick = { mode = AppMode.FULL; onMode(AppMode.FULL) },
                                 label = "מלא",
                                 modifier = Modifier.weight(1f),
                             )
                             ChoiceChip(
                                 selected = mode == AppMode.BASIC,
-                                onClick = { onMode(AppMode.BASIC) },
+                                onClick = { mode = AppMode.BASIC; onMode(AppMode.BASIC) },
                                 label = "Basic ללא נגישות",
                                 modifier = Modifier.weight(1f),
                             )
@@ -1249,7 +1249,7 @@ private fun EditorScreen(
                             metadata,
                         )
                     },
-                    Modifier.fillMaxWidth().padding(12.dp).height(54.dp),
+                    Modifier.fillMaxWidth().padding(8.dp).height(48.dp),
                 ) {
                     Icon(Icons.Outlined.Save, null); Spacer(Modifier.width(8.dp)); Text("שמירת פעולה")
                 }
@@ -1258,11 +1258,11 @@ private fun EditorScreen(
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(10.dp, 6.dp, 10.dp, 14.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             item {
-                SettingCard("פרטי הכלל", "שם ברור יעזור למצוא את הפעולה ביומן ובדשבורד.") {
+                SettingCard("פרטי הכלל", "שם הפעולה שיופיע ברשימה.") {
                     OutlinedTextField(
                         value = draft.name,
                         onValueChange = { draft = draft.copy(name = it) },
@@ -1342,7 +1342,7 @@ private fun EditorScreen(
                 }
             } else {
                 item {
-                    SettingCard("לימוד מיקום", "פתח את האפליקציה, לחץ על היעד ושמור את המיקום. לאחר מכן ניתן לדייק אותו ידנית.") {
+                    SettingCard("לימוד מיקום", "בחר אפליקציה ולמד את נקודת הלחיצה.") {
                         Button(
                             onClick = {
                                 if (!isAccessibilityEnabled(context)) {
@@ -1452,7 +1452,7 @@ private fun EditorScreen(
                 }
             }
             item {
-                SettingCard("אפשרויות מתקדמות", "התנהגות מדויקת יותר לכלל.") {
+                SettingCard("אפשרויות מתקדמות", "עדיפות, השהיה, ניסיונות וסבילות.") {
                     Text("עדיפות: " + metadata.priority)
                     Slider(value = metadata.priority.coerceIn(0, 10).toFloat(), onValueChange = { metadata = metadata.copy(priority = it.toInt().coerceIn(0, 10)) }, valueRange = 0f..10f, steps = 9)
                     Text("Cooldown: " + metadata.cooldownMs + "ms")
