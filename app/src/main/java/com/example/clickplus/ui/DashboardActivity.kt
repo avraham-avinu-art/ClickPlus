@@ -1121,15 +1121,39 @@ private fun SettingsScreen(
     onTheme: (String) -> Unit,
     onBackup: () -> Unit,
 ) {
-    Scaffold(topBar = { SimpleTopBar("הגדרות", onBack) }) { padding ->
+    Scaffold(topBar = { SimpleTopBar("הגדרות", onBack, "כאן אפשר לשנות את מצב העבודה, מונה הלחיצות, חלון הלחיצות, מראה וגיבוי.") }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                SettingCard("זמן חלון לחיצות", "כמה זמן יש בין כניסות/לחיצות חוזרות.") {
-                    Text(timeout.toString() + "ms", style = MaterialTheme.typography.titleMedium)
+                SettingCard(
+                    "מצב עבודה",
+                    "בחר איך קליק פלוס יפעל. מצב מלא משתמש בשירות הנגישות; מצב בסיסי אינו דורש אותו.",
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ChoiceChip(
+                            selected = currentMode == AppMode.FULL,
+                            onClick = { onMode(AppMode.FULL) },
+                            label = "מצב מלא",
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        ChoiceChip(
+                            selected = currentMode == AppMode.BASIC,
+                            onClick = { onMode(AppMode.BASIC) },
+                            label = "מצב בסיסי ללא נגישות",
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+            item {
+                SettingCard(
+                    "זמן חלון לחיצות",
+                    "הזמן שבו קליק פלוס מחכה ללחיצות אוטומטיות נוספות לפני שהוא מפעיל את ההתאמה. לדוגמה: 4 לחיצות בתוך החלון.",
+                ) {
+                    Text("${timeout}ms", style = MaterialTheme.typography.titleMedium)
                     Slider(
                         value = timeout.toFloat(),
                         onValueChange = { onTimeout(it.toLong()) },
@@ -1139,8 +1163,11 @@ private fun SettingsScreen(
                 }
             }
             item {
-                SettingCard("השהיה לפני פעולה", "המתנה אחידה אחרי שהרצף זוהה ולפני ביצוע הפעולה.") {
-                    Text(actionDelay.toString() + "ms", style = MaterialTheme.typography.titleMedium)
+                SettingCard(
+                    "השהיה לפני פעולה",
+                    "המתנה לאחר שהרצף כבר זוהה ולפני שקליק פלוס מבצע את הפעולה. היא אינה משנה את חלון זיהוי הלחיצות.",
+                ) {
+                    Text("${actionDelay}ms", style = MaterialTheme.typography.titleMedium)
                     Slider(
                         value = actionDelay.toFloat(),
                         onValueChange = { onActionDelay(it.toLong()) },
@@ -1150,27 +1177,38 @@ private fun SettingsScreen(
                 }
             }
             item {
-                SettingCard("הצגת מונה לחיצות", "הצג מספר לחיצות זמנית מעל המסך.") {
+                SettingCard("מונה לחיצות על המסך", "מציג זמנית את מספר הלחיצות האוטומטיות גם מעל אפליקציות אחרות כאשר מצב מלא ושירות הנגישות פעילים.") {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("מונה פעיל", Modifier.weight(1f))
+                        Text("הצג מונה", Modifier.weight(1f))
                         Switch(checked = showTapCount, onCheckedChange = onShowTapCount)
                     }
+                    Spacer(Modifier.height(4.dp))
+                    Text("מיקום: ${tapCountPosition}% מתחתית המסך", style = MaterialTheme.typography.bodySmall)
+                    Slider(
+                        value = tapCountPosition.toFloat(),
+                        onValueChange = { onTapCountPosition(it.toInt()) },
+                        valueRange = 5f..90f,
+                        steps = 84,
+                    )
                 }
             }
             item {
-                SettingCard("מראה", "ערכת צבעים ועדכון אוטומטי לפי המכשיר.") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ThemeChip("מערכת", "system", themeMode, onTheme, Icons.Outlined.BrightnessAuto)
-                        ThemeChip("בהיר", "light", themeMode, onTheme, Icons.Outlined.LightMode)
-                        ThemeChip("כהה", "dark", themeMode, onTheme, Icons.Outlined.DarkMode)
+                SettingCard("מראה", "בחר את ערכת הצבעים.") {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        ThemeChip("מערכת", "system", themeMode, onTheme, Icons.Outlined.BrightnessAuto, Modifier.weight(1f))
+                        ThemeChip("בהיר", "light", themeMode, onTheme, Icons.Outlined.LightMode, Modifier.weight(1f))
+                        ThemeChip("כהה", "dark", themeMode, onTheme, Icons.Outlined.DarkMode, Modifier.weight(1f))
                         if (Build.VERSION.SDK_INT >= 31) {
-                            ThemeChip("דינמי", "dynamic", themeMode, onTheme, Icons.Outlined.BrightnessAuto)
+                            ThemeChip("דינמי", "dynamic", themeMode, onTheme, Icons.Outlined.BrightnessAuto, Modifier.weight(1f))
                         }
                     }
                 }
             }
             item {
-                SettingCard("גיבוי והעברה", "ייצוא, ייבוא ואיפוס של כל ההגדרות.") {
+                SettingCard("גיבוי והעברה", "ייצוא, ייבוא ואיפוס של ההגדרות.") {
                     Button(onClick = onBackup, Modifier.fillMaxWidth()) { Text("פתח גיבוי") }
                 }
             }
@@ -1179,13 +1217,1177 @@ private fun SettingsScreen(
 }
 
 @Composable
-private fun ThemeChip(label: String, value: String, selectedValue: String, onTheme: (String) -> Unit, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+private fun SettingCard(title: String, subtitle: String, content: @Composable () -> Unit) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall)
+            content()
+        }
+    }
+}
+
+@Composable
+private fun BackupScreen(
+    mappings: List<KeyActionConfig>,
+    timeout: Long,
+    showTapCount: Boolean,
+    actionDelay: Long,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val advanced = remember { AdvancedRuleRepository(context) }
+    val basePrefs = remember { AppPreferencesRepository(context) }
+    var message by remember { mutableStateOf("") }
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { selected ->
+            scope.launch {
+                runCatching {
+                    val json = context.contentResolver.openInputStream(selected)?.bufferedReader()?.use { it.readText() }
+                        ?: error("קובץ ריק")
+                    val root = JSONObject(json)
+                    val array = root.optJSONArray("mappings") ?: JSONArray()
+                    val imported = buildList {
+                        for (i in 0 until array.length()) {
+                            array.optJSONObject(i)?.let { add(KeyActionConfig.fromJson(it)) }
+                        }
+                    }
+                    basePrefs.saveMappings(imported)
+                    root.optJSONObject("settings")?.let {
+                        if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 1200L))
+                        if (it.has("actionDelayMs")) basePrefs.saveActionDelay(it.optLong("actionDelayMs", 0L))
+                        if (it.has("showTapCount")) basePrefs.saveShowTapCount(it.optBoolean("showTapCount", false))
+                    }
+                    advanced.importBundle(root)
+                    message = "הגיבוי יובא בהצלחה."
+                }.onFailure { message = "הייבוא נכשל: " + (it.message ?: "שגיאה") }
+            }
+        }
+    }
+
+    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let { selected ->
+            val json = advanced.exportJson(
+                JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
+                JSONObject().put("tapTimeoutMs", timeout).put("actionDelayMs", actionDelay).put("showTapCount", showTapCount)
+            )
+            runCatching {
+                context.contentResolver.openOutputStream(selected)?.bufferedWriter()?.use { it.write(json) }
+                message = "הגיבוי נשמר בהצלחה."
+            }.onFailure { message = "שמירת הגיבוי נכשלה." }
+        }
+    }
+
+    Scaffold(topBar = { SimpleTopBar("גיבוי והעברה", onBack) }) { padding ->
+        LazyColumn(
+            Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                SettingCard("ייצוא ושיתוף", "שמור או שתף את כל הפעולות, הפרופילים וההגדרות.") {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { exportLauncher.launch("clickplus-backup.json") },
+                            Modifier.weight(1f),
+                        ) { Text("ייצוא") }
+                        OutlinedButton(
+                            onClick = {
+                                val json = advanced.exportJson(
+                                    JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
+                                    JSONObject().put("tapTimeoutMs", timeout).put("actionDelayMs", actionDelay).put("showTapCount", showTapCount)
+                                )
+                                runCatching {
+                                    val file = java.io.File(context.cacheDir, "clickplus-backup.json")
+                                    file.writeText(json)
+                                    val uri = FileProvider.getUriForFile(
+                                        context,
+                                        context.packageName + ".fileprovider",
+                                        file,
+                                    )
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_SEND).apply {
+                                            type = "application/json"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }.let { Intent.createChooser(it, "שיתוף גיבוי ClickPlus") }
+                                    )
+                                    message = "נפתח מסך השיתוף."
+                                }.onFailure {
+                                    message = "השיתוף נכשל: " + (it.message ?: "שגיאה")
+                                }
+                            },
+                            Modifier.weight(1f),
+                        ) { Text("שיתוף") }
+                    }
+                }
+            }
+            item {
+                SettingCard("ייבוא", "החלפת ההגדרות הנוכחיות בתוכן מקובץ גיבוי.") {
+                    OutlinedButton(
+                        onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) },
+                        Modifier.fillMaxWidth(),
+                    ) { Text("ייבוא גיבוי") }
+                }
+            }
+            item {
+                SettingCard("איפוס", "מחיקת כל הפעולות והמטא־נתונים של ClickPlus.") {
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                basePrefs.saveMappings(emptyList())
+                                advanced.clearAllRuleMetadata()
+                                advanced.saveProfiles(listOf(ClickPlusProfile("default", "כללי", true)))
+                                message = "ההגדרות אופסו."
+                            }
+                        },
+                        Modifier.fillMaxWidth(),
+                    ) { Text("איפוס פעולות") }
+                }
+            }
+            if (message.isNotBlank()) {
+                item { AssistChip(onClick = {}, label = { Text(message) }, leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) }) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorScreen(
+    existing: KeyActionConfig?,
+    onBack: () -> Unit,
+    onSave: (KeyActionConfig, RuleAdvancedMetadata) -> Unit,
+    onDelete: (KeyActionConfig) -> Unit,
+) {
+    val context = LocalContext.current
+    val repo = remember { AdvancedRuleRepository(context) }
+    var draft by remember(existing?.id) {
+        mutableStateOf(existing ?: KeyActionConfig(
+            name = "פעולה חדשה",
+            triggerType = TriggerType.APP_ENTRY,
+            enabled = true,
+        ))
+    }
+    var metadata by remember(existing?.id) {
+        mutableStateOf(repo.getRuleMetadata(existing?.id ?: ""))
+    }
+    var appDialog by remember { mutableStateOf(false) }
+    var screenAppDialog by remember { mutableStateOf(false) }
+    var learning by remember { mutableStateOf(false) }
+    var orientation by remember {
+        mutableStateOf(
+            if (context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+                "landscape"
+            } else {
+                "portrait"
+            }
+        )
+    }
+    var showDelete by remember { mutableStateOf(false) }
+
+    LaunchedEffect(draft.triggerType, draft.actionType) {
+        if (draft.triggerType == TriggerType.SCREEN_TAP && draft.actionType != ActionType.APP_TAP) {
+            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("tap_learning", false)
+                .apply()
+        }
+    }
+
+    LaunchedEffect(draft.id) {
+        while (true) {
+            val p = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+            if (p.getBoolean("tap_capture_ready", false)) {
+                val capturedX = p.getFloat("tap_capture_x_ratio", -1f)
+                val capturedY = p.getFloat("tap_capture_y_ratio", -1f)
+                val pkg = p.getString("tap_capture_package", "").orEmpty()
+                val name = p.getString("tap_capture_app_name", "").orEmpty()
+                if (capturedX >= 0f && capturedY >= 0f) {
+                    draft = if (draft.actionType == ActionType.APP_TAP) {
+                        draft.copy(
+                            screenTapPackage = pkg,
+                            screenTapAppName = name,
+                            screenTapXRatio = capturedX,
+                            screenTapYRatio = capturedY,
+                        )
+                    } else {
+                        draft.copy(
+                            triggerType = TriggerType.SCREEN_TAP,
+                            screenTapPackage = pkg,
+                            screenTapAppName = name,
+                            screenTapXRatio = capturedX,
+                            screenTapYRatio = capturedY,
+                        )
+                    }
+                    metadata = if (orientation == "landscape") {
+                        metadata.copy(landscapeX = capturedX, landscapeY = capturedY)
+                    } else {
+                        metadata.copy(portraitX = capturedX, portraitY = capturedY)
+                    }
+                }
+                p.edit().putBoolean("tap_capture_ready", false).apply()
+                learning = false
+            }
+            kotlinx.coroutines.delay(250)
+        }
+    }
+
+    val rawX = if (orientation == "landscape" && metadata.landscapeX >= 0f) {
+        metadata.landscapeX
+    } else if (metadata.portraitX >= 0f) {
+        metadata.portraitX
+    } else {
+        draft.screenTapXRatio.coerceAtLeast(0f)
+    }
+    val rawY = if (orientation == "landscape" && metadata.landscapeY >= 0f) {
+        metadata.landscapeY
+    } else if (metadata.portraitY >= 0f) {
+        metadata.portraitY
+    } else {
+        draft.screenTapYRatio.coerceAtLeast(0f)
+    }
+    val x = rawX.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
+    val y = rawY.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(if (existing == null) "הוספת פעולה" else "עריכת פעולה") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Outlined.ArrowForward, "חזרה")
+                    }
+                },
+                actions = {
+                    if (existing != null) {
+                        IconButton(onClick = { showDelete = true }) {
+                            Icon(Icons.Outlined.Delete, "מחיקה")
+                        }
+                    }
+                },
+            )
+        },
+        bottomBar = {
+            Surface(shadowElevation = 8.dp) {
+                Button(
+                    onClick = {
+                        if (draft.name.isBlank()) {
+                            draft = draft.copy(name = draft.triggerType.titleHebrew)
+                        }
+                        onSave(
+                            draft.copy(
+                                screenTapXRatio = if (draft.screenTapXRatio >= 0f) draft.screenTapXRatio else x,
+                                screenTapYRatio = if (draft.screenTapYRatio >= 0f) draft.screenTapYRatio else y,
+                                screenTapToleranceRatio = maxOf(
+                                    metadata.toleranceXRatio,
+                                    metadata.toleranceYRatio,
+                                ),
+                            ),
+                            metadata,
+                        )
+                    },
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                        .height(50.dp),
+                ) {
+                    Icon(Icons.Outlined.Save, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("שמירת פעולה", fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+    ) { padding ->
+        LazyColumn(
+            Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item {
+                EditorSectionCard(
+                    number = "1",
+                    title = "פרטי הפעולה",
+                    subtitle = "השם שיוצג ביומן וברשימת הפעולות.",
+                ) {
+                    OutlinedTextField(
+                        value = draft.name,
+                        onValueChange = { draft = draft.copy(name = it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("שם הפעולה") },
+                    )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("הפעלת הפעולה", fontWeight = FontWeight.Medium)
+                            Text(
+                                if (draft.enabled) "הפעולה פעילה וזמינה להפעלה."
+                                else "הפעולה שמורה אך לא תופעל.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Switch(
+                            checked = draft.enabled,
+                            onCheckedChange = { draft = draft.copy(enabled = it) },
+                        )
+                    }
+                }
+            }
+
+            item {
+                EditorSectionCard(
+                    number = "2",
+                    title = "מתי להפעיל?",
+                    subtitle = "בחר את סוג ההפעלה ואת מספר הכניסות או הלחיצות.",
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ChoiceChip(
+                            selected = draft.triggerType == TriggerType.APP_ENTRY,
+                            onClick = { draft = draft.copy(triggerType = TriggerType.APP_ENTRY) },
+                            label = "כניסה לאפליקציה",
+                            modifier = Modifier.weight(1f),
+                        )
+                        ChoiceChip(
+                            selected = draft.triggerType == TriggerType.SCREEN_TAP,
+                            onClick = { draft = draft.copy(triggerType = TriggerType.SCREEN_TAP) },
+                            label = "לחיצה במיקום",
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Text(
+                        "מספר הפעלות רצופות",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        (1..10).forEach { n ->
+                            CompactChoiceChip(
+                                selected = draft.pressCount == n,
+                                onClick = { draft = draft.copy(pressCount = n) },
+                                label = n.toString(),
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                EditorSectionCard(
+                    number = "3",
+                    title = "באיזה מצב?",
+                    subtitle = if (draft.triggerType == TriggerType.APP_ENTRY) {
+                        "קבע מתי הכלל מתאים לפי האפליקציה והמצב לפני ClickPlus."
+                    } else {
+                        "בחר באיזו אפליקציה ובאיזה מיקום לחיצה הכלל יזוהה."
+                    },
+                ) {
+                    if (draft.triggerType == TriggerType.APP_ENTRY) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            maxItemsInEachRow = 2,
+                        ) {
+                            ContextConditionType.entries.forEach { type ->
+                                ChoiceChip(
+                                    selected = draft.contextConditionType == type,
+                                    onClick = {
+                                        draft = draft.copy(contextConditionType = type)
+                                    },
+                                    label = type.titleHebrew,
+                                    modifier = Modifier.widthIn(min = 120.dp).weight(1f),
+                                )
+                            }
+                        }
+
+                        if (
+                            draft.contextConditionType == ContextConditionType.APP ||
+                            draft.contextConditionType == ContextConditionType.RADIO
+                        ) {
+                            OutlinedButton(
+                                onClick = { appDialog = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(Icons.Outlined.Apps, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    if (draft.contextConditionName.isBlank()) {
+                                        "בחירת אפליקציה"
+                                    } else {
+                                        draft.contextConditionName
+                                    },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Text(
+                                "ההתאמה נבדקת לפי האפליקציה שהייתה פתוחה לפני ClickPlus.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { screenAppDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.Outlined.Apps, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (draft.screenTapPackage.isBlank()) "בחירת אפליקציה לזיהוי הלחיצה"
+                                else "החלפת אפליקציית הזיהוי",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+
+                        if (draft.screenTapPackage.isBlank()) {
+                            Text(
+                                "אין צורך לפתוח את האפליקציה או להפעיל שכבת לימוד. בחר אפליקציה והגדר את הנקודה בתצוגה המקדימה.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+
+                        if (draft.screenTapPackage.isNotBlank()) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        draft.screenTapAppName.ifBlank { "האפליקציה שנבחרה" },
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        "מיקום שמור: X " + (x * 100f).toInt() + "% · Y " + (y * 100f).toInt() + "%",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                                ChoiceChip(
+                                    selected = false,
+                                    onClick = { screenAppDialog = true },
+                                    label = "החלפה",
+                                    modifier = Modifier.widthIn(min = 88.dp),
+                                )
+                            }
+
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                ChoiceChip(
+                                    selected = orientation == "portrait",
+                                    onClick = { orientation = "portrait" },
+                                    label = "אנכי",
+                                    modifier = Modifier.weight(1f),
+                                )
+                                ChoiceChip(
+                                    selected = orientation == "landscape",
+                                    onClick = { orientation = "landscape" },
+                                    label = "אופקי",
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+
+                            PointEditor(
+                                x = x,
+                                y = y,
+                                toleranceX = metadata.toleranceXRatio,
+                                toleranceY = metadata.toleranceYRatio,
+                                onChange = { nx, ny ->
+                                    draft = draft.copy(
+                                        screenTapXRatio = nx,
+                                        screenTapYRatio = ny,
+                                    )
+                                    metadata = if (orientation == "landscape") {
+                                        metadata.copy(
+                                            landscapeX = nx,
+                                            landscapeY = ny,
+                                        )
+                                    } else {
+                                        metadata.copy(
+                                            portraitX = nx,
+                                            portraitY = ny,
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                EditorSectionCard(
+                    number = "4",
+                    title = "מה לבצע?",
+                    subtitle = "בחר מה ClickPlus יעשה לאחר שהכלל הופעל.",
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ChoiceChip(
+                            selected = draft.actionType == ActionType.SYSTEM,
+                            onClick = {
+                                draft = draft.copy(
+                                    actionType = ActionType.SYSTEM,
+                                    systemActionId = draft.systemActionId.ifBlank { SystemActionPreset.HOME.id },
+                                )
+                            },
+                            label = "פעולת מערכת",
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        ChoiceChip(
+                            selected = draft.actionType == ActionType.APP,
+                            onClick = { draft = draft.copy(actionType = ActionType.APP, systemActionId = "") },
+                            label = "פתיחת אפליקציה",
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        ChoiceChip(
+                            selected = draft.actionType == ActionType.APP_TAP,
+                            onClick = { draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "") },
+                            label = "פתיחת אפליקציה + לחיצה",
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    when (draft.actionType) {
+                        ActionType.SYSTEM -> {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                SystemActionPreset.entries.forEach { action ->
+                                    ChoiceChip(
+                                        selected = draft.systemActionId == action.id,
+                                        onClick = { draft = draft.copy(systemActionId = action.id) },
+                                        label = action.titleHebrew,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
+                            }
+                        }
+                        ActionType.APP -> {
+                            OutlinedButton(onClick = { appDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Outlined.Apps, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    if (draft.targetAppName.isBlank()) "בחירת אפליקציית יעד" else draft.targetAppName,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                        ActionType.APP_TAP -> {
+                            OutlinedButton(
+                                onClick = {
+                                    if (!isAccessibilityEnabled(context)) {
+                                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                    } else if (draft.screenTapPackage.isBlank()) {
+                                        screenAppDialog = true
+                                    } else {
+                                        val p = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                                        p.edit()
+                                            .putBoolean("tap_learning", true)
+                                            .putString("tap_learning_package", draft.screenTapPackage)
+                                            .apply()
+                                        context.packageManager.getLaunchIntentForPackage(draft.screenTapPackage)?.let {
+                                            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            context.startActivity(it)
+                                            learning = true
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(Icons.Outlined.LocationOn, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    if (draft.screenTapPackage.isBlank()) "בחירת אפליקציה ולימוד נקודת לחיצה" else "לימוד מחדש של נקודת הלחיצה",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+
+                            if (learning) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                ) {
+                                    Text(
+                                        "מצב לימוד פעיל: לחץ באפליקציה על היעד שבו תתבצע הלחיצה האוטומטית.",
+                                        modifier = Modifier.padding(12.dp),
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                            }
+
+                            if (draft.screenTapPackage.isNotBlank()) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            draft.screenTapAppName.ifBlank { "האפליקציה שנבחרה" },
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            "נקודת לחיצה: X " + (x * 100f).toInt() + "% · Y " + (y * 100f).toInt() + "%",
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                    ChoiceChip(
+                                        selected = false,
+                                        onClick = { screenAppDialog = true },
+                                        label = "החלפה",
+                                        modifier = Modifier.widthIn(min = 88.dp),
+                                    )
+                                }
+
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    ChoiceChip(
+                                        selected = orientation == "portrait",
+                                        onClick = { orientation = "portrait" },
+                                        label = "אנכי",
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    ChoiceChip(
+                                        selected = orientation == "landscape",
+                                        onClick = { orientation = "landscape" },
+                                        label = "אופקי",
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+
+                                PointEditor(
+                                    x = x,
+                                    y = y,
+                                    toleranceX = metadata.toleranceXRatio,
+                                    toleranceY = metadata.toleranceYRatio,
+                                    onChange = { nx, ny ->
+                                        draft = draft.copy(screenTapXRatio = nx, screenTapYRatio = ny)
+                                        metadata = if (orientation == "landscape") {
+                                            metadata.copy(landscapeX = nx, landscapeY = ny)
+                                        } else {
+                                            metadata.copy(portraitX = nx, portraitY = ny)
+                                        }
+                                    },
+                                )
+                                Text(
+                                    "בעת ההפעלה האפליקציה תיפתח על המסך, תזוהה בחזית, ואז ClickPlus יבצע את הלחיצה בנקודה הזו.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                    }
+
+                    if (draft.actionType == ActionType.APP && draft.targetPackage.isNotBlank()) {
+                        Text(
+                            "יעד: " + draft.targetAppName.ifBlank { draft.targetPackage },
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+            item {
+                EditorSectionCard(
+                    number = "5",
+                    title = "הגדרות מתקדמות",
+                    subtitle = "ניסיונות, הגנה ואזור התאמה.",
+                ) {
+                    EditorSliderRow(
+                        title = "Cooldown",
+                        valueText = metadata.cooldownMs.toString() + "ms",
+                    ) {
+                        Slider(
+                            value = metadata.cooldownMs.coerceIn(0L, 10_000L).toFloat(),
+                            onValueChange = {
+                                metadata = metadata.copy(
+                                    cooldownMs = it.toLong().coerceIn(0L, 60_000L),
+                                )
+                            },
+                            valueRange = 0f..10_000f,
+                            steps = 9,
+                        )
+                    }
+
+                    EditorSliderRow(
+                        title = "מספר ניסיונות",
+                        valueText = metadata.retries.toString(),
+                    ) {
+                        Slider(
+                            value = metadata.retries.coerceIn(1, 3).toFloat(),
+                            onValueChange = {
+                                metadata = metadata.copy(
+                                    retries = it.toInt().coerceIn(1, 3),
+                                )
+                            },
+                            valueRange = 1f..3f,
+                            steps = 1,
+                        )
+                    }
+
+                    if (draft.triggerType == TriggerType.SCREEN_TAP) {
+                        EditorSliderRow(
+                            title = "רוחב אזור התאמה",
+                            valueText = (metadata.toleranceXRatio * 100f).toInt().toString() + "%",
+                        ) {
+                            Slider(
+                                value = metadata.toleranceXRatio.coerceIn(0.01f, 0.25f),
+                                onValueChange = {
+                                    metadata = metadata.copy(
+                                        toleranceXRatio = it.coerceIn(0.01f, 0.25f),
+                                    )
+                                },
+                                valueRange = 0.01f..0.25f,
+                            )
+                        }
+
+                        EditorSliderRow(
+                            title = "גובה אזור התאמה",
+                            valueText = (metadata.toleranceYRatio * 100f).toInt().toString() + "%",
+                        ) {
+                            Slider(
+                                value = metadata.toleranceYRatio.coerceIn(0.01f, 0.25f),
+                                onValueChange = {
+                                    metadata = metadata.copy(
+                                        toleranceYRatio = it.coerceIn(0.01f, 0.25f),
+                                    )
+                                },
+                                valueRange = 0.01f..0.25f,
+                            )
+                        }
+                    }
+
+                    ProfileSelector(
+                        profiles = repo.profiles(),
+                        selectedId = metadata.profileId,
+                        onSelect = { metadata = metadata.copy(profileId = it) },
+                    )
+
+                    OutlinedButton(
+                        onClick = {
+                            val performer = when (AdvancedRuleRepository.currentMode(context)) {
+                                AppMode.BASIC -> BasicActionPerformer(context)
+                                AppMode.FULL -> KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
+                                    ?: UnavailableActionPerformer("מצב מלא נבחר, אבל שירות הנגישות אינו פעיל.")
+                            }
+                            RuleExecutionCoordinator(context, performer).execute(
+                                draft,
+                                test = true,
+                                reason = "בדיקה ידנית",
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Outlined.PlayArrow, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("בדיקת הפעולה")
+                    }
+                }
+            }
+        }
+    }
+
+    if (appDialog) {
+        AppPickerDialog(
+            title = "בחירת אפליקציה",
+            onDismiss = { appDialog = false },
+            onSelect = { app ->
+                if (draft.triggerType == TriggerType.SCREEN_TAP || draft.actionType == ActionType.APP_TAP) {
+                    draft = draft.copy(
+                        screenTapPackage = app.packageName,
+                        screenTapAppName = app.label,
+                        screenTapXRatio = -1f,
+                        screenTapYRatio = -1f,
+                    )
+                } else if (
+                    draft.triggerType == TriggerType.APP_ENTRY &&
+                    (
+                        draft.contextConditionType == ContextConditionType.APP ||
+                            draft.contextConditionType == ContextConditionType.RADIO
+                    )
+                ) {
+                    draft = draft.copy(
+                        contextConditionValue = app.packageName,
+                        contextConditionName = app.label,
+                    )
+                } else {
+                    draft = draft.copy(
+                        targetPackage = app.packageName,
+                        targetAppName = app.label,
+                    )
+                }
+                appDialog = false
+            },
+        )
+    }
+
+    if (screenAppDialog) {
+        AppPickerDialog(
+            title = if (draft.actionType == ActionType.APP_TAP) "אפליקציה לביצוע הלחיצה" else "אפליקציה לזיהוי הלחיצה",
+            onDismiss = { screenAppDialog = false },
+            onSelect = { app ->
+                draft = draft.copy(
+                    screenTapPackage = app.packageName,
+                    screenTapAppName = app.label,
+                    screenTapXRatio = -1f,
+                    screenTapYRatio = -1f,
+                )
+                screenAppDialog = false
+            },
+        )
+    }
+
+    if (showDelete && existing != null) {
+        AlertDialog(
+            onDismissRequest = { showDelete = false },
+            title = { Text("למחוק את הפעולה?") },
+            text = { Text("הכלל וההגדרות המתקדמות שלו יוסרו.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDelete = false
+                        onDelete(existing)
+                    },
+                ) {
+                    Text("מחיקה")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDelete = false }) {
+                    Text("ביטול")
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun EditorSectionCard(
+    number: String,
+    title: String,
+    subtitle: String,
+    content: @Composable () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant,
+        ),
+    ) {
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    modifier = Modifier.size(34.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            number,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            HorizontalDivider()
+            content()
+        }
+    }
+}
+
+@Composable
+private fun EditorSliderRow(
+    title: String,
+    valueText: String,
+    content: @Composable () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, fontWeight = FontWeight.Medium)
+            Text(
+                valueText,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        content()
+    }
+}
+private data class InstalledApp(
+    val packageName: String,
+    val label: String,
+    val icon: Drawable?,
+)
+
+@Composable
+private fun AppPickerDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    onSelect: (InstalledApp) -> Unit,
+) {
+    val context = LocalContext.current
+    val apps = remember {
+        runCatching {
+            context.packageManager.getInstalledApplications(0)
+                .asSequence()
+                .filter { it.packageName != context.packageName }
+                .mapNotNull { info ->
+                    runCatching {
+                        context.packageManager.getLaunchIntentForPackage(info.packageName) ?: return@runCatching null
+                        val label = context.packageManager.getApplicationLabel(info).toString()
+                        val icon = runCatching { info.loadIcon(context.packageManager) }.getOrNull()
+                        InstalledApp(info.packageName, label, icon)
+                    }.getOrNull()
+                }
+                .distinctBy { it.packageName }
+                .sortedBy { it.label.lowercase(Locale.ROOT) }
+                .toList()
+        }.getOrDefault(emptyList())
+    }
+    var query by remember { mutableStateOf("") }
+    val filtered = apps.filter {
+        it.label.contains(query, true) || it.packageName.contains(query, true)
+    }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("חיפוש אפליקציה") },
+                leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            )
+            LazyColumn(
+                Modifier.fillMaxWidth().height(460.dp),
+                contentPadding = PaddingValues(bottom = 24.dp),
+            ) {
+                items(filtered, key = { it.packageName }) { app ->
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clickable { onSelect(app) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Surface(
+                            Modifier.size(42.dp),
+                            CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                        ) {
+                            val iconBitmap = remember(app.packageName) {
+                                app.icon?.let { drawable ->
+                                    runCatching { drawable.toBitmap(42, 42).asImageBitmap() }.getOrNull()
+                                }
+                            }
+                            if (iconBitmap != null) {
+                                Image(
+                                    bitmap = iconBitmap,
+                                    contentDescription = app.label,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(7.dp),
+                                )
+                            } else {
+                                Icon(Icons.Outlined.Apps, null, Modifier.padding(9.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(app.label, fontWeight = FontWeight.Bold)
+                            Text(
+                                app.packageName,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileSelector(profiles: List<ClickPlusProfile>, selectedId: String, onSelect: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("פרופיל")
+        profiles.forEach { profile ->
+            ChoiceChip(
+                selected = selectedId == profile.id,
+                onClick = { onSelect(profile.id) },
+                label = profile.name,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PointEditor(
+    x: Float,
+    y: Float,
+    toleranceX: Float,
+    toleranceY: Float,
+    onChange: (Float, Float) -> Unit,
+) {
+    val safeX = x.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
+    val safeY = y.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
+    val safeToleranceX = toleranceX.takeIf { it.isFinite() }?.coerceIn(0.01f, 0.25f) ?: 0.08f
+    val safeToleranceY = toleranceY.takeIf { it.isFinite() }?.coerceIn(0.01f, 0.25f) ?: 0.08f
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val outlineColor = MaterialTheme.colorScheme.outline
+    val surfaceColor = MaterialTheme.colorScheme.surfaceVariant
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("תצוגה מקדימה · גרור את הנקודה למיקום המדויק")
+        Box(
+            Modifier.fillMaxWidth().height(210.dp).background(
+                surfaceColor,
+                RoundedCornerShape(18.dp),
+            ),
+        ) {
+            Canvas(
+                Modifier
+                    .fillMaxSize()
+                    .padding(14.dp)
+                    .pointerInput(safeX, safeY) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val pointX = safeX * size.width
+                            val pointY = safeY * size.height
+                            val dx = down.position.x - pointX
+                            val dy = down.position.y - pointY
+                            val handleRadius = 40.dp.toPx()
+                            val startsOnHandle = dx * dx + dy * dy <= handleRadius * handleRadius
+                            if (!startsOnHandle) return@awaitEachGesture
+
+                            down.consume()
+                            drag(down.id) { change ->
+                                val nx = if (size.width > 0f) {
+                                    (change.position.x / size.width).coerceIn(0f, 1f)
+                                } else safeX
+                                val ny = if (size.height > 0f) {
+                                    (change.position.y / size.height).coerceIn(0f, 1f)
+                                } else safeY
+                                onChange(nx, ny)
+                                change.consume()
+                            }
+                        }
+                    }
+            ) {
+                val px = safeX * size.width
+                val py = safeY * size.height
+                drawRect(
+                    color = outlineColor.copy(alpha = 0.35f),
+                    style = Stroke(2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f))),
+                )
+                drawRect(
+                    color = primaryColor.copy(alpha = 0.16f),
+                    topLeft = Offset((safeX - safeToleranceX).coerceAtLeast(0f) * size.width, (safeY - safeToleranceY).coerceAtLeast(0f) * size.height),
+                    size = androidx.compose.ui.geometry.Size(
+                        ((safeToleranceX * 2f).coerceAtMost(1f)) * size.width,
+                        ((safeToleranceY * 2f).coerceAtMost(1f)) * size.height,
+                    ),
+                )
+                drawCircle(primaryColor.copy(alpha = 0.18f), radius = 32f, center = Offset(px, py))
+                drawCircle(primaryColor, radius = 11f, center = Offset(px, py))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SimpleTopBar(title: String, onBack: () -> Unit) {
+    TopAppBar(
+        title = { Text(title) },
+        navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
+    )
+}
+
+private fun isAccessibilityEnabled(context: Context): Boolean {
+    val enabled = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+    ).orEmpty()
+    return enabled.split(':').any { it.contains(context.packageName, true) }
+}
+
+
+private fun hasUsageAccess(context: Context): Boolean {
+    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
+    return runCatching {
+        appOps.unsafeCheckOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(),
+            context.packageName,
+        ) == AppOpsManager.MODE_ALLOWED
+    }.getOrDefault(false)
+}@Composable
+private fun ThemeChip(
+    label: String,
+    value: String,
+    selectedValue: String,
+    onTheme: (String) -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+) {
     FilterChip(
         selected = selectedValue == value,
         onClick = { onTheme(value) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp),
+        modifier = modifier.height(40.dp),
         colors = FilterChipDefaults.filterChipColors(
             containerColor = MaterialTheme.colorScheme.surface,
             labelColor = MaterialTheme.colorScheme.onSurface,
@@ -1195,14 +2397,9 @@ private fun ThemeChip(label: String, value: String, selectedValue: String, onThe
             selectedTrailingIconColor = MaterialTheme.colorScheme.onPrimary,
         ),
         label = {
-            Box(
-                Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-            }
+            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         },
-        leadingIcon = { Icon(icon, null) },
+        leadingIcon = { Icon(icon, null, Modifier.size(17.dp)) },
     )
 }
 
