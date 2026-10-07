@@ -402,26 +402,16 @@ private fun HomeDashboard(
     val context = LocalContext.current
     val mode = AdvancedRuleRepository.currentMode(context)
     val accessibility = isAccessibilityEnabled(context)
-    val activeProfile = AdvancedRuleRepository.activeProfileId(context)
     val repo = remember { AdvancedRuleRepository(context) }
-    val activeProfileName = remember(activeProfile) {
-        repo.profiles().firstOrNull { it.id == activeProfile }?.name ?: "כללי"
-    }
     var deleteTarget by remember { mutableStateOf<KeyActionConfig?>(null) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("קליק פלוס פועל", fontWeight = FontWeight.Bold) },
+                title = { Text("קליק פלוס", fontWeight = FontWeight.Bold) },
                 actions = {
-                    androidx.compose.runtime.CompositionLocalProvider(
-                        LocalLayoutDirection provides LayoutDirection.Ltr
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            IconButton(onClick = onSettings) {
-                                Icon(Icons.Outlined.Settings, "הגדרות")
-                            }
-                        }
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Outlined.Settings, "הגדרות")
                     }
                 },
             )
@@ -429,73 +419,103 @@ private fun HomeDashboard(
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(12.dp, 8.dp, 12.dp, 18.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
-                Row(
+                Card(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
                 ) {
-                    OutlinedButton(
-                        onClick = onStatus,
-                        Modifier.weight(1f).height(68.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        Surface(
+                            Modifier.size(46.dp),
+                            CircleShape,
+                            color = MaterialTheme.colorScheme.primary,
                         ) {
-                            Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
-                            Text(
-                                "סטטוס השירות",
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelLarge,
+                            Icon(
+                                Icons.Outlined.CheckCircle,
+                                "קליק פלוס פעיל",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(10.dp),
                             )
                         }
-                    }
-                    OutlinedButton(
-                        onClick = onProfiles,
-                        Modifier.weight(1f).height(68.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-                    ) {
+                        Spacer(Modifier.width(12.dp))
                         Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
-                            Icon(Icons.Outlined.Settings, null, Modifier.size(18.dp))
-                            Text(
-                                "פרופילים",
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelLarge,
-                            )
-                        }
-                    }
-                    OutlinedButton(
-                        onClick = onStatus,
-                        Modifier.weight(1f).height(68.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
-                        ) {
-                            Icon(Icons.Outlined.CheckCircle, null, Modifier.size(18.dp))
                             Text(
                                 "קליק פלוס פעיל",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                when {
+                                    mode == AppMode.BASIC -> "מצב בסיסי · ללא נגישות"
+                                    accessibility -> "מצב מלא · נגישות פעילה"
+                                    else -> "מצב מלא · נגישות לא פעילה"
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelLarge,
                             )
+                            if (mode == AppMode.FULL && !accessibility) {
+                                Text(
+                                    "שירות הנגישות אינו פעיל.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }
             }
+
+            item {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = onStatus,
+                        Modifier.weight(1f).height(48.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                    ) {
+                        Icon(Icons.Outlined.Tune, null, Modifier.size(17.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("סטטוס השירות", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    }
+                    OutlinedButton(
+                        onClick = onLogs,
+                        Modifier.weight(1f).height(48.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                    ) {
+                        Icon(Icons.Outlined.History, null, Modifier.size(17.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("יומן", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    }
+                    OutlinedButton(
+                        onClick = onProfiles,
+                        Modifier.weight(1f).height(48.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                    ) {
+                        Icon(Icons.Outlined.Apps, null, Modifier.size(17.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("פרופילים", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+
             if (mappings.isEmpty()) {
                 item { EmptyState(onAdd) }
             } else {
@@ -512,9 +532,13 @@ private fun HomeDashboard(
                     )
                 }
             }
+
             item {
-                Spacer(Modifier.height(6.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     Button(
                         onClick = onAdd,
                         Modifier.weight(1f).height(54.dp),
@@ -544,9 +568,16 @@ private fun HomeDashboard(
             title = { Text("למחוק את הפעולה?") },
             text = { Text("הפעולה וההגדרות שלה יוסרו.") },
             confirmButton = {
-                TextButton(onClick = { deleteTarget = null; onDelete(target) }) { Text("מחיקה") }
+                TextButton(
+                    onClick = {
+                        deleteTarget = null
+                        onDelete(target)
+                    },
+                ) { Text("מחיקה") }
             },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("ביטול") } },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) { Text("ביטול") }
+            },
         )
     }
 }
@@ -902,27 +933,36 @@ private fun LogsScreen(
                                 }
                             }
                             val rule = mappings.firstOrNull { it.id == log.ruleId }
-                            val ruleDetails = if (rule != null) {
-                                val baseDetails = when (rule.actionType) {
-                                    ActionType.SYSTEM -> rule.actionSummary()
-                                    ActionType.APP -> "פתיחת " + rule.targetAppName.ifBlank { rule.targetPackage }
-                                    ActionType.APP_TAP -> "פתיחת " + rule.screenTapAppName.ifBlank { rule.screenTapPackage } + " ולחיצה במיקום שנלמד"
-                                    ActionType.MULTI_POINT_TAP -> "פתיחת " + rule.screenTapAppName.ifBlank { rule.screenTapPackage } + " ושתי לחיצות במיקומים שנלמדו"
-                                    ActionType.PROFILE -> {
-                                        val targetProfileId = profileIdFromActionId(rule.systemActionId)
-                                        val targetProfile = targetProfileId?.let { id ->
-                                            AdvancedRuleRepository(context).profiles().firstOrNull { it.id == id }
+                            val actualActionDetails = log.detail
+                                .takeIf { it.isNotBlank() && !it.startsWith("לא נמסר הסבר") }
+                                ?: rule?.let { currentRule ->
+                                    when (currentRule.actionType) {
+                                        ActionType.SYSTEM -> when (currentRule.systemActionId) {
+                                            SystemActionPreset.HOME.id -> "פתיחת מסך הבית"
+                                            SystemActionPreset.BACK.id -> "חזרה למסך הקודם"
+                                            SystemActionPreset.RECENTS.id -> "פתיחת היישומים האחרונים"
+                                            SystemActionPreset.NOTIFICATIONS.id -> "פתיחת חלונית ההתראות"
+                                            SystemActionPreset.LOCK_SCREEN.id -> "נעילת המסך"
+                                            SystemActionPreset.POWER_MENU.id -> "פתיחת תפריט הכיבוי"
+                                            SystemActionPreset.SCREENSHOT.id -> "צילום מסך"
+                                            else -> currentRule.actionSummary()
                                         }
-                                        "מעבר לפרופיל " + (targetProfile?.name ?: "שנבחר")
+                                        ActionType.APP -> "פתיחת " + currentRule.targetAppName.ifBlank { "האפליקציה שנבחרה" }
+                                        ActionType.APP_TAP -> "פתיחת " + currentRule.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " וביצוע לחיצה במיקום שנלמד"
+                                        ActionType.MULTI_POINT_TAP -> "פתיחת " + currentRule.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " וביצוע שתי לחיצות במיקומים שנלמדו"
+                                        ActionType.PROFILE -> {
+                                            val targetProfileId = profileIdFromActionId(currentRule.systemActionId)
+                                            val targetProfile = targetProfileId?.let { id ->
+                                                AdvancedRuleRepository(context).profiles().firstOrNull { it.id == id }
+                                            }
+                                            "מעבר לפרופיל " + (targetProfile?.name ?: "שנבחר")
+                                        }
                                     }
-                                }
-                                if (log.detail.startsWith("בדיקה ידנית")) {
-                                    "בדיקה ידנית · " + baseDetails
-                                } else {
-                                    baseDetails
-                                }
+                                } ?: "הפעולה שבוצעה"
+                            val ruleDetails = if (log.detail == "בדיקה ידנית") {
+                                "בדיקה ידנית · " + actualActionDetails
                             } else {
-                                if (log.detail.startsWith("בדיקה ידנית")) "בדיקה ידנית" else log.actionLabel.ifBlank { log.message }
+                                actualActionDetails
                             }
                             Text(
                                 "שם הפעולה: " + (rule?.name?.ifBlank { null } ?: log.actionLabel.ifBlank { "פעולה" }),
@@ -1862,6 +1902,7 @@ private fun EditorScreen(
                                 },
                                 label = "פעולת מכשיר",
                                 modifier = Modifier.weight(1f).height(54.dp),
+                                compactText = true,
                             )
                             ChoiceChip(
                                 selected = actionTypeChosen && draft.actionType == ActionType.APP,
@@ -1872,6 +1913,7 @@ private fun EditorScreen(
                                 },
                                 label = "פתיחת אפליקציה",
                                 modifier = Modifier.weight(1f).height(54.dp),
+                                compactText = true,
                             )
                         }
                         Row(
@@ -1887,6 +1929,7 @@ private fun EditorScreen(
                                 },
                                 label = "פתיחה + לחיצה",
                                 modifier = Modifier.weight(1f).height(54.dp),
+                                compactText = true,
                             )
                             ChoiceChip(
                                 selected = actionTypeChosen && draft.actionType == ActionType.MULTI_POINT_TAP,
@@ -1897,6 +1940,7 @@ private fun EditorScreen(
                                 },
                                 label = "שתי לחיצות",
                                 modifier = Modifier.weight(1f).height(54.dp),
+                                compactText = true,
                             )
                         }
                         Row(
@@ -1919,6 +1963,7 @@ private fun EditorScreen(
                                 },
                                 label = "החלפת פרופיל",
                                 modifier = Modifier.weight(1f).height(54.dp),
+                                compactText = true,
                             )
                             Spacer(Modifier.weight(1f).height(54.dp))
                         }
@@ -2790,6 +2835,7 @@ private fun ChoiceChip(
     onClick: () -> Unit,
     label: String,
     modifier: Modifier = Modifier,
+    compactText: Boolean = false,
 ) {
     val borderColor = if (selected) {
         MaterialTheme.colorScheme.primary
@@ -2842,6 +2888,7 @@ private fun ChoiceChip(
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    style = if (compactText) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyLarge,
                 )
             }
         }
