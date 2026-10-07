@@ -3,6 +3,9 @@ package com.example.clickplus.service
 import android.os.Handler
 import android.os.Looper
 import com.example.clickplus.data.ActivityLog
+import com.example.clickplus.data.ActionType
+import com.example.clickplus.data.SystemActionPreset
+import com.example.clickplus.data.profileIdFromActionId
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.KeyActionConfig
@@ -79,15 +82,7 @@ class RuleExecutionCoordinator(
                     appPackage = sourcePackage,
                     actionLabel = config.name.ifBlank { config.actionSummary() },
                     success = if (result.pending) null else result.success,
-                    detail = if (test && result.success && result.reason.isBlank()) {
-                        "בדיקה ידנית הסתיימה בהצלחה."
-                    } else if (test && result.success) {
-                        "בדיקה ידנית: " + result.reason
-                    } else if (result.pending || result.success) {
-                        result.reason
-                    } else {
-                        result.reason.ifBlank { "לא נמסר הסבר מהמבצע" }
-                    }
+                    detail = if (test) "בדיקה ידנית" else actualActionDetails(config)
                 )
             )
             if (!result.success && attempt < attempts) {
@@ -112,9 +107,32 @@ class RuleExecutionCoordinator(
                 sourcePackage,
                 success = false,
                 actionLabel = config.name.ifBlank { config.actionSummary() },
-                detail = detail
+                detail = actualActionDetails(config)
             )
         )
+    }
+
+    private fun actualActionDetails(config: KeyActionConfig): String = when (config.actionType) {
+        ActionType.SYSTEM -> when (config.systemActionId) {
+            SystemActionPreset.HOME.id -> "פתיחת מסך הבית"
+            SystemActionPreset.BACK.id -> "חזרה למסך הקודם"
+            SystemActionPreset.RECENTS.id -> "פתיחת היישומים האחרונים"
+            SystemActionPreset.NOTIFICATIONS.id -> "פתיחת חלונית ההתראות"
+            SystemActionPreset.LOCK_SCREEN.id -> "נעילת המסך"
+            SystemActionPreset.POWER_MENU.id -> "פתיחת תפריט הכיבוי"
+            SystemActionPreset.SCREENSHOT.id -> "צילום מסך"
+            else -> config.actionSummary()
+        }
+        ActionType.APP -> "פתיחת " + config.targetAppName.ifBlank { "האפליקציה שנבחרה" }
+        ActionType.APP_TAP -> "פתיחת " + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " וביצוע לחיצה במיקום שנלמד"
+        ActionType.MULTI_POINT_TAP -> "פתיחת " + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " וביצוע שתי לחיצות במיקומים שנלמדו"
+        ActionType.PROFILE -> {
+            val targetProfileId = profileIdFromActionId(config.systemActionId)
+            val targetProfile = targetProfileId?.let { id ->
+                advanced.profiles().firstOrNull { it.id == id }
+            }
+            "מעבר לפרופיל " + (targetProfile?.name ?: "שנבחר")
+        }
     }
 
     fun metadata(ruleId: String): RuleAdvancedMetadata = advanced.getRuleMetadata(ruleId)
