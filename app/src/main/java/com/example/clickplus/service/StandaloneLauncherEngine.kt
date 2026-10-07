@@ -24,7 +24,7 @@ object StandaloneLauncherEngine {
     fun process(context: Context) {
         if (AdvancedRuleRepository.currentMode(context) != AppMode.BASIC) return
         val mappings = AppPreferencesRepository.mappingsSnapshot(context)
-            .filter { it.enabled && it.triggerType == TriggerType.APP_ENTRY }
+            .filter { it.enabled && it.triggerType == TriggerType.CLICKPLUS_ENTRY }
         if (mappings.isEmpty()) return
 
         val now = System.currentTimeMillis()
