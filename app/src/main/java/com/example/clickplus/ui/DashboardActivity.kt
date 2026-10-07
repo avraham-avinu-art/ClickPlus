@@ -1545,34 +1545,33 @@ private fun EditorScreen(
                 EditorSectionCard(
                     number = "2",
                     title = "מתי להפעיל?",
-                    subtitle = "בחר את סוג ההפעלה ואת מספר הכניסות או הלחיצות.",
+                    subtitle = "בחר את סוג הטריגר ואת מספר הלחיצות הרצופות.",
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        ChoiceChip(
-                            selected = draft.triggerType == TriggerType.APP_ENTRY,
-                            onClick = { draft = draft.copy(triggerType = TriggerType.APP_ENTRY) },
-                            label = "כניסה לאפליקציה",
-                            modifier = Modifier.weight(1f),
-                        )
-                        ChoiceChip(
-                            selected = draft.triggerType == TriggerType.SCREEN_TAP,
-                            onClick = { draft = draft.copy(triggerType = TriggerType.SCREEN_TAP) },
-                            label = "לחיצה במיקום",
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    Text(
-                        "מספר הלחיצות הרצופות",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Row(
+                    FlowRow(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        maxItemsInEachRow = 3,
                     ) {
+                        TriggerType.entries.forEach { trigger ->
+                            ChoiceChip(
+                                selected = draft.triggerType == trigger,
+                                onClick = {
+                                    draft = draft.copy(
+                                        triggerType = trigger,
+                                        contextConditionType = if (trigger == TriggerType.APP_ENTRY) draft.contextConditionType else ContextConditionType.ANY,
+                                    )
+                                    runtimePrefs.edit().putBoolean("tap_learning", false).apply()
+                                    learning = false
+                                },
+                                label = trigger.titleHebrew,
+                                modifier = Modifier.widthIn(min = 105.dp),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text("מספר הלחיצות הרצופות", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         (1..10).forEach { n ->
                             CompactChoiceChip(
                                 selected = draft.pressCount == n,
@@ -1582,6 +1581,12 @@ private fun EditorScreen(
                             )
                         }
                     }
+                    if (draft.triggerType == TriggerType.APP_TAP) {
+                        Text(
+                            "הפעולה תזוהה רק כשהאפליקציה הנבחרת פתוחה בחזית. קליק פלוס לא יפתח אותה ולא יחסום את הפעולות הרגילות שלה.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
 
@@ -1589,116 +1594,153 @@ private fun EditorScreen(
                 EditorSectionCard(
                     number = "3",
                     title = "באיזה מצב?",
-                    subtitle = if (draft.triggerType == TriggerType.APP_ENTRY) {
-                        "קבע מתי הכלל מתאים לפי האפליקציה והמצב בזמן שהטריגר מזוהה."
-                    } else {
-                        "בחר באיזו אפליקציה ובאיזה מיקום לחיצה הכלל יזוהה."
-                    },
+                    subtitle = "הבחירה משתנה לפי סוג הטריגר.",
                 ) {
                     if (draft.triggerType == TriggerType.APP_ENTRY) {
                         FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
                             maxItemsInEachRow = 2,
                         ) {
                             ContextConditionType.entries.forEach { type ->
                                 ChoiceChip(
                                     selected = draft.contextConditionType == type,
                                     onClick = {
-                                        draft = draft.copy(contextConditionType = type)
+                                        draft = draft.copy(
+                                            contextConditionType = type,
+                                            contextConditionValue = if (type == ContextConditionType.VOLUME_LEVEL && draft.contextConditionValue.isBlank()) "15" else draft.contextConditionValue,
+                                        )
                                     },
                                     label = type.titleHebrew,
-                                    modifier = Modifier.widthIn(min = 120.dp).weight(1f),
+                                    modifier = Modifier.fillMaxWidth(0.48f),
                                 )
                             }
                         }
-
-                        if (
-                            draft.contextConditionType == ContextConditionType.APP ||
+                        if (draft.contextConditionType == ContextConditionType.APP ||
                             draft.contextConditionType == ContextConditionType.RADIO
                         ) {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(onClick = { appDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Outlined.Apps, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(draft.contextConditionName.ifBlank { "בחירת אפליקציה" })
+                            }
+                            Text("הבדיקה נעשית לפי האפליקציה הפעילה בזמן זיהוי הטריגר.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (draft.contextConditionType == ContextConditionType.VOLUME_LEVEL) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "רמת עוצמת שמע: " + draft.contextConditionValue.ifBlank { "15" } + " מתוך 30",
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Slider(
+                                value = draft.contextConditionValue.toFloatOrNull()?.coerceIn(1f, 30f) ?: 15f,
+                                onValueChange = { draft = draft.copy(contextConditionValue = it.toInt().coerceIn(1, 30).toString()) },
+                                valueRange = 1f..30f,
+                                steps = 28,
+                            )
+                        }
+                    } else {
+                        if (draft.screenTapPackage.isBlank()) {
                             OutlinedButton(
                                 onClick = { appDialog = true },
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Icon(Icons.Outlined.Apps, null)
                                 Spacer(Modifier.width(8.dp))
-                                Text(
-                                    if (draft.contextConditionName.isBlank()) {
-                                        "בחירת אפליקציה"
-                                    } else {
-                                        draft.contextConditionName
-                                    },
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
+                                Text("בחירת אפליקציה → לימוד מקום לחיצה")
                             }
                             Text(
-                                "ההתאמה נבדקת לפי האפליקציה הפעילה בזמן זיהוי הטריגר.",
+                                "לאחר בחירת האפליקציה היא תיפתח, ומצב הלימוד יופעל מיד.",
                                 style = MaterialTheme.typography.bodySmall,
                             )
-                        }
-                    } else {
-                        OutlinedButton(
-                            onClick = { screenAppDialog = true },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(Icons.Outlined.Apps, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                if (draft.screenTapPackage.isBlank()) "בחירת אפליקציה לזיהוי הלחיצה"
-                                else "החלפת אפליקציית הזיהוי",
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-
-                        if (draft.screenTapPackage.isBlank()) {
-                            Text(
-                                "אין צורך לפתוח את האפליקציה או להפעיל שכבת לימוד. בחר אפליקציה והגדר את הנקודה בתצוגה המקדימה.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-
-                        if (draft.screenTapPackage.isNotBlank()) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
+                        } else {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
+                                    Text(draft.screenTapAppName.ifBlank { "האפליקציה שנבחרה" }, fontWeight = FontWeight.Bold)
                                     Text(
-                                        draft.screenTapAppName.ifBlank { "האפליקציה שנבחרה" },
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        "מיקום שמור: X " + (x * 100f).toInt() + "% · Y " + (y * 100f).toInt() + "%",
+                                        if (draft.screenTapXRatio >= 0f) {
+                                            "נקודה ראשונה: X " + (x * 100).toInt() + "% · Y " + (y * 100).toInt() + "%"
+                                        } else "הנקודה הראשונה עדיין לא נלמדה",
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
                                 ChoiceChip(
                                     selected = false,
-                                    onClick = { screenAppDialog = true },
-                                    label = "החלפה",
-                                    modifier = Modifier.widthIn(min = 88.dp),
+                                    onClick = {
+                                        if (draft.screenTapPackage.isNotBlank()) {
+                                            learning = true
+                                            learningStage = 1
+                                            runtimePrefs.edit()
+                                                .putBoolean("tap_learning", true)
+                                                .putInt("tap_learning_stage", 1)
+                                                .putString("tap_learning_package", draft.screenTapPackage)
+                                                .apply()
+                                            context.packageManager.getLaunchIntentForPackage(draft.screenTapPackage)?.let {
+                                                it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                context.startActivity(it)
+                                            }
+                                        }
+                                    },
+                                    label = "לימוד מחדש",
+                                    modifier = Modifier.widthIn(min = 100.dp),
                                 )
                             }
-
                             PointEditor(
                                 x = x,
                                 y = y,
                                 toleranceX = metadata.toleranceXRatio,
                                 toleranceY = metadata.toleranceYRatio,
                                 onChange = { nx, ny ->
-                                    draft = draft.copy(
-                                        screenTapXRatio = nx,
-                                        screenTapYRatio = ny,
-                                    )
+                                    draft = draft.copy(screenTapXRatio = nx, screenTapYRatio = ny)
                                     metadata = metadata.copy(portraitX = nx, portraitY = ny)
                                 },
                             )
+                            if (draft.actionType == ActionType.MULTI_POINT_TAP) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    if (draft.screenTapSecondXRatio >= 0f) {
+                                        "נקודה שנייה: X " + (secondX * 100).toInt() + "% · Y " + (secondY * 100).toInt() + "%"
+                                    } else "הנקודה השנייה עדיין לא נלמדה",
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                if (draft.screenTapSecondXRatio >= 0f) {
+                                    PointEditor(
+                                        x = secondX,
+                                        y = secondY,
+                                        toleranceX = metadata.toleranceXRatio,
+                                        toleranceY = metadata.toleranceYRatio,
+                                        onChange = { nx, ny ->
+                                            draft = draft.copy(screenTapSecondXRatio = nx, screenTapSecondYRatio = ny)
+                                        },
+                                    )
+                                }
+                                Text(
+                                    "השהיה בין שתי הלחיצות: " + (draft.screenTapIntervalMs / 1000f) + " שניות",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Slider(
+                                    value = draft.screenTapIntervalMs.toFloat(),
+                                    onValueChange = { draft = draft.copy(screenTapIntervalMs = it.toLong().coerceIn(500L, 10_000L)) },
+                                    valueRange = 500f..10_000f,
+                                    steps = 19,
+                                )
+                            }
+                            Text("אפשר לגרור את הנקודה בתצוגה המקדימה גם לאחר הלימוד.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (learning) {
+                            Surface(
+                                Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                            ) {
+                                Text(
+                                    if (learningStage == 1) "מצב לימוד פעיל: גע בנקודה הראשונה." else "מצב לימוד פעיל: גע בנקודה השנייה.",
+                                    Modifier.padding(12.dp),
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
                         }
                     }
                 }
