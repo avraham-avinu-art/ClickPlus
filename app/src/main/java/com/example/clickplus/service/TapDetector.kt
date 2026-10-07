@@ -21,7 +21,7 @@ class TapDetector(
     private val actionExecutor: RuleExecutionCoordinator,
     private val onTapCount: (Int) -> Unit = {},
 ) {
-    var tapTimeoutMs = 650L
+    var tapTimeoutMs = 1200L
     private var tapCount = 0
     private var lastLaunchTime = 0L
     private var pendingForegroundPackage = ""
@@ -128,26 +128,18 @@ class TapDetector(
                 screenTapCounts[config.id] = count
                 onTapCount(count)
                 screenReset[config.id]?.let(handler::removeCallbacks)
-                val reset = Runnable {
-                    screenTapCounts.remove(config.id)
-                    screenReset.remove(config.id)
-                }
-                screenReset[config.id] = reset
-                handler.postDelayed(reset, tapTimeoutMs.coerceIn(300L, 1500L))
-
                 // Resolve only after the global window closes. This prevents a
                 // 1-press rule from firing before a longer multi-press sequence is complete.
-                val resolvingReset = Runnable {
+                val reset = Runnable {
                     val finalCount = screenTapCounts.remove(config.id) ?: 0
                     screenReset.remove(config.id)
                     if (finalCount == config.pressCount) {
                         actionExecutor.execute(config, packageName, "לחיצה במיקום במסך")
                     }
                 }
-                screenReset[config.id] = resolvingReset
-                handler.removeCallbacks(reset)
+                screenReset[config.id] = reset
                 handler.postDelayed(
-                    resolvingReset,
+                    reset,
                     tapTimeoutMs.coerceIn(300L, 1500L),
                 )
             }
