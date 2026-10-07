@@ -1859,11 +1859,11 @@ private fun PointEditor(
                 val px = safeX * size.width
                 val py = safeY * size.height
                 drawRect(
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                    outlineColor.copy(alpha = 0.35f),
                     style = Stroke(2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 7f))),
                 )
                 drawRect(
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    primaryColor.copy(alpha = 0.15f),
                     topLeft = Offset(
                         ((safeX - safeTx).coerceAtLeast(0f)) * size.width,
                         ((safeY - safeTy).coerceAtLeast(0f)) * size.height,
@@ -1873,8 +1873,8 @@ private fun PointEditor(
                         (safeTy * 2f).coerceAtMost(1f) * size.height,
                     ),
                 )
-                drawCircle(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), radius = 30f, center = Offset(px, py))
-                drawCircle(MaterialTheme.colorScheme.primary, radius = 11f, center = Offset(px, py))
+                drawCircle(primaryColor.copy(alpha = 0.18f), radius = 30f, center = Offset(px, py))
+                drawCircle(primaryColor, radius = 11f, center = Offset(px, py))
             }
         }
     }
