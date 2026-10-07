@@ -13,6 +13,7 @@ import android.view.KeyEvent
 import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.KeyActionConfig
+import com.example.clickplus.data.profileIdFromActionId
 import com.example.clickplus.data.SystemActionPreset
 
 class ActionExecutor(private val service: AccessibilityService) : ClickActionPerformer {
@@ -264,6 +265,18 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
 
 
     private fun executeProfile(profileActionId: String): ActionExecutionResult {
+        val selectedProfileId = profileIdFromActionId(profileActionId)
+        if (selectedProfileId != null) {
+            val profile = AdvancedRuleRepository(service).profiles().firstOrNull { it.id == selectedProfileId }
+                ?: return ActionExecutionResult.failure("הפרופיל שנבחר אינו קיים")
+            if (!profile.enabled) {
+                return ActionExecutionResult.failure("הפרופיל שנבחר מושבת")
+            }
+            AdvancedRuleRepository.setActiveProfileId(service, profile.id)
+            return ActionExecutionResult.success("עבר לפרופיל: " + profile.name)
+        }
+
+        // Backward compatibility for rules saved by older versions.
         return when (profileActionId) {
             "profile_next" ->
                 ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(service, 1))
