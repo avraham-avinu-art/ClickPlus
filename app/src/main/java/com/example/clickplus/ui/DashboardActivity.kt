@@ -2188,6 +2188,33 @@ private fun EditorScreen(
                             horizontalArrangement = Arrangement.spacedBy(7.dp),
                         ) {
                             ChoiceChip(
+                                selected = actionTypeChosen && draft.actionType == ActionType.APP,
+                                onClick = {
+                                    actionTypeChosen = true
+                                    selectedSystemCategory = null
+                                    draft = draft.copy(actionType = ActionType.APP, systemActionId = "")
+                                },
+                                label = "פתיחת אפליקציה",
+                                modifier = Modifier.weight(1f).height(54.dp),
+                                compactText = true,
+                            )
+                            ChoiceChip(
+                                selected = actionTypeChosen && draft.actionType == ActionType.APP_TAP,
+                                onClick = {
+                                    actionTypeChosen = true
+                                    selectedSystemCategory = null
+                                    draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "")
+                                },
+                                label = "פתיחה+לחיצות",
+                                modifier = Modifier.weight(1f).height(54.dp),
+                                compactText = true,
+                            )
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            ChoiceChip(
                                 selected = actionTypeChosen && draft.actionType == ActionType.SYSTEM,
                                 onClick = {
                                     actionTypeChosen = true
@@ -2203,33 +2230,6 @@ private fun EditorScreen(
                                 modifier = Modifier.weight(1f).height(54.dp),
                                 compactText = true,
                             )
-                            ChoiceChip(
-                                selected = actionTypeChosen && draft.actionType == ActionType.APP,
-                                onClick = {
-                                    actionTypeChosen = true
-                                    selectedSystemCategory = null
-                                    draft = draft.copy(actionType = ActionType.APP, systemActionId = "")
-                                },
-                                label = "פתיחת אפליקציה",
-                                modifier = Modifier.weight(1f).height(54.dp),
-                                compactText = true,
-                            )
-                        }
-                        ChoiceChip(
-                            selected = actionTypeChosen && draft.actionType == ActionType.APP_TAP,
-                            onClick = {
-                                actionTypeChosen = true
-                                selectedSystemCategory = null
-                                draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "")
-                            },
-                            label = "פתיחה+לחיצות",
-                            modifier = Modifier.fillMaxWidth().height(54.dp),
-                            compactText = true,
-                        )
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(7.dp),
-                        ) {
                             ChoiceChip(
                                 selected = actionTypeChosen && draft.actionType == ActionType.PROFILE,
                                 onClick = {
@@ -2248,7 +2248,6 @@ private fun EditorScreen(
                                 modifier = Modifier.weight(1f).height(54.dp),
                                 compactText = true,
                             )
-                            Spacer(Modifier.weight(1f).height(54.dp))
                         }
                     }
 
@@ -2260,6 +2259,51 @@ private fun EditorScreen(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     } else {
+                        val permissionNeeded =
+                            if (draft.actionType == ActionType.APP_TAP || draft.actionType == ActionType.MULTI_POINT_TAP) {
+                                AdvancedRuleRepository.currentMode(context) == AppMode.FULL && !isAccessibilityEnabled(context)
+                            } else {
+                                draft.actionType == ActionType.SYSTEM &&
+                                    draft.systemActionId == SystemActionPreset.BRIGHTNESS_SET.id &&
+                                    !Settings.System.canWrite(context)
+                            }
+                        if (permissionNeeded) {
+                            val accessibilityMissing =
+                                (draft.actionType == ActionType.APP_TAP || draft.actionType == ActionType.MULTI_POINT_TAP) &&
+                                    !isAccessibilityEnabled(context)
+                            Surface(
+                                Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(11.dp),
+                                color = MaterialTheme.colorScheme.errorContainer,
+                            ) {
+                                Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    Text(
+                                        if (accessibilityMissing) {
+                                            "הפעולה הזאת דורשת את שירות הנגישות כדי לבצע לחיצה בתוך האפליקציה."
+                                        } else {
+                                            "הפעולה הזאת דורשת הרשאה לשינוי בהירות המסך."
+                                        },
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            if (accessibilityMissing) {
+                                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                            } else {
+                                                context.startActivity(
+                                                    Intent(
+                                                        Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                                                        Uri.parse("package:" + context.packageName),
+                                                    )
+                                                )
+                                            }
+                                        },
+                                    ) {
+                                        Text("מעבר לנתינת ההרשאה")
+                                    }
+                                }
+                            }
+                        }
                         when (draft.actionType) {
                             ActionType.SYSTEM -> {
                                 Spacer(Modifier.height(6.dp))
