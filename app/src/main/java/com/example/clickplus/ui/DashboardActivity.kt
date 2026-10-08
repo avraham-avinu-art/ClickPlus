@@ -1762,7 +1762,13 @@ private fun BackupScreen(
                         ?.bufferedReader()
                         ?.use { it.readText() }
                         ?: error("קובץ ריק")
-                    pendingImport = JSONObject(json)
+                    val root = JSONObject(json)
+                    val version = root.optInt("version", -1)
+                    if (version !in 1..2) error("גרסת גיבוי אינה נתמכת")
+                    if (!root.has("mappings") || root.optJSONArray("mappings") == null) {
+                        error("קובץ הגיבוי חסר רשימת פעולות")
+                    }
+                    pendingImport = root
                 }.onFailure {
                     message = "הייבוא נכשל: " + (it.message ?: "שגיאה")
                 }
@@ -1888,8 +1894,9 @@ private fun BackupScreen(
             title = { Text("ייבוא גיבוי") },
             text = {
                 Text(
-                    "הקובץ מכיל " + array.length() + " פעולות ו-" +
-                        profileArray.length() + " פרופילים. הייבוא יחליף את הנתונים הקיימים.",
+                    "גרסת גיבוי " + root.optInt("version", -1) + ". הקובץ מכיל " +
+                        array.length() + " פעולות ו-" + profileArray.length() +
+                        " פרופילים. הייבוא יחליף את הנתונים הקיימים.",
                 )
             },
             confirmButton = {
@@ -2574,6 +2581,7 @@ private fun EditorScreen(
                                         tapPreviewImage = null
                                         p.edit()
                                             .remove("tap_capture_screenshot_path")
+                                            .putBoolean("tap_capture_preview_requested", false)
                                             .putBoolean("tap_learning", true)
                                             .putString("tap_learning_package", draft.screenTapPackage)
                                             .apply()
