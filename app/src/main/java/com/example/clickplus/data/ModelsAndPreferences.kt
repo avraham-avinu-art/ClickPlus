@@ -195,6 +195,10 @@ class AppPreferencesRepository(private val context: Context) {
     }
     suspend fun saveShowTapCount(enabled: Boolean) { context.dataStore.edit { it[SHOW_TAP_COUNT] = enabled } }
     suspend fun setOnboardingCompleted(completed: Boolean) { context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed } }
+    suspend fun resetAll() {
+        context.dataStore.edit { it.clear() }
+    }
+
     suspend fun saveMappings(mappings: List<KeyActionConfig>) {
         val array = JSONArray()
         mappings.forEach { array.put(it.toJson()) }
