@@ -1594,6 +1594,7 @@ private fun EditorScreen(
         )
     }
     var showDelete by remember { mutableStateOf(false) }
+    var validationMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(draft.triggerType, draft.actionType) {
         if (draft.triggerType == TriggerType.SCREEN_TAP && draft.actionType != ActionType.APP_TAP) {
@@ -1681,20 +1682,22 @@ private fun EditorScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        if (draft.name.isBlank()) {
-                            draft = draft.copy(name = draft.triggerType.titleHebrew)
-                        }
-                        onSave(
-                            draft.copy(
-                                screenTapXRatio = if (draft.screenTapXRatio >= 0f) draft.screenTapXRatio else x,
-                                screenTapYRatio = if (draft.screenTapYRatio >= 0f) draft.screenTapYRatio else y,
-                                screenTapToleranceRatio = maxOf(
-                                    metadata.toleranceXRatio,
-                                    metadata.toleranceYRatio,
-                                ),
+                        val prepared = draft.copy(
+                            name = draft.name.ifBlank { draft.triggerType.titleHebrew },
+                            screenTapXRatio = if (draft.screenTapXRatio >= 0f) draft.screenTapXRatio else x,
+                            screenTapYRatio = if (draft.screenTapYRatio >= 0f) draft.screenTapYRatio else y,
+                            screenTapToleranceRatio = maxOf(
+                                metadata.toleranceXRatio,
+                                metadata.toleranceYRatio,
                             ),
-                            metadata,
                         )
+                        val error = validateRuleBeforeSave(context, prepared, metadata, repo)
+                        if (error != null) {
+                            validationMessage = error
+                        } else {
+                            validationMessage = ""
+                            onSave(prepared, metadata)
+                        }
                     },
                     Modifier
                         .fillMaxWidth()
@@ -1803,21 +1806,49 @@ private fun EditorScreen(
                     },
                 ) {
                     if (draft.triggerType == TriggerType.APP_ENTRY) {
-                        FlowRow(
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            maxItemsInEachRow = 2,
                         ) {
-                            ContextConditionType.entries.forEach { type ->
-                                ChoiceChip(
-                                    selected = draft.contextConditionType == type,
-                                    onClick = {
-                                        draft = draft.copy(contextConditionType = type)
-                                    },
-                                    label = type.titleHebrew,
-                                    modifier = Modifier.widthIn(min = 120.dp).weight(1f),
-                                )
+                            ChoiceChip(
+                                selected = draft.contextConditionType == ContextConditionType.ANY,
+                                onClick = {
+                                    draft = draft.copy(contextConditionType = ContextConditionType.ANY)
+                                },
+                                label = "בכל מצב",
+                                modifier = Modifier.weight(1f),
+                            )
+                            ChoiceChip(
+                                selected = draft.contextConditionType != ContextConditionType.ANY,
+                                onClick = {
+                                    if (draft.contextConditionType == ContextConditionType.ANY) {
+                                        draft = draft.copy(contextConditionType = ContextConditionType.APP)
+                                    }
+                                },
+                                label = "לפי מצב מסוים",
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+
+                        if (draft.contextConditionType != ContextConditionType.ANY) {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                ContextConditionType.entries
+                                    .filter { it != ContextConditionType.ANY }
+                                    .forEach { type ->
+                                        ChoiceChip(
+                                            selected = draft.contextConditionType == type,
+                                            onClick = {
+                                                draft = draft.copy(contextConditionType = type)
+                                            },
+                                            label = type.titleHebrew,
+                                            modifier = Modifier.width(132.dp),
+                                        )
+                                    }
                             }
                         }
 
@@ -1832,19 +1863,13 @@ private fun EditorScreen(
                                 Icon(Icons.Outlined.Apps, null)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    if (draft.contextConditionName.isBlank()) {
-                                        "בחירת אפליקציה"
-                                    } else {
-                                        draft.contextConditionName
-                                    },
+                                    if (draft.contextConditionName.isBlank()) "בחירת אפליקציה"
+                                    else draft.contextConditionName,
                                     maxLines = 1,
+                                    softWrap = false,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            Text(
-                                "ההתאמה נבדקת לפי האפליקציה שהייתה פתוחה לפני ClickPlus.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
                         }
                     } else {
                         OutlinedButton(
@@ -1945,32 +1970,36 @@ private fun EditorScreen(
                     title = "מה לבצע?",
                     subtitle = "בחר מה ClickPlus יעשה לאחר שהכלל הופעל.",
                 ) {
-                    Column(
+                    ChoiceChip(
+                        selected = draft.actionType == ActionType.SYSTEM,
+                        onClick = {
+                            draft = draft.copy(
+                                actionType = ActionType.SYSTEM,
+                                systemActionId = draft.systemActionId.ifBlank { SystemActionPreset.HOME.id },
+                            )
+                        },
+                        label = "פעולת מערכת",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(
                         Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         ChoiceChip(
-                            selected = draft.actionType == ActionType.SYSTEM,
-                            onClick = {
-                                draft = draft.copy(
-                                    actionType = ActionType.SYSTEM,
-                                    systemActionId = draft.systemActionId.ifBlank { SystemActionPreset.HOME.id },
-                                )
-                            },
-                            label = "פעולת מערכת",
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        ChoiceChip(
                             selected = draft.actionType == ActionType.APP,
-                            onClick = { draft = draft.copy(actionType = ActionType.APP, systemActionId = "") },
+                            onClick = {
+                                draft = draft.copy(actionType = ActionType.APP, systemActionId = "")
+                            },
                             label = "פתיחת אפליקציה",
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.weight(1f),
                         )
                         ChoiceChip(
                             selected = draft.actionType == ActionType.APP_TAP,
-                            onClick = { draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "") },
-                            label = "פתיחת אפליקציה + לחיצה",
-                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "")
+                            },
+                            label = "פתיחה+לחיצות",
+                            modifier = Modifier.weight(1f),
                         )
                     }
 
@@ -1999,6 +2028,29 @@ private fun EditorScreen(
                             }
                         }
                         ActionType.APP_TAP -> {
+                            Text(
+                                "מספר לחיצות",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                (1..10).forEach { n ->
+                                    CompactChoiceChip(
+                                        selected = draft.actionTapCount == n,
+                                        onClick = {
+                                            draft = draft.copy(actionTapCount = n)
+                                        },
+                                        label = n.toString(),
+                                        modifier = Modifier.width(42.dp),
+                                    )
+                                }
+                            }
+
                             OutlinedButton(
                                 onClick = {
                                     if (!isAccessibilityEnabled(context)) {
@@ -2185,26 +2237,41 @@ private fun EditorScreen(
                         selectedId = metadata.profileId,
                         onSelect = { metadata = metadata.copy(profileId = it) },
                     )
+                }
+            }
 
-                    OutlinedButton(
-                        onClick = {
-                            val performer = when (AdvancedRuleRepository.currentMode(context)) {
-                                AppMode.BASIC -> BasicActionPerformer(context)
-                                AppMode.FULL -> KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
-                                    ?: UnavailableActionPerformer("מצב מלא נבחר, אבל שירות הנגישות אינו פעיל.")
-                            }
-                            RuleExecutionCoordinator(context, performer).execute(
-                                draft,
-                                test = true,
-                                reason = "בדיקה ידנית",
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Outlined.PlayArrow, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("בדיקת הפעולה")
-                    }
+            item {
+                OutlinedButton(
+                    onClick = {
+                        val performer = when (AdvancedRuleRepository.currentMode(context)) {
+                            AppMode.BASIC -> BasicActionPerformer(context)
+                            AppMode.FULL -> KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
+                                ?: UnavailableActionPerformer("מצב מלא נבחר, אבל שירות הנגישות אינו פעיל.")
+                        }
+                        RuleExecutionCoordinator(context, performer).execute(
+                            draft,
+                            test = true,
+                            reason = "בדיקה ידנית",
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 2.dp),
+                ) {
+                    Icon(Icons.Outlined.PlayArrow, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("בדיקת הפעולה")
+                }
+            }
+
+            if (validationMessage.isNotBlank()) {
+                item {
+                    Text(
+                        validationMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    )
                 }
             }
         }
