@@ -63,6 +63,7 @@ import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.BrightnessAuto
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
