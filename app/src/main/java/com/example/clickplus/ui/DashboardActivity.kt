@@ -255,6 +255,7 @@ private fun ClickPlusDashboard(
     val timeout by prefs.tapTimeoutFlow.collectAsState(initial = 1200L)
     val actionDelay by prefs.actionDelayFlow.collectAsState(initial = 0L)
     val showTapCount by prefs.showTapCountFlow.collectAsState(initial = false)
+    val tapCountSizeSp by prefs.tapCountSizeFlow.collectAsState(initial = 20f)
     var route by remember { mutableStateOf<DashboardRoute>(DashboardRoute.Home) }
     var themeMode by remember { mutableStateOf(advanced.themeMode()) }
     var workMode by remember { mutableStateOf(AdvancedRuleRepository.currentMode(context)) }
@@ -315,6 +316,7 @@ private fun ClickPlusDashboard(
                 timeout = timeout,
                 actionDelay = actionDelay,
                 showTapCount = showTapCount,
+                tapCountSizeSp = tapCountSizeSp,
                 themeMode = themeMode,
                 workMode = workMode,
                 onBack = { route = DashboardRoute.Home },
@@ -1352,12 +1354,14 @@ private fun SettingsScreen(
     timeout: Long,
     actionDelay: Long,
     showTapCount: Boolean,
+    tapCountSizeSp: Float,
     themeMode: String,
     workMode: AppMode,
     onBack: () -> Unit,
     onTimeout: (Long) -> Unit,
     onActionDelay: (Long) -> Unit,
     onShowTapCount: (Boolean) -> Unit,
+    onTapCountSize: (Float) -> Unit,
     onTheme: (String) -> Unit,
     onMode: (AppMode) -> Unit,
     onRequestNotification: () -> Unit,
@@ -1424,7 +1428,35 @@ private fun SettingsScreen(
             }
 
             item {
-                SettingCard("חיווי", "האם להציג מונה קצר של מספר הלחיצות.") {
+                SettingCard("חיווי", "הצגת מונה קצר של מספר הלחיצות וגודל המונה.") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("הצגת מונה לחיצות", Modifier.weight(1f))
+                            Switch(
+                                checked = showTapCount,
+                                onCheckedChange = onShowTapCount,
+                            )
+                        }
+                        EditorSliderRow(
+                            title = "גודל החיווי",
+                            valueText = tapCountSizeSp.toInt().toString() + "sp",
+                        ) {
+                            Slider(
+                                value = tapCountSizeSp,
+                                onValueChange = onTapCountSize,
+                                valueRange = 14f..32f,
+                                steps = 8,
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                SettingCard("מראה", "בחירת ערכת הצבעים של האפליקציה.") {
                     Row(
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
