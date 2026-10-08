@@ -245,20 +245,114 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                     val meta = AdvancedRuleRepository(service).getRuleMetadata(config.id)
                     val delayMs = (if (meta.delayMs > 0L) meta.delayMs else AppPreferencesRepository.actionDelaySnapshot(service))
                         .coerceIn(0L, 10_000L)
-                    if (delayMs == 0L) {
-                        dispatchLearnedTap(config, targetPackage, xRatio, yRatio, executionId)
-                    } else {
-                        handler.postDelayed(
-                            { dispatchLearnedTap(config, targetPackage, xRatio, yRatio, executionId) },
-                            delayMs,
-                        )
+                    val run = {
+                        val count = config.screenTapCount.coerceIn(1, 10)
+                        if (count == 1) {
+                            dispatchLearnedTap(config, targetPackage, xRatio, yRatio, executionId)
+                        } else {
+                            dispatchRepeatedTaps(
+                                config,
+                                targetPackage,
+                                xRatio,
+                                yRatio,
+                                count,
+                                1,
+                                executionId,
+                            )
+                        }
                     }
+                    if (delayMs == 0L) run() else handler.postDelayed(run, delayMs)
                 } else {
                     handler.postDelayed(this, 150L)
                 }
             }
         }
         handler.post(check)
+    }
+
+    private fun dispatchRepeatedTaps(
+        config: KeyActionConfig,
+        targetPackage: String,
+        xRatio: Float,
+        yRatio: Float,
+        count: Int,
+        index: Int,
+        executionId: String,
+    ) {
+        if (service.rootInActiveWindow?.packageName?.toString().orEmpty() != targetPackage) {
+            logAppTapResult(
+                config,
+                targetPackage,
+                false,
+                "אפליקציית היעד יצאה מהחזית במהלך סדרת הלחיצות",
+                executionId,
+            )
+            return
+        }
+
+        val metrics = service.resources.displayMetrics
+        val width = metrics.widthPixels.coerceAtLeast(1).toFloat()
+        val height = metrics.heightPixels.coerceAtLeast(1).toFloat()
+        val x = (xRatio * width).coerceIn(0f, width - 1f)
+        val y = (yRatio * height).coerceIn(0f, height - 1f)
+        val path = Path().apply { moveTo(x, y) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0L, 60L))
+            .build()
+
+        runCatching {
+            service.dispatchGesture(
+                gesture,
+                object : AccessibilityService.GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        if (index >= count) {
+                            logAppTapResult(
+                                config,
+                                targetPackage,
+                                true,
+                                "כל " + count + " הלחיצות בוצעו בהצלחה",
+                                executionId,
+                            )
+                        } else {
+                            handler.postDelayed(
+                                {
+                                    dispatchRepeatedTaps(
+                                        config,
+                                        targetPackage,
+                                        xRatio,
+                                        yRatio,
+                                        count,
+                                        index + 1,
+                                        executionId,
+                                    )
+                                },
+                                config.screenTapIntervalMs.coerceIn(500L, 10_000L),
+                            )
+                        }
+                    }
+
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        logAppTapResult(
+                            config,
+                            targetPackage,
+                            false,
+                            "לחיצה מספר " + index + " בוטלה על ידי Android",
+                            executionId,
+                        )
+                    }
+                },
+                handler,
+            )
+        }.onFailure { error ->
+            logAppTapResult(
+                config,
+                targetPackage,
+                false,
+                "לא ניתן לשלוח לחיצה מספר " + index + ": " +
+                    (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName),
+                executionId,
+            )
+        }
     }
 
     private fun dispatchLearnedTap(
