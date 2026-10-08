@@ -59,9 +59,27 @@ class ActionExecutor(private val service: KeyInterceptorAccessibilityService) : 
             return ActionExecutionResult.failure("לא נבחרה אפליקציה לביצוע הלחיצה")
         }
 
-        val xRatio = config.screenTapXRatio.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
-        val yRatio = config.screenTapYRatio.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
-        if (xRatio == null || yRatio == null || config.screenTapXRatio < 0f || config.screenTapYRatio < 0f) {
+        val metadata = AdvancedRuleRepository(service).getRuleMetadata(config.id)
+        val landscape = service.resources.configuration.orientation ==
+            android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val learnedX = if (landscape && metadata.landscapeX >= 0f) {
+            metadata.landscapeX
+        } else if (!landscape && metadata.portraitX >= 0f) {
+            metadata.portraitX
+        } else {
+            config.screenTapXRatio
+        }
+        val learnedY = if (landscape && metadata.landscapeY >= 0f) {
+            metadata.landscapeY
+        } else if (!landscape && metadata.portraitY >= 0f) {
+            metadata.portraitY
+        } else {
+            config.screenTapYRatio
+        }
+
+        val xRatio = learnedX.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
+        val yRatio = learnedY.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
+        if (xRatio == null || yRatio == null || learnedX < 0f || learnedY < 0f) {
             return ActionExecutionResult.failure("לא נלמד מיקום לחיצה תקין באפליקציה")
         }
 
