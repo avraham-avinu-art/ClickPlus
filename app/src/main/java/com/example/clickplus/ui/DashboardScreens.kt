@@ -305,18 +305,19 @@ internal fun HomeDashboard(
                         Text("פרופילים", maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelMedium)
                     }
                 }
+            }
 
-                if (mode == AppMode.FULL && accessibility && !accessibilityHealthy) {
-                    item {
-                        StatusCard(
-                            "שירות הנגישות לא מגיב",
-                            false,
-                            "Android מציג שהשירות מופעל, אבל ClickPlus לא מזהה שהוא פעיל. ייתכן שהשירות קרס.",
-                            onAction = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
-                            actionLabel = "פתיחת הגדרות נגישות",
-                        )
-                    }
+            if (mode == AppMode.FULL && accessibility && !accessibilityHealthy) {
+                item {
+                    StatusCard(
+                        "שירות הנגישות לא מגיב",
+                        false,
+                        "Android מציג שהשירות מופעל, אבל ClickPlus לא מזהה פעילות של השירות. ייתכן שהשירות קרס.",
+                        onAction = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                        actionLabel = "פתיחת הגדרות נגישות",
+                    )
                 }
+            }
 
             if (mappings.isEmpty()) {
                 item { EmptyState(onAdd) }
