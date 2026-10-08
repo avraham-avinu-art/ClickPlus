@@ -406,8 +406,8 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         // Hide the learning panel before taking the screenshot so the stored
         // image represents the target app itself, not the teaching overlay.
         tapLearningOverlay.hide()
-        uiHandler.postDelayed({ saveLearningScreenshot(stage) }, 120L)
-        uiHandler.postDelayed({ openEditor() }, 260L)
+        uiHandler.postDelayed({ saveLearningScreenshot(stage) }, 350L)
+        uiHandler.postDelayed({ openEditor() }, 700L)
     }
 
     private fun cancelLearning() {
