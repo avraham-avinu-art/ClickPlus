@@ -17,7 +17,7 @@ import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.SystemActionPreset
 import java.util.UUID
 
-class ActionExecutor(private val service: AccessibilityService) : ClickActionPerformer {
+class ActionExecutor(private val service: KeyInterceptorAccessibilityService) : ClickActionPerformer {
     private val handler = Handler(Looper.getMainLooper())
 
     override fun supports(config: KeyActionConfig): Boolean {
