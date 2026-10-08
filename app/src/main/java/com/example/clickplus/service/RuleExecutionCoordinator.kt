@@ -48,6 +48,12 @@ class RuleExecutionCoordinator(
                 return false
             }
             if (selectedProfile.id != activeProfileId) {
+                logFailure(
+                    config,
+                    sourcePackage,
+                    reason,
+                    "הפרופיל "" + selectedProfile.name + "" אינו הפרופיל הפעיל",
+                )
                 return false
             }
             if (!selectedProfile.enabled) {
