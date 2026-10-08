@@ -6,9 +6,11 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Build
 import android.provider.Settings
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import androidx.core.app.NotificationCompat
 import com.example.clickplus.data.AdvancedRuleRepository
@@ -24,6 +26,7 @@ import kotlinx.coroutines.launch
 class KeyInterceptorAccessibilityService : AccessibilityService() {
     @Volatile private var tapCountOverlayEnabled = false
     @Volatile private var lastExternalPackage = ""
+    @Volatile private var currentForegroundPackage = ""
 
     companion object {
         @Volatile var instance: KeyInterceptorAccessibilityService? = null
@@ -57,6 +60,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
 
     fun onLauncherEntry() {
         tapDetector.processActivationLaunch(lastExternalPackage)
+    }
+
+    fun isPackageInForeground(targetPackage: String): Boolean {
+        if (targetPackage.isBlank()) return false
+        val rootPackage = rootInActiveWindow?.packageName?.toString().orEmpty()
+        return rootPackage == targetPackage
     }
 
     fun openMainInterface() {
@@ -97,6 +106,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             .setSmallIcon(com.example.clickplus.R.drawable.ic_notification_transparent)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setSilent(true)
             .build()
 
         runCatching {
@@ -124,6 +134,11 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             }
         }
         serviceScope.launch {
+            prefsRepository.tapCountSizeFlow.collectLatest { sizeSp ->
+                tapCountOverlay.setSizeSp(sizeSp)
+            }
+        }
+        serviceScope.launch {
             prefsRepository.mappingsFlow.collectLatest { tapDetector.updateProfiles(it) }
         }
     }
@@ -143,9 +158,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
-                if (shouldTrackExternalPackage(eventPackage)) {
+                currentForegroundPackage = if (shouldTrackExternalPackage(eventPackage)) {
                     lastExternalPackage = eventPackage
                     AdvancedRuleRepository.setLastExternalPackage(applicationContext, eventPackage)
+                    eventPackage
+                } else {
+                    ""
                 }
                 updateLearningOverlay(eventPackage)
             }
@@ -162,6 +180,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         val target = prefs.getString("tap_learning_package", "").orEmpty()
         if (learning && target.isNotBlank() && target == eventPackage) {
             tapLearningOverlay.show()
+            if (!prefs.getBoolean("tap_capture_preview_requested", false) &&
+                rootInActiveWindow?.packageName?.toString() == target
+            ) {
+                prefs.edit().putBoolean("tap_capture_preview_requested", true).apply()
+                captureScreenPreview()
+            }
         } else if (!learning) {
             tapLearningOverlay.hide()
         }
@@ -204,6 +228,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             )
             .apply()
         tapLearningOverlay.hide()
+        prefs.edit().putBoolean("tap_capture_preview_requested", false).apply()
 
         runCatching {
             startActivity(
@@ -213,6 +238,53 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             )
         }
         return true
+    }
+
+    private fun captureScreenPreview() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+
+        runCatching {
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                mainExecutor,
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: ScreenshotResult) {
+                        runCatching {
+                            val source = Bitmap.wrapHardwareBuffer(
+                                screenshot.hardwareBuffer,
+                                screenshot.colorSpace,
+                            )
+                            val bitmap = source?.copy(Bitmap.Config.ARGB_8888, false)
+                            screenshot.hardwareBuffer.close()
+
+                            if (bitmap != null) {
+                                val file = java.io.File(cacheDir, "tap-preview-" + System.currentTimeMillis() + ".png")
+                                file.outputStream().use {
+                                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                                }
+                                bitmap.recycle()
+
+                                getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+                                    .edit()
+                                    .putString("tap_capture_screenshot_path", file.absolutePath)
+                                    .apply()
+                            }
+                        }.onFailure { error ->
+                            android.util.Log.w("ClickPlus", "Could not save tap preview", error)
+                        }
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        android.util.Log.w(
+                            "ClickPlus",
+                            "Screenshot capture failed: " + errorCode,
+                        )
+                    }
+                },
+            )
+        }.onFailure { error ->
+            android.util.Log.w("ClickPlus", "Screenshot capture unavailable", error)
+        }
     }
 
     override fun onInterrupt() = Unit

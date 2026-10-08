@@ -19,12 +19,14 @@ class LauncherActivity : Activity() {
         val firstLaunch = !prefs.getBoolean("first_ui_opened", false)
         if (firstLaunch) {
             prefs.edit()
+                .putBoolean("first_ui_opened", true)
                 .putBoolean("background_only", false)
                 .putBoolean("permission_bootstrap_done", false)
+                .putBoolean("permission_intro_completed", false)
                 .apply()
 
             startActivity(
-                Intent(this, MainActivity::class.java).addFlags(
+                Intent(this, DashboardActivity::class.java).addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
                         Intent.FLAG_ACTIVITY_CLEAR_TOP or
                         Intent.FLAG_ACTIVITY_SINGLE_TOP

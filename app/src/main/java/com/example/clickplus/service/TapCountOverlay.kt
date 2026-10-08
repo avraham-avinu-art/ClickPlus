@@ -29,6 +29,22 @@ class TapCountOverlay(private val context: Context) {
     private var attached = false
     private var hideRunnable: Runnable? = null
 
+    fun setSizeSp(sizeSp: Float) {
+        val safe = sizeSp.coerceIn(14f, 32f)
+        textView.textSize = safe
+        if (attached) {
+            val density = context.resources.displayMetrics.density
+            val sidePadding = (safe * 1.8f * density).toInt().coerceAtLeast((22 * density).toInt())
+            val height = (safe * 2.2f * density).toInt().coerceAtLeast((40 * density).toInt())
+            val params = textView.layoutParams as? WindowManager.LayoutParams
+            if (params != null) {
+                params.width = sidePadding
+                params.height = height
+                runCatching { windowManager.updateViewLayout(textView, params) }
+            }
+        }
+    }
+
     fun show(count: Int, durationMs: Long = 900L) {
         textView.text = count.toString()
 

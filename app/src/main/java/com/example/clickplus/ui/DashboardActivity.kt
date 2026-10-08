@@ -7,10 +7,12 @@
 package com.example.clickplus.ui
 
 import android.Manifest
+import android.app.Activity
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.os.Build
@@ -114,6 +116,8 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -161,15 +165,13 @@ private sealed interface DashboardRoute {
 }
 
 class DashboardActivity : ComponentActivity() {
-    private var settingsStepActive = false
-    private var runtimeRequestActive = false
     private var showPermissionIntro by mutableStateOf(false)
+    private var permissionRefreshKey by mutableIntStateOf(0)
 
     private val runtimePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
-        runtimeRequestActive = false
-        continueFirstLaunchPermissions()
+        permissionRefreshKey++
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -181,13 +183,38 @@ class DashboardActivity : ComponentActivity() {
             .putBoolean("first_ui_opened", true)
             .putBoolean("background_only", false)
             .apply()
+
         setContent {
             ClickPlusDashboard(
                 showPermissionIntro = showPermissionIntro,
-                onBeginPermissionSetup = {
-                    runtimePrefs.edit().putBoolean("permission_intro_completed", true).apply()
+                permissionRefreshKey = permissionRefreshKey,
+                onRequestNotification = {
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        runtimePermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+                    }
+                },
+                onRequestPhone = {
+                    if (ContextCompat.checkSelfPermission(
+                            this,
+                            Manifest.permission.READ_PHONE_STATE,
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        runtimePermissionLauncher.launch(arrayOf(Manifest.permission.READ_PHONE_STATE))
+                    }
+                },
+                onOpenAccessibility = {
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                },
+                onOpenUsage = {
+                    startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                },
+                onEnterApp = {
+                    runtimePrefs.edit()
+                        .putBoolean("permission_intro_completed", true)
+                        .putBoolean("permission_bootstrap_done", true)
+                        .putBoolean("background_only", false)
+                        .apply()
                     showPermissionIntro = false
-                    continueFirstLaunchPermissions()
                 },
             )
         }
@@ -195,74 +222,29 @@ class DashboardActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (runtimeRequestActive) return
-        val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
-        if (!prefs.getBoolean("first_ui_opened", false) ||
-            prefs.getBoolean("permission_bootstrap_done", false) ||
-            !prefs.getBoolean("permission_intro_completed", false)
-        ) return
-
-        if (settingsStepActive) {
-            settingsStepActive = false
-        }
-        continueFirstLaunchPermissions()
-    }
-
-    private fun continueFirstLaunchPermissions() {
-        if (runtimeRequestActive) return
-
-        val runtimePermissions = buildList {
-            if (Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(
-                    this@DashboardActivity,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            if (ContextCompat.checkSelfPermission(
-                    this@DashboardActivity,
-                    Manifest.permission.READ_PHONE_STATE
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                add(Manifest.permission.READ_PHONE_STATE)
-            }
-        }
-
-        if (runtimePermissions.isNotEmpty()) {
-            runtimeRequestActive = true
-            runtimePermissionLauncher.launch(runtimePermissions.toTypedArray())
-            return
-        }
-
-        val serviceEnabled = isAccessibilityEnabled(this)
-        if (!serviceEnabled) {
-            settingsStepActive = true
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            return
-        }
-
-        val usageEnabled = hasUsageAccess(this)
-        if (!usageEnabled) {
-            settingsStepActive = true
-            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-            return
-        }
-
-        getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
-            .edit()
-            .putBoolean("permission_bootstrap_done", true)
-            .apply()
+        permissionRefreshKey++
     }
 }
 
 @Composable
 private fun ClickPlusDashboard(
     showPermissionIntro: Boolean,
-    onBeginPermissionSetup: () -> Unit,
+    permissionRefreshKey: Int,
+    onRequestNotification: () -> Unit,
+    onRequestPhone: () -> Unit,
+    onOpenAccessibility: () -> Unit,
+    onOpenUsage: () -> Unit,
+    onEnterApp: () -> Unit,
 ) {
     if (showPermissionIntro) {
-        PermissionIntroScreen(onBeginPermissionSetup)
+        PermissionIntroScreen(
+            refreshKey = permissionRefreshKey,
+            onRequestNotification = onRequestNotification,
+            onRequestPhone = onRequestPhone,
+            onOpenAccessibility = onOpenAccessibility,
+            onOpenUsage = onOpenUsage,
+            onEnterApp = onEnterApp,
+        )
         return
     }
 
@@ -273,8 +255,10 @@ private fun ClickPlusDashboard(
     val timeout by prefs.tapTimeoutFlow.collectAsState(initial = 1200L)
     val actionDelay by prefs.actionDelayFlow.collectAsState(initial = 0L)
     val showTapCount by prefs.showTapCountFlow.collectAsState(initial = false)
+    val tapCountSizeSp by prefs.tapCountSizeFlow.collectAsState(initial = 20f)
     var route by remember { mutableStateOf<DashboardRoute>(DashboardRoute.Home) }
     var themeMode by remember { mutableStateOf(advanced.themeMode()) }
+    var workMode by remember { mutableStateOf(AdvancedRuleRepository.currentMode(context)) }
 
     val dark = when (themeMode) {
         "dark" -> true
@@ -304,11 +288,19 @@ private fun ClickPlusDashboard(
                         advanced.removeRuleMetadata(item.id)
                     }
                 },
+                onToggle = { item ->
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                        prefs.saveMappings(
+                            mappings.map { current ->
+                                if (current.id == item.id) current.copy(enabled = !current.enabled) else current
+                            },
+                        )
+                    }
+                },
                 onStatus = { route = DashboardRoute.Status },
                 onLogs = { route = DashboardRoute.Logs },
                 onProfiles = { route = DashboardRoute.Profiles },
                 onSettings = { route = DashboardRoute.Settings },
-                onTest = { route = DashboardRoute.Logs },
             )
             DashboardRoute.Status -> StatusScreen(
                 mappings = mappings,
@@ -324,14 +316,33 @@ private fun ClickPlusDashboard(
                 timeout = timeout,
                 actionDelay = actionDelay,
                 showTapCount = showTapCount,
+                tapCountSizeSp = tapCountSizeSp,
                 themeMode = themeMode,
+                workMode = workMode,
                 onBack = { route = DashboardRoute.Home },
                 onTimeout = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapTimeout(value) } },
                 onActionDelay = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveActionDelay(value) } },
                 onShowTapCount = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveShowTapCount(value) } },
+                onTapCountSize = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapCountSize(value) } },
                 onTheme = {
                     themeMode = it
                     advanced.saveThemeMode(it)
+                },
+                onMode = {
+                    workMode = it
+                    AdvancedRuleRepository.setMode(context, it)
+                },
+                onRequestNotification = {
+                    requestRuntimePermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                },
+                onRequestPhone = {
+                    requestRuntimePermission(context, Manifest.permission.READ_PHONE_STATE)
+                },
+                onOpenAccessibility = {
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                },
+                onOpenUsage = {
+                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                 },
                 onBackup = { route = DashboardRoute.Backup },
             )
@@ -374,30 +385,26 @@ private fun HomeDashboard(
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
     onDelete: (KeyActionConfig) -> Unit,
+    onToggle: (KeyActionConfig) -> Unit,
     onStatus: () -> Unit,
     onLogs: () -> Unit,
     onProfiles: () -> Unit,
     onSettings: () -> Unit,
-    onTest: () -> Unit,
 ) {
     val context = LocalContext.current
     val mode = AdvancedRuleRepository.currentMode(context)
     val accessibilityEnabled = isAccessibilityEnabled(context)
     var query by remember { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<KeyActionConfig?>(null) }
-    val active = mappings.count { it.enabled }
-    val apps = mappings.mapNotNull {
-        when {
-            it.triggerType == TriggerType.SCREEN_TAP -> it.screenTapPackage
-            it.actionType == ActionType.APP -> it.targetPackage
-            it.contextConditionType == ContextConditionType.APP -> it.contextConditionValue
-            else -> null
-        }
-    }.filter { it.isNotBlank() }.distinct().size
     val filtered = mappings.filter {
         val q = query.trim()
         q.isBlank() || listOf(
-            it.name, it.actionSummary(), it.contextSummary(), it.targetAppName, it.screenTapAppName
+            it.name,
+            it.triggerSummary(),
+            it.actionSummary(),
+            it.contextSummary(),
+            it.targetAppName,
+            it.screenTapAppName,
         ).any { value -> value.contains(q, true) }
     }
 
@@ -406,104 +413,122 @@ private fun HomeDashboard(
             TopAppBar(
                 title = { Text("קליק פלוס", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "הגדרות") }
+                    IconButton(onClick = onAdd) {
+                        Icon(Icons.Outlined.Add, "הוספת פעולה")
+                    }
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Outlined.Settings, "הגדרות")
+                    }
                 },
             )
-        },
-        bottomBar = {
-            Surface(shadowElevation = 8.dp) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Button(
-                        onClick = onAdd,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(60.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "הוספת פעולה",
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = onTest,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(60.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Icon(Icons.Outlined.History, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "יומן",
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
         },
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(12.dp, 8.dp, 12.dp, 18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
                 Card(
                     Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
                 ) {
                     Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onStatus)
-                            .padding(20.dp),
+                        Modifier.fillMaxWidth().padding(18.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Surface(Modifier.size(52.dp), CircleShape, color = MaterialTheme.colorScheme.primary) {
-                            Icon(Icons.Outlined.CheckCircle, "פעיל", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(12.dp))
+                        Surface(
+                            Modifier.size(48.dp),
+                            CircleShape,
+                            color = MaterialTheme.colorScheme.primary,
+                        ) {
+                            Icon(
+                                Icons.Outlined.CheckCircle,
+                                "מצב",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(11.dp),
+                            )
                         }
-                        Spacer(Modifier.width(14.dp))
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("ClickPlus פעילה", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text(
+                                "קליק פלוס פעיל",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
                             Text(
                                 when {
                                     mode == AppMode.BASIC -> "מצב בסיסי · ללא נגישות"
                                     accessibilityEnabled -> "מצב מלא · נגישות פעילה"
                                     else -> "מצב מלא · נגישות לא פעילה"
                                 },
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
-                            if (mode == AppMode.FULL && !accessibilityEnabled) {
-                                Text(
-                                    "יש להפעיל את שירות הנגישות כדי שפעולות שדורשות אותו יעבדו.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
                         }
                     }
                 }
             }
+
             item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatCard("פעולות פעילות", active.toString(), Modifier.weight(1f))
-                    StatCard("אפליקציות", apps.toString(), Modifier.weight(1f))
-                    StatCard("סה״כ כללים", mappings.size.toString(), Modifier.weight(1f))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    HomeShortcutCard(
+                        title = "מצב השירות",
+                        icon = Icons.Outlined.Tune,
+                        onClick = onStatus,
+                    )
+                    HomeShortcutCard(
+                        title = "יומן",
+                        icon = Icons.Outlined.History,
+                        onClick = onLogs,
+                    )
+                    HomeShortcutCard(
+                        title = "פרופילים",
+                        icon = Icons.Outlined.Apps,
+                        onClick = onProfiles,
+                    )
                 }
             }
+
+            item {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StatCard(
+                        "פעולות פעילות",
+                        mappings.count { it.enabled }.toString(),
+                        Modifier.weight(1f),
+                    )
+                    StatCard(
+                        "אפליקציות",
+                        mappings.mapNotNull {
+                            when {
+                                it.triggerType == TriggerType.SCREEN_TAP -> it.screenTapPackage
+                                it.actionType == ActionType.APP -> it.targetPackage
+                                it.contextConditionType == ContextConditionType.APP -> it.contextConditionValue
+                                else -> null
+                            }
+                        }.filter { it.isNotBlank() }.distinct().size.toString(),
+                        Modifier.weight(1f),
+                    )
+                    StatCard(
+                        "סה״כ פעולות",
+                        mappings.size.toString(),
+                        Modifier.weight(1f),
+                    )
+                }
+            }
+
             item {
                 OutlinedTextField(
                     value = query,
@@ -511,30 +536,19 @@ private fun HomeDashboard(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                    label = { Text("חיפוש וסינון") },
+                    label = { Text("חיפוש פעולות") },
                 )
             }
-            item {
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    AssistChip(onClick = onProfiles, label = { Text("פרופילים") }, leadingIcon = { Icon(Icons.Outlined.Apps, null) })
-                    AssistChip(onClick = onStatus, label = { Text("מצב השירות") }, leadingIcon = { Icon(Icons.Outlined.Tune, null) })
-                    AssistChip(onClick = onLogs, label = { Text("יומן פעילות") }, leadingIcon = { Icon(Icons.Outlined.History, null) })
-                    AssistChip(onClick = onSettings, label = { Text("הגדרות") }, leadingIcon = { Icon(Icons.Outlined.Settings, null) })
-                }
-            }
+
             if (filtered.isEmpty()) {
-                item {
-                    EmptyState(onAdd)
-                }
+                item { EmptyState(onAdd) }
             } else {
                 items(filtered, key = { it.id }) { item ->
                     RuleCard(
                         item = item,
                         onEdit = { onEdit(item.id) },
                         onDelete = { deleteTarget = item },
+                        onToggle = { onToggle(item) },
                     )
                 }
             }
@@ -556,6 +570,36 @@ private fun HomeDashboard(
                 TextButton(onClick = { deleteTarget = null }) { Text("ביטול") }
             },
         )
+    }
+}
+
+@Composable
+private fun HomeShortcutCard(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .widthIn(min = 116.dp)
+            .height(58.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Row(
+            Modifier.fillMaxSize().padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                title,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -591,72 +635,68 @@ private fun StatCard(title: String, value: String, modifier: Modifier) {
 }
 
 @Composable
-private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit, onDelete: () -> Unit) {
-    val meta = AdvancedRuleRepository(LocalContext.current).getRuleMetadata(item.id)
+private fun RuleCard(
+    item: KeyActionConfig,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onToggle: () -> Unit,
+) {
     OutlinedCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onEdit),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
     ) {
-        Column(
-            Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                Column(
-                    Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                Text(
+                    item.name.ifBlank { "פעולה" },
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                 ) {
                     Text(
-                        item.name.ifBlank { item.triggerType.titleHebrew },
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        item.pressSummary() + " · " + item.contextSummary(),
+                        "טריגר: " + item.triggerSummary(),
                         style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
-                IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Outlined.Edit, "עריכה")
-                }
-                IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Outlined.Delete, "מחיקה")
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                ) {
+                    Text(
+                        "פעולה: " + item.actionSummary(),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
                 }
             }
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(38.dp)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Switch(
+                checked = item.enabled,
+                onCheckedChange = { onToggle() },
+            )
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(40.dp),
             ) {
-                AssistChip(
-                    onClick = {},
-                    label = {
-                        Text(
-                            item.actionSummary(),
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    modifier = Modifier.height(34.dp),
-                )
-                AssistChip(
-                    onClick = {},
-                    label = { Text(if (item.enabled) "פעיל" else "מושהה", maxLines = 1) },
-                    leadingIcon = if (item.enabled) ({ Icon(Icons.Outlined.CheckCircle, null) }) else null,
-                    modifier = Modifier.height(34.dp),
-                )
+                Icon(Icons.Outlined.Delete, "מחיקה")
             }
         }
     }
@@ -677,57 +717,163 @@ private fun EmptyState(onAdd: () -> Unit) {
 }
 
 @Composable
-private fun PermissionIntroScreen(onBeginPermissionSetup: () -> Unit) {
+private fun PermissionIntroScreen(
+    refreshKey: Int,
+    onRequestNotification: () -> Unit,
+    onRequestPhone: () -> Unit,
+    onOpenAccessibility: () -> Unit,
+    onOpenUsage: () -> Unit,
+    onEnterApp: () -> Unit,
+) {
+    // The key forces a fresh permission-state read after returning from Android settings.
+    val context = LocalContext.current
+    refreshKey.hashCode()
+
+    val notificationGranted = Build.VERSION.SDK_INT < 33 ||
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+    val phoneGranted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.READ_PHONE_STATE,
+    ) == PackageManager.PERMISSION_GRANTED
+    val accessibilityGranted = isAccessibilityEnabled(context)
+    val usageGranted = hasUsageAccess(context)
+
     Surface(Modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 32.dp),
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
         ) {
-            Surface(
-                Modifier.size(72.dp),
-                CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Icon(
-                    Icons.Outlined.Settings,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(18.dp),
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-            Text("הגדרה ראשונית", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "כדי שקליק פלוס תוכל לזהות כניסות ולחיצות ולבצע את הפעולות שהגדרת, Android יבקש ממך כמה הרשאות.",
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(18.dp))
-            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                Column(
-                    Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+            item {
+                Surface(
+                    Modifier.size(68.dp),
+                    CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
-                    Text("מה יופיע עכשיו?", fontWeight = FontWeight.Bold)
-                    Text("• הרשאת התראות – להפעלת שירות הרקע והצגת מצב השירות.")
-                    Text("• הרשאת מצב טלפון – עבור תנאים הקשורים למצב השיחה.")
-                    Text("• שירות נגישות – לזיהוי לחיצות ולפעולות מערכת הדורשות נגישות.")
-                    Text("• גישה לנתוני שימוש – לזיהוי האפליקציה שהייתה פתוחה, כשנדרש.")
-                    Text(
-                        "בכל מסך Android שיופיע, הפעל את קליק פלוס וחזור לאפליקציה. לאחר כל שלב נמשיך אוטומטית לשלב הבא.",
-                        style = MaterialTheme.typography.bodySmall,
+                    Icon(
+                        Icons.Outlined.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(16.dp),
                     )
                 }
             }
-            Spacer(Modifier.height(20.dp))
-            Button(
-                onClick = onBeginPermissionSetup,
-                Modifier.fillMaxWidth().height(54.dp),
+            item {
+                Text(
+                    "הגדרה ראשונית",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            item {
+                Text(
+                    "אפשר לתת את ההרשאות אחת־אחת לפי הצורך. אפשר גם להיכנס לאפליקציה בלי לאשר אותן עכשיו.",
+                    textAlign = TextAlign.Center,
+                )
+            }
+
+            item {
+                PermissionRow(
+                    title = "התראות",
+                    detail = "נדרשות להפעלת שירות הרקע.",
+                    granted = notificationGranted,
+                    available = Build.VERSION.SDK_INT >= 33,
+                    buttonText = if (Build.VERSION.SDK_INT < 33) "לא נדרש" else if (notificationGranted) "מאושר" else "מתן הרשאה",
+                    onClick = onRequestNotification,
+                )
+            }
+            item {
+                PermissionRow(
+                    title = "מצב טלפון",
+                    detail = "נדרש רק לפעולות או מצבים שקשורים לשיחות.",
+                    granted = phoneGranted,
+                    available = true,
+                    buttonText = if (phoneGranted) "מאושר" else "מתן הרשאה",
+                    onClick = onRequestPhone,
+                )
+            }
+            item {
+                PermissionRow(
+                    title = "שירות נגישות",
+                    detail = "נדרש ללחיצות במסך ולפעולות מערכת שדורשות נגישות.",
+                    granted = accessibilityGranted,
+                    available = true,
+                    buttonText = if (accessibilityGranted) "פעיל" else "פתיחת הגדרות",
+                    onClick = onOpenAccessibility,
+                )
+            }
+            item {
+                PermissionRow(
+                    title = "נתוני שימוש",
+                    detail = "נדרשים כאשר רוצים לזהות איזו אפליקציה נמצאת בחזית במצב בסיסי.",
+                    granted = usageGranted,
+                    available = true,
+                    buttonText = if (usageGranted) "מאושר" else "פתיחת הגדרות",
+                    onClick = onOpenUsage,
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = onEnterApp,
+                    Modifier.fillMaxWidth().height(52.dp),
+                ) {
+                    Text("כניסה לאפליקציה", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionRow(
+    title: String,
+    detail: String,
+    granted: Boolean,
+    available: Boolean,
+    buttonText: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("התחלת ההגדרה")
+                Icon(
+                    if (granted) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
+                    contentDescription = null,
+                    tint = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(26.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title, fontWeight = FontWeight.Bold)
+                    Text(
+                        detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            OutlinedButton(
+                onClick = onClick,
+                enabled = available && !granted,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(buttonText)
             }
         }
     }
@@ -742,6 +888,7 @@ private fun StatusScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var refreshKey by remember { mutableIntStateOf(0) }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) refreshKey++
@@ -749,10 +896,34 @@ private fun StatusScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+
     var mode by remember(refreshKey) { mutableStateOf(AdvancedRuleRepository.currentMode(context)) }
     val service = remember(refreshKey) { isAccessibilityEnabled(context) }
     val usage = remember(refreshKey) { hasUsageAccess(context) }
-    val screenRules = mappings.count { it.triggerType == TriggerType.SCREEN_TAP && it.enabled }
+    val phone = remember(refreshKey) {
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_PHONE_STATE,
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    val activeRules = mappings.filter { it.enabled }
+    val usageRequired = mode == AppMode.BASIC && activeRules.any {
+        it.triggerType == TriggerType.APP_ENTRY &&
+            it.contextConditionType in setOf(
+                ContextConditionType.APP,
+                ContextConditionType.RADIO,
+            )
+    }
+    val phoneRequired = activeRules.any {
+        it.triggerType == TriggerType.APP_ENTRY &&
+            it.contextConditionType == ContextConditionType.RINGING
+    }
+    val activeProfileName = runCatching {
+        val repo = AdvancedRuleRepository(context)
+        repo.profiles().firstOrNull { it.id == repo.activeProfileId() }?.name ?: "כללי"
+    }.getOrDefault("כללי")
+
     Scaffold(topBar = { SimpleTopBar("מצב השירות", onBack) }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
@@ -760,66 +931,149 @@ private fun StatusScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                StatusCard(
-                    title = "שירות נגישות",
-                    ok = service,
-                    detail = if (service) "השירות פעיל וזמין לפעולות הדורשות נגישות." else "השירות אינו פעיל. במצב מלא הוא נדרש לזיהוי לחיצות ולפעולות מערכת.",
-                    actionText = "פתיחת הגדרות נגישות",
-                    settingsHint = "פתח את שירותי הנגישות, מצא את קליק פלוס והפעל אותו.",
-                    onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
-                )
-            }
-            item {
-                StatusCard(
-                    title = "שימוש בנתוני שימוש",
-                    ok = usage,
-                    detail = if (usage) "הגישה פעילה וניתן לזהות איזו אפליקציה הייתה פתוחה לפני ההפעלה." else "הגישה אינה פעילה. היא נדרשת לזיהוי האפליקציה שהייתה פתוחה לפני ההפעלה.",
-                    actionText = "פתיחת גישת נתוני שימוש",
-                    settingsHint = "פתח את גישת נתוני השימוש, מצא את קליק פלוס ואפשר לה גישה.",
-                    onClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
-                )
-            }
-            item {
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("מצב עבודה", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Column(
-                                Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                ChoiceChip(
-                                    selected = mode == AppMode.FULL,
-                                    onClick = { mode = AppMode.FULL; onMode(AppMode.FULL) },
-                                    label = "מלא",
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                ChoiceChip(
-                                    selected = mode == AppMode.BASIC,
-                                    onClick = { mode = AppMode.BASIC; onMode(AppMode.BASIC) },
-                                    label = "בסיסי ללא נגישות",
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            "מצב עבודה",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ChoiceChip(
+                                selected = mode == AppMode.FULL,
+                                onClick = {
+                                    mode = AppMode.FULL
+                                    onMode(AppMode.FULL)
+                                },
+                                label = "מלא",
+                                modifier = Modifier.weight(1f),
+                            )
+                            ChoiceChip(
+                                selected = mode == AppMode.BASIC,
+                                onClick = {
+                                    mode = AppMode.BASIC
+                                    onMode(AppMode.BASIC)
+                                },
+                                label = "בסיסי ללא נגישות",
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                         Text(
                             if (mode == AppMode.FULL) {
-                                "כל היכולות זמינות, כולל זיהוי מיקום לחיצה ופעולות מערכת."
+                                "מצב מלא מאפשר גם לחיצות במיקום ופעולות מערכת שדורשות נגישות."
                             } else {
-                                "במצב זה אפשר לזהות כניסות, לפתוח אפליקציות ולהפעיל פעולות מדיה, ווליום, הגדרות וחייגן. אי אפשר לזהות מיקום לחיצה במסך או לבצע פעולות מערכת גלובליות כמו בית, חזרה, התראות ויישומים אחרונים."
+                                "מצב בסיסי עובד ללא שירות נגישות, אך חלק מהפעולות אינן זמינות."
                             },
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
             }
+
+            if (mode == AppMode.FULL) {
+                item {
+                    StatusCard(
+                        title = "שירות נגישות",
+                        ok = service,
+                        detail = if (service) {
+                            "השירות פעיל וזמין."
+                        } else {
+                            "השירות חסר ולכן פעולות מסוימות לא יוכלו לפעול."
+                        },
+                        actionText = "הפעלת שירות נגישות",
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        },
+                    )
+                }
+            }
+
+            if (usageRequired) {
+                item {
+                    StatusCard(
+                        title = "נתוני שימוש",
+                        ok = usage,
+                        detail = if (usage) {
+                            "הגישה פעילה."
+                        } else {
+                            "הפעולות הפעילות שלך דורשות את ההרשאה הזאת."
+                        },
+                        actionText = "מתן הרשאת נתוני שימוש",
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                        },
+                    )
+                }
+            }
+
+            if (phoneRequired) {
+                item {
+                    StatusCard(
+                        title = "מצב טלפון",
+                        ok = phone,
+                        detail = if (phone) {
+                            "ההרשאה פעילה."
+                        } else {
+                            "פעולה פעילה דורשת את ההרשאה הזאת."
+                        },
+                        actionText = "מתן הרשאת מצב טלפון",
+                        onClick = {
+                            requestRuntimePermission(context, Manifest.permission.READ_PHONE_STATE)
+                        },
+                    )
+                }
+            }
+
             item {
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("בריאות המערכת", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("פעולות פעילות: " + mappings.count { it.enabled })
-                        Text("כללי מיקום: " + screenRules)
-                        Text("מצב השירות: " + if (mode == AppMode.FULL && service || mode == AppMode.BASIC) "תקין" else "דורש הרשאה")
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            "מצב נוכחי",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text("פרופיל פעיל: " + activeProfileName)
+                        Text("פעולות פעילות: " + activeRules.size)
+                        Text(
+                            if (mode == AppMode.FULL && !service) {
+                                "חסר: שירות נגישות"
+                            } else if (usageRequired && !usage) {
+                                "חסר: הרשאת נתוני שימוש"
+                            } else if (phoneRequired && !phone) {
+                                "חסר: הרשאת מצב טלפון"
+                            } else {
+                                "אין הרשאות חסרות שנדרשות כרגע"
+                            },
+                            color = if (
+                                (mode == AppMode.FULL && !service) ||
+                                (usageRequired && !usage) ||
+                                (phoneRequired && !phone)
+                            ) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
+                            fontWeight = FontWeight.Medium,
+                        )
                     }
                 }
             }
@@ -833,12 +1087,13 @@ private fun StatusCard(
     ok: Boolean,
     detail: String,
     actionText: String,
-    settingsHint: String,
     onClick: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(
-            Modifier.fillMaxWidth().padding(18.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
@@ -848,28 +1103,26 @@ private fun StatusCard(
                 Icon(
                     if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
                     contentDescription = null,
-                    tint = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(30.dp),
+                    tint = if (ok) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    modifier = Modifier.size(28.dp),
                 )
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(title, fontWeight = FontWeight.Bold)
                     Text(detail, style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (!ok) {
-                Button(
+                OutlinedButton(
                     onClick = onClick,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(actionText)
                 }
-                Text(
-                    settingsHint,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                )
             }
         }
     }
@@ -879,7 +1132,9 @@ private fun StatusCard(
 private fun LogsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var items by remember { mutableStateOf(AdvancedRuleRepository.logs(context)) }
+    var confirmClear by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -894,18 +1149,27 @@ private fun LogsScreen(onBack: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text("יומן פעילות") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Outlined.ArrowForward, "חזרה")
+                    }
+                },
                 actions = {
-                    TextButton(onClick = {
-                        AdvancedRuleRepository.clearLogs(context)
-                        items = emptyList()
-                    }) { Text("ניקוי") }
+                    TextButton(
+                        onClick = { confirmClear = true },
+                        enabled = items.isNotEmpty(),
+                    ) {
+                        Text("ניקוי")
+                    }
                 },
             )
         },
     ) { padding ->
         if (items.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
                 Text("אין אירועים להצגה עדיין.")
             }
         } else {
@@ -914,11 +1178,22 @@ private fun LogsScreen(onBack: () -> Unit) {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(items) { log ->
-                    val (statusText, statusColor, statusTextColor) = when (log.success) {
-                        true -> Triple("הצליח", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-                        false -> Triple("נכשל", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-                        null -> Triple("ממתין", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                items(items, key = { it.id }) { log ->
+                    val statusText = when (log.success) {
+                        true -> "הצליח"
+                        false -> "נכשל"
+                        null -> "בביצוע"
+                    }
+                    val statusWithDetail = if (log.success == false && log.detail.isNotBlank()) {
+                        statusText + " — " + log.detail
+                    } else {
+                        statusText
+                    }
+                    val trigger = log.triggerDescription.ifBlank {
+                        if (log.message.contains("בדיקה ידנית")) "בדיקה ידנית" else "הפעלה"
+                    }
+                    val action = log.actionDescription.ifBlank {
+                        log.detail.ifBlank { log.message }
                     }
 
                     OutlinedCard(
@@ -927,65 +1202,57 @@ private fun LogsScreen(onBack: () -> Unit) {
                     ) {
                         Column(
                             Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
                         ) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = statusColor,
-                                ) {
-                                    Text(
-                                        statusText,
-                                        color = statusTextColor,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    )
-                                }
-                                Text(
-                                    SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(log.timestamp)),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-
                             Text(
-                                log.message,
+                                "הטריגר המפעיל: " + trigger,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
                             )
-
-                            if (log.success == false) {
-                                Text(
-                                    "סיבת הכישלון: " + log.detail.ifBlank { "לא נמסר הסבר." },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            } else if (log.detail.isNotBlank()) {
-                                Text(
-                                    log.detail,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-
-                            if (log.appPackage.isNotBlank()) {
-                                Text(log.appPackage, style = MaterialTheme.typography.labelSmall)
-                            }
-
-                            if (log.xRatio >= 0f && log.yRatio >= 0f) {
-                                Text(
-                                    "מיקום: X " + (log.xRatio * 100f).toInt() + "% · Y " + (log.yRatio * 100f).toInt() + "%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Center,
-                                )
-                            }
+                            Text(
+                                "פעולה: " + action,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                "סטטוס: " + statusWithDetail +
+                                    " · " +
+                                    SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                                        .format(Date(log.timestamp)),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }
             }
         }
+    }
+
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("לנקות את היומן?") },
+            text = { Text("כל הרשומות ביומן הפעילות יימחקו.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    AdvancedRuleRepository.clearLogs(context)
+                    items = emptyList()
+                    confirmClear = false
+                }) {
+                    Text("מחיקה")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClear = false }) {
+                    Text("ביטול")
+                }
+            },
+        )
     }
 }
 
@@ -994,15 +1261,28 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
     val context = LocalContext.current
     val repo = remember { AdvancedRuleRepository(context) }
     var profiles by remember { mutableStateOf(repo.profiles()) }
-    var dialog by remember { mutableStateOf(false) }
+    var activeProfileId by remember { mutableStateOf(repo.activeProfileId()) }
+    var createDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<ClickPlusProfile?>(null) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("פרופילים ומצבים") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
-                actions = { IconButton(onClick = { newName = ""; dialog = true }) { Icon(Icons.Outlined.Add, "פרופיל חדש") } },
+                title = { Text("פרופילים") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Outlined.ArrowForward, "חזרה")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        newName = ""
+                        createDialog = true
+                    }) {
+                        Icon(Icons.Outlined.Add, "פרופיל חדש")
+                    }
+                },
             )
         },
     ) { padding ->
@@ -1013,26 +1293,57 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
         ) {
             items(profiles, key = { it.id }) { profile ->
                 val count = mappings.count {
-                    AdvancedRuleRepository(context).getRuleMetadata(it.id).profileId == profile.id
+                    repo.getRuleMetadata(it.id).profileId == profile.id
                 }
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(profile.name, fontWeight = FontWeight.Bold)
-                            Text(count.toString() + " כללים", style = MaterialTheme.typography.bodySmall)
+                val isActive = profile.id == activeProfileId
+
+                Card(
+                    Modifier.fillMaxWidth().clickable {
+                        if (!isActive) {
+                            activeProfileId = profile.id
+                            repo.setActiveProfileId(profile.id)
+                            profiles = repo.profiles()
                         }
-                        Switch(
-                            checked = profile.enabled,
-                            onCheckedChange = {
-                                profiles = profiles.map { p -> if (p.id == profile.id) p.copy(enabled = it) else p }
-                                repo.saveProfiles(profiles)
-                            },
-                        )
-                        if (profile.id != "default") {
-                            IconButton(onClick = {
-                                profiles = profiles.filterNot { it.id == profile.id }
-                                repo.saveProfiles(profiles)
-                            }) { Icon(Icons.Outlined.Delete, "מחיקה") }
+                    },
+                    shape = RoundedCornerShape(18.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Text(profile.name, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (count == 1) "פעולה אחת" else count.toString() + " פעולות",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+
+                        Box(
+                            Modifier.size(40.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (isActive) {
+                                Icon(
+                                    Icons.Outlined.CheckCircle,
+                                    contentDescription = "פרופיל פעיל",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+
+                        Box(
+                            Modifier.size(40.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (profile.id != "default") {
+                                IconButton(onClick = { deleteTarget = profile }) {
+                                    Icon(Icons.Outlined.Delete, "מחיקה")
+                                }
+                            }
                         }
                     }
                 }
@@ -1040,9 +1351,9 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
         }
     }
 
-    if (dialog) {
+    if (createDialog) {
         AlertDialog(
-            onDismissRequest = { dialog = false },
+            onDismissRequest = { createDialog = false },
             title = { Text("פרופיל חדש") },
             text = {
                 OutlinedTextField(
@@ -1056,13 +1367,69 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
                 TextButton(onClick = {
                     val name = newName.trim()
                     if (name.isNotBlank()) {
-                        profiles = profiles + ClickPlusProfile(name = name)
-                        repo.saveProfiles(profiles)
+                        val created = profiles + ClickPlusProfile(name = name, enabled = false)
+                        repo.saveProfiles(created)
+                        profiles = repo.profiles()
                     }
-                    dialog = false
-                }) { Text("הוספה") }
+                    createDialog = false
+                }) {
+                    Text("הוספה")
+                }
             },
-            dismissButton = { TextButton(onClick = { dialog = false }) { Text("ביטול") } },
+            dismissButton = {
+                TextButton(onClick = { createDialog = false }) {
+                    Text("ביטול")
+                }
+            },
+        )
+    }
+
+    deleteTarget?.let { target ->
+        val assignedCount = mappings.count {
+            repo.getRuleMetadata(it.id).profileId == target.id
+        }
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("למחוק את הפרופיל?") },
+            text = {
+                Text(
+                    if (assignedCount == 0) {
+                        "הפרופיל \"" + target.name + "\" יימחק."
+                    } else {
+                        "יש " + assignedCount + " פעולות שמשויכות לפרופיל \"" +
+                            target.name +
+                            "\". הפעולות יועברו לפרופיל \"כללי\" לפני המחיקה."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val defaultProfileId = "default"
+                    mappings.filter {
+                        repo.getRuleMetadata(it.id).profileId == target.id
+                    }.forEach { rule ->
+                        val metadata = repo.getRuleMetadata(rule.id)
+                        repo.saveRuleMetadata(rule.id, metadata.copy(profileId = defaultProfileId))
+                    }
+
+                    val remaining = profiles.filterNot { it.id == target.id }
+                    repo.saveProfiles(remaining)
+                    if (activeProfileId == target.id) {
+                        activeProfileId = defaultProfileId
+                        repo.setActiveProfileId(defaultProfileId)
+                    }
+                    profiles = repo.profiles()
+                    activeProfileId = repo.activeProfileId()
+                    deleteTarget = null
+                }) {
+                    Text(if (assignedCount == 0) "מחיקה" else "העברה לכללי ומחיקה")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) {
+                    Text("ביטול")
+                }
+            },
         )
     }
 }
@@ -1098,10 +1465,12 @@ private fun ChoiceChip(
     onClick: () -> Unit,
     label: String,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     FilterChip(
         selected = selected,
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.height(48.dp),
         colors = FilterChipDefaults.filterChipColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -1133,14 +1502,24 @@ private fun SettingsScreen(
     timeout: Long,
     actionDelay: Long,
     showTapCount: Boolean,
+    tapCountSizeSp: Float,
     themeMode: String,
+    workMode: AppMode,
     onBack: () -> Unit,
     onTimeout: (Long) -> Unit,
     onActionDelay: (Long) -> Unit,
     onShowTapCount: (Boolean) -> Unit,
+    onTapCountSize: (Float) -> Unit,
     onTheme: (String) -> Unit,
+    onMode: (AppMode) -> Unit,
+    onRequestNotification: () -> Unit,
+    onRequestPhone: () -> Unit,
+    onOpenAccessibility: () -> Unit,
+    onOpenUsage: () -> Unit,
     onBackup: () -> Unit,
 ) {
+    val context = LocalContext.current
+
     Scaffold(topBar = { SimpleTopBar("הגדרות", onBack) }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
@@ -1148,37 +1527,84 @@ private fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                SettingCard("זמן חלון לחיצות", "כמה זמן יש בין כניסות/לחיצות חוזרות.") {
-                    Text(timeout.toString() + "ms", style = MaterialTheme.typography.titleMedium)
-                    Slider(
-                        value = timeout.toFloat(),
-                        onValueChange = { onTimeout(it.toLong()) },
-                        valueRange = 300f..1500f,
-                        steps = 11,
-                    )
-                }
-            }
-            item {
-                SettingCard("השהיה לפני פעולה", "המתנה אחידה אחרי שהרצף זוהה ולפני ביצוע הפעולה.") {
-                    Text(actionDelay.toString() + "ms", style = MaterialTheme.typography.titleMedium)
-                    Slider(
-                        value = actionDelay.toFloat(),
-                        onValueChange = { onActionDelay(it.toLong()) },
-                        valueRange = 0f..5000f,
-                        steps = 9,
-                    )
-                }
-            }
-            item {
-                SettingCard("הצגת מונה לחיצות", "הצג מספר לחיצות זמנית מעל המסך.") {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("מונה פעיל", Modifier.weight(1f))
-                        Switch(checked = showTapCount, onCheckedChange = onShowTapCount)
+                SettingCard("הפעלת המערכת", "הגדרות שקובעות מתי המערכת מזהה רצף ומתי היא מבצעת פעולה.") {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("מצב עבודה", fontWeight = FontWeight.Bold)
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ChoiceChip(
+                                selected = workMode == AppMode.FULL,
+                                onClick = { onMode(AppMode.FULL) },
+                                label = "מלא",
+                                modifier = Modifier.weight(1f),
+                            )
+                            ChoiceChip(
+                                selected = workMode == AppMode.BASIC,
+                                onClick = { onMode(AppMode.BASIC) },
+                                label = "בסיסי ללא נגישות",
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+
+                        EditorSliderRow(
+                            title = "זמן חלון",
+                            valueText = formatDurationMs(timeout),
+                        ) {
+                            Slider(
+                                value = timeout.toFloat(),
+                                onValueChange = { onTimeout(it.toLong()) },
+                                valueRange = 300f..1500f,
+                                steps = 11,
+                            )
+                        }
+
+                        EditorSliderRow(
+                            title = "השהיה לפני פעולה",
+                            valueText = formatDurationMs(actionDelay),
+                        ) {
+                            Slider(
+                                value = actionDelay.toFloat(),
+                                onValueChange = { onActionDelay(it.toLong()) },
+                                valueRange = 0f..5000f,
+                                steps = 9,
+                            )
+                        }
                     }
                 }
             }
+
             item {
-                SettingCard("מראה", "ערכת צבעים ועדכון אוטומטי לפי המכשיר.") {
+                SettingCard("חיווי", "הצגת מונה קצר של מספר הלחיצות וגודל המונה.") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("הצגת מונה לחיצות", Modifier.weight(1f))
+                            Switch(
+                                checked = showTapCount,
+                                onCheckedChange = onShowTapCount,
+                            )
+                        }
+                        EditorSliderRow(
+                            title = "גודל החיווי",
+                            valueText = tapCountSizeSp.toInt().toString() + "sp",
+                        ) {
+                            Slider(
+                                value = tapCountSizeSp,
+                                onValueChange = onTapCountSize,
+                                valueRange = 14f..32f,
+                                steps = 8,
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                SettingCard("מראה", "בחירת ערכת הצבעים של האפליקציה.") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         ThemeChip("מערכת", "system", themeMode, onTheme, Icons.Outlined.BrightnessAuto)
                         ThemeChip("בהיר", "light", themeMode, onTheme, Icons.Outlined.LightMode)
@@ -1189,12 +1615,69 @@ private fun SettingsScreen(
                     }
                 }
             }
+
             item {
-                SettingCard("גיבוי והעברה", "ייצוא, ייבוא ואיפוס של כל ההגדרות.") {
-                    Button(onClick = onBackup, Modifier.fillMaxWidth()) { Text("פתח גיבוי") }
+                SettingCard("הרשאות", "כל הרשאה ניתנת בנפרד לפי הצורך.") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingsPermissionButton(
+                            title = "התראות",
+                            granted = Build.VERSION.SDK_INT < 33 ||
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS,
+                                ) == PackageManager.PERMISSION_GRANTED,
+                            onClick = onRequestNotification,
+                            disabled = Build.VERSION.SDK_INT < 33,
+                        )
+                        SettingsPermissionButton(
+                            title = "מצב טלפון",
+                            granted = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.READ_PHONE_STATE,
+                            ) == PackageManager.PERMISSION_GRANTED,
+                            onClick = onRequestPhone,
+                        )
+                        SettingsPermissionButton(
+                            title = "שירות נגישות",
+                            granted = isAccessibilityEnabled(context),
+                            onClick = onOpenAccessibility,
+                        )
+                        SettingsPermissionButton(
+                            title = "נתוני שימוש",
+                            granted = hasUsageAccess(context),
+                            onClick = onOpenUsage,
+                        )
+                    }
+                }
+            }
+
+            item {
+                SettingCard("גיבוי", "שמירה, שחזור ואיפוס של נתוני האפליקציה.") {
+                    Button(
+                        onClick = onBackup,
+                        Modifier.fillMaxWidth(),
+                    ) {
+                        Text("פתח גיבוי")
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsPermissionButton(
+    title: String,
+    granted: Boolean,
+    onClick: () -> Unit,
+    disabled: Boolean = false,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = !granted && !disabled,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(title + if (granted) " · מאושר" else "")
     }
 }
 
@@ -1250,46 +1733,61 @@ private fun BackupScreen(
     val advanced = remember { AdvancedRuleRepository(context) }
     val basePrefs = remember { AppPreferencesRepository(context) }
     var message by remember { mutableStateOf("") }
+    var pendingImport by remember { mutableStateOf<JSONObject?>(null) }
+    var resetMode by remember { mutableStateOf<String?>(null) }
+
+    val makeBackup = {
+        advanced.exportJson(
+            JSONArray().apply {
+                mappings.forEach { put(it.toJson()) }
+            }.toString(),
+            JSONObject()
+                .put("tapTimeoutMs", timeout)
+                .put("actionDelayMs", actionDelay)
+                .put("showTapCount", showTapCount)
+                .put("tapCountSizeSp", AppPreferencesRepository.tapCountSizeSnapshot(context))
+                .put("mode", AdvancedRuleRepository.currentMode(context).name)
+                .put("themeMode", advanced.themeMode()),
+        )
+    }
+
     val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        ActivityResultContracts.OpenDocument(),
     ) { uri ->
         uri?.let { selected ->
             scope.launch {
                 runCatching {
-                    val json = context.contentResolver.openInputStream(selected)?.bufferedReader()?.use { it.readText() }
+                    val json = context.contentResolver.openInputStream(selected)
+                        ?.bufferedReader()
+                        ?.use { it.readText() }
                         ?: error("קובץ ריק")
                     val root = JSONObject(json)
-                    val array = root.optJSONArray("mappings") ?: JSONArray()
-                    val imported = buildList {
-                        for (i in 0 until array.length()) {
-                            array.optJSONObject(i)?.let { add(KeyActionConfig.fromJson(it)) }
-                        }
+                    val version = root.optInt("version", -1)
+                    if (version !in 1..2) error("גרסת גיבוי אינה נתמכת")
+                    if (!root.has("mappings") || root.optJSONArray("mappings") == null) {
+                        error("קובץ הגיבוי חסר רשימת פעולות")
                     }
-                    basePrefs.saveMappings(imported)
-                    root.optJSONObject("settings")?.let {
-                        if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 1200L))
-                        if (it.has("actionDelayMs")) basePrefs.saveActionDelay(it.optLong("actionDelayMs", 0L))
-                        if (it.has("showTapCount")) basePrefs.saveShowTapCount(it.optBoolean("showTapCount", false))
-                    }
-                    advanced.importBundle(root)
-                    message = "הגיבוי יובא בהצלחה."
-                }.onFailure { message = "הייבוא נכשל: " + (it.message ?: "שגיאה") }
+                    pendingImport = root
+                }.onFailure {
+                    message = "הייבוא נכשל: " + (it.message ?: "שגיאה")
+                }
             }
         }
     }
 
     val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.CreateDocument("application/json"),
     ) { uri ->
         uri?.let { selected ->
-            val json = advanced.exportJson(
-                JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
-                JSONObject().put("tapTimeoutMs", timeout).put("actionDelayMs", actionDelay).put("showTapCount", showTapCount)
-            )
             runCatching {
-                context.contentResolver.openOutputStream(selected)?.bufferedWriter()?.use { it.write(json) }
+                context.contentResolver.openOutputStream(selected)
+                    ?.bufferedWriter()
+                    ?.use { it.write(makeBackup()) }
+                    ?: error("לא ניתן לכתוב לקובץ")
                 message = "הגיבוי נשמר בהצלחה."
-            }.onFailure { message = "שמירת הגיבוי נכשלה." }
+            }.onFailure {
+                message = "שמירת הגיבוי נכשלה: " + (it.message ?: "שגיאה")
+            }
         }
     }
 
@@ -1300,21 +1798,22 @@ private fun BackupScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                SettingCard("ייצוא ושיתוף", "שמור או שתף את כל הפעולות, הפרופילים וההגדרות.") {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingCard("ייצוא ושיתוף", "שמור את כל הפעולות, הפרופילים וההגדרות.") {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         Button(
                             onClick = { exportLauncher.launch("clickplus-backup.json") },
                             Modifier.weight(1f),
-                        ) { Text("ייצוא") }
+                        ) {
+                            Text("ייצוא")
+                        }
                         OutlinedButton(
                             onClick = {
-                                val json = advanced.exportJson(
-                                    JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
-                                    JSONObject().put("tapTimeoutMs", timeout).put("actionDelayMs", actionDelay).put("showTapCount", showTapCount)
-                                )
                                 runCatching {
                                     val file = java.io.File(context.cacheDir, "clickplus-backup.json")
-                                    file.writeText(json)
+                                    file.writeText(makeBackup())
                                     val uri = FileProvider.getUriForFile(
                                         context,
                                         context.packageName + ".fileprovider",
@@ -1325,7 +1824,7 @@ private fun BackupScreen(
                                             type = "application/json"
                                             putExtra(Intent.EXTRA_STREAM, uri)
                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }.let { Intent.createChooser(it, "שיתוף גיבוי ClickPlus") }
+                                        }.let { Intent.createChooser(it, "שיתוף גיבוי ClickPlus") },
                                     )
                                     message = "נפתח מסך השיתוף."
                                 }.onFailure {
@@ -1333,37 +1832,159 @@ private fun BackupScreen(
                                 }
                             },
                             Modifier.weight(1f),
-                        ) { Text("שיתוף") }
+                        ) {
+                            Text("שיתוף")
+                        }
                     }
                 }
             }
+
             item {
-                SettingCard("ייבוא", "החלפת ההגדרות הנוכחיות בתוכן מקובץ גיבוי.") {
-                    OutlinedButton(
-                        onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) },
-                        Modifier.fillMaxWidth(),
-                    ) { Text("ייבוא גיבוי") }
-                }
-            }
-            item {
-                SettingCard("איפוס", "מחיקת כל הפעולות והמטא־נתונים של ClickPlus.") {
+                SettingCard("ייבוא", "בדוק את תוכן הגיבוי לפני שהוא מחליף את הנתונים הנוכחיים.") {
                     OutlinedButton(
                         onClick = {
-                            scope.launch {
-                                basePrefs.saveMappings(emptyList())
-                                advanced.clearAllRuleMetadata()
-                                advanced.saveProfiles(listOf(ClickPlusProfile("default", "כללי", true)))
-                                message = "ההגדרות אופסו."
-                            }
+                            importLauncher.launch(arrayOf("application/json", "text/plain"))
                         },
                         Modifier.fillMaxWidth(),
-                    ) { Text("איפוס פעולות") }
+                    ) {
+                        Text("בחירת גיבוי לייבוא")
+                    }
                 }
             }
+
+            item {
+                SettingCard("איפוס פעולות", "מוחק את כל הפעולות וההגדרות המתקדמות שלהן, בלי למחוק את הפרופילים.") {
+                    OutlinedButton(
+                        onClick = { resetMode = "actions" },
+                        Modifier.fillMaxWidth(),
+                    ) {
+                        Text("איפוס פעולות")
+                    }
+                }
+            }
+
+            item {
+                SettingCard("איפוס כל האפליקציה", "מחזיר את האפליקציה למצב התחלתי ומוחק פעולות, פרופילים, יומן והגדרות.") {
+                    OutlinedButton(
+                        onClick = { resetMode = "all" },
+                        Modifier.fillMaxWidth(),
+                    ) {
+                        Text("איפוס כל האפליקציה")
+                    }
+                }
+            }
+
             if (message.isNotBlank()) {
-                item { AssistChip(onClick = {}, label = { Text(message) }, leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) }) }
+                item {
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
+    }
+
+    pendingImport?.let { root ->
+        val array = root.optJSONArray("mappings") ?: JSONArray()
+        val profileArray = root.optJSONArray("profiles") ?: JSONArray()
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            title = { Text("ייבוא גיבוי") },
+            text = {
+                Text(
+                    "גרסת גיבוי " + root.optInt("version", -1) + ". הקובץ מכיל " +
+                        array.length() + " פעולות ו-" + profileArray.length() +
+                        " פרופילים. הייבוא יחליף את הנתונים הקיימים.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        runCatching {
+                            val imported = buildList {
+                                for (i in 0 until array.length()) {
+                                    array.optJSONObject(i)?.let { add(KeyActionConfig.fromJson(it)) }
+                                }
+                            }
+                            basePrefs.saveMappings(imported)
+                            root.optJSONObject("settings")?.let { settings ->
+                                if (settings.has("tapTimeoutMs")) {
+                                    basePrefs.saveTapTimeout(settings.optLong("tapTimeoutMs", 1200L))
+                                }
+                                if (settings.has("actionDelayMs")) {
+                                    basePrefs.saveActionDelay(settings.optLong("actionDelayMs", 0L))
+                                }
+                                if (settings.has("showTapCount")) {
+                                    basePrefs.saveShowTapCount(settings.optBoolean("showTapCount", false))
+                                }
+                                if (settings.has("tapCountSizeSp")) {
+                                    basePrefs.saveTapCountSize(settings.optDouble("tapCountSizeSp", 20.0).toFloat())
+                                }
+                            }
+                            advanced.importBundle(root)
+                            message = "הגיבוי יובא בהצלחה."
+                            pendingImport = null
+                        }.onFailure {
+                            message = "הייבוא נכשל: " + (it.message ?: "שגיאה")
+                        }
+                    }
+                }) {
+                    Text("ייבוא")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingImport = null }) {
+                    Text("ביטול")
+                }
+            },
+        )
+    }
+
+    resetMode?.let { mode ->
+        val fullReset = mode == "all"
+        AlertDialog(
+            onDismissRequest = { resetMode = null },
+            title = { Text(if (fullReset) "לאפס את כל האפליקציה?" else "לאפס את הפעולות?") },
+            text = {
+                Text(
+                    if (fullReset) {
+                        "כל הפעולות, הפרופילים, היומן וההגדרות יימחקו."
+                    } else {
+                        "כל הפעולות וההגדרות המתקדמות שלהן יימחקו."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        if (fullReset) {
+                            basePrefs.resetAll()
+                            advanced.resetPersistentState()
+                            advanced.saveProfiles(listOf(ClickPlusProfile("default", "כללי", true)))
+                            AdvancedRuleRepository.setMode(context, AppMode.FULL)
+                            advanced.saveThemeMode("system")
+                            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                                .edit()
+                                .clear()
+                                .apply()
+                        } else {
+                            basePrefs.saveMappings(emptyList())
+                            advanced.clearAllRuleMetadata()
+                        }
+                        message = "האיפוס הושלם."
+                        resetMode = null
+                    }
+                }) {
+                    Text("איפוס")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { resetMode = null }) {
+                    Text("ביטול")
+                }
+            },
+        )
     }
 }
 
@@ -1389,16 +2010,24 @@ private fun EditorScreen(
     var appDialog by remember { mutableStateOf(false) }
     var screenAppDialog by remember { mutableStateOf(false) }
     var learning by remember { mutableStateOf(false) }
+    val configuration = LocalConfiguration.current
     var orientation by remember {
         mutableStateOf(
-            if (context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+            if (configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
                 "landscape"
             } else {
                 "portrait"
             }
         )
     }
+    LaunchedEffect(configuration.orientation) {
+        orientation = if (
+            configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        ) "landscape" else "portrait"
+    }
     var showDelete by remember { mutableStateOf(false) }
+    var validationMessage by remember { mutableStateOf("") }
+    var tapPreviewImage by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
 
     LaunchedEffect(draft.triggerType, draft.actionType) {
         if (draft.triggerType == TriggerType.SCREEN_TAP && draft.actionType != ActionType.APP_TAP) {
@@ -1410,8 +2039,17 @@ private fun EditorScreen(
     }
 
     LaunchedEffect(draft.id) {
+        var loadedScreenshotPath = ""
         while (true) {
             val p = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+            val screenshotPath = p.getString("tap_capture_screenshot_path", "").orEmpty()
+            if (screenshotPath.isNotBlank() && screenshotPath != loadedScreenshotPath) {
+                BitmapFactory.decodeFile(screenshotPath)?.let { bitmap ->
+                    tapPreviewImage = bitmap.asImageBitmap()
+                    loadedScreenshotPath = screenshotPath
+                }
+            }
+
             if (p.getBoolean("tap_capture_ready", false)) {
                 val capturedX = p.getFloat("tap_capture_x_ratio", -1f)
                 val capturedY = p.getFloat("tap_capture_y_ratio", -1f)
@@ -1486,20 +2124,22 @@ private fun EditorScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        if (draft.name.isBlank()) {
-                            draft = draft.copy(name = draft.triggerType.titleHebrew)
-                        }
-                        onSave(
-                            draft.copy(
-                                screenTapXRatio = if (draft.screenTapXRatio >= 0f) draft.screenTapXRatio else x,
-                                screenTapYRatio = if (draft.screenTapYRatio >= 0f) draft.screenTapYRatio else y,
-                                screenTapToleranceRatio = maxOf(
-                                    metadata.toleranceXRatio,
-                                    metadata.toleranceYRatio,
-                                ),
+                        val prepared = draft.copy(
+                            name = draft.name.ifBlank { draft.triggerType.titleHebrew },
+                            screenTapXRatio = if (draft.screenTapXRatio >= 0f) draft.screenTapXRatio else x,
+                            screenTapYRatio = if (draft.screenTapYRatio >= 0f) draft.screenTapYRatio else y,
+                            screenTapToleranceRatio = maxOf(
+                                metadata.toleranceXRatio,
+                                metadata.toleranceYRatio,
                             ),
-                            metadata,
                         )
+                        val error = validateRuleBeforeSave(context, prepared, metadata, repo)
+                        if (error != null) {
+                            validationMessage = error
+                        } else {
+                            validationMessage = ""
+                            onSave(prepared, metadata)
+                        }
                     },
                     Modifier
                         .fillMaxWidth()
@@ -1574,6 +2214,7 @@ private fun EditorScreen(
                             onClick = { draft = draft.copy(triggerType = TriggerType.SCREEN_TAP) },
                             label = "לחיצה במיקום",
                             modifier = Modifier.weight(1f),
+                            enabled = AdvancedRuleRepository.currentMode(context) == AppMode.FULL,
                         )
                     }
                     Text(
@@ -1594,6 +2235,13 @@ private fun EditorScreen(
                             )
                         }
                     }
+                    if (draft.triggerType == TriggerType.APP_ENTRY && draft.pressCount == 1) {
+                        Text(
+                            "כאשר הטריגר מבוסס על פתיחת אפליקציה אחרת, לא מומלץ לבחור כניסה אחת: הכניסה הראשונה משמשת לפתיחת האפליקציה עצמה על המסך.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
                 }
             }
 
@@ -1608,21 +2256,60 @@ private fun EditorScreen(
                     },
                 ) {
                     if (draft.triggerType == TriggerType.APP_ENTRY) {
-                        FlowRow(
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            maxItemsInEachRow = 2,
                         ) {
-                            ContextConditionType.entries.forEach { type ->
-                                ChoiceChip(
-                                    selected = draft.contextConditionType == type,
-                                    onClick = {
-                                        draft = draft.copy(contextConditionType = type)
-                                    },
-                                    label = type.titleHebrew,
-                                    modifier = Modifier.widthIn(min = 120.dp).weight(1f),
-                                )
+                            ChoiceChip(
+                                selected = draft.contextConditionType == ContextConditionType.ANY,
+                                onClick = {
+                                    draft = draft.copy(contextConditionType = ContextConditionType.ANY)
+                                },
+                                label = "בכל מצב",
+                                modifier = Modifier.weight(1f),
+                            )
+                            ChoiceChip(
+                                selected = draft.contextConditionType != ContextConditionType.ANY,
+                                onClick = {
+                                    if (draft.contextConditionType == ContextConditionType.ANY) {
+                                        draft = draft.copy(contextConditionType = ContextConditionType.APP)
+                                    }
+                                },
+                                label = "לפי מצב מסוים",
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+
+                        if (AdvancedRuleRepository.currentMode(context) == AppMode.BASIC) {
+                            Text(
+                                "במצב בסיסי חלק מהמצבים אינם זמינים.",
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+
+                        if (draft.contextConditionType != ContextConditionType.ANY) {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                ContextConditionType.entries
+                                    .filter { it != ContextConditionType.ANY }
+                                    .forEach { type ->
+                                        ChoiceChip(
+                                            selected = draft.contextConditionType == type,
+                                            onClick = {
+                                                draft = draft.copy(contextConditionType = type)
+                                            },
+                                            label = type.titleHebrew,
+                                            modifier = Modifier.width(132.dp),
+                                            enabled = isContextConditionAvailable(
+                                                AdvancedRuleRepository.currentMode(context),
+                                                type,
+                                            ),
+                                        )
+                                    }
                             }
                         }
 
@@ -1637,19 +2324,13 @@ private fun EditorScreen(
                                 Icon(Icons.Outlined.Apps, null)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    if (draft.contextConditionName.isBlank()) {
-                                        "בחירת אפליקציה"
-                                    } else {
-                                        draft.contextConditionName
-                                    },
+                                    if (draft.contextConditionName.isBlank()) "בחירת אפליקציה"
+                                    else draft.contextConditionName,
                                     maxLines = 1,
+                                    softWrap = false,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            Text(
-                                "ההתאמה נבדקת לפי האפליקציה שהייתה פתוחה לפני ClickPlus.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
                         }
                     } else {
                         OutlinedButton(
@@ -1750,45 +2431,106 @@ private fun EditorScreen(
                     title = "מה לבצע?",
                     subtitle = "בחר מה ClickPlus יעשה לאחר שהכלל הופעל.",
                 ) {
-                    Column(
+                    ChoiceChip(
+                        selected = draft.actionType == ActionType.SYSTEM,
+                        onClick = {
+                            draft = draft.copy(
+                                actionType = ActionType.SYSTEM,
+                                systemActionId = draft.systemActionId.ifBlank { SystemActionPreset.HOME.id },
+                            )
+                        },
+                        label = "פעולת מערכת",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(
                         Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         ChoiceChip(
-                            selected = draft.actionType == ActionType.SYSTEM,
-                            onClick = {
-                                draft = draft.copy(
-                                    actionType = ActionType.SYSTEM,
-                                    systemActionId = draft.systemActionId.ifBlank { SystemActionPreset.HOME.id },
-                                )
-                            },
-                            label = "פעולת מערכת",
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        ChoiceChip(
                             selected = draft.actionType == ActionType.APP,
-                            onClick = { draft = draft.copy(actionType = ActionType.APP, systemActionId = "") },
+                            onClick = {
+                                draft = draft.copy(actionType = ActionType.APP, systemActionId = "")
+                            },
                             label = "פתיחת אפליקציה",
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.weight(1f),
                         )
                         ChoiceChip(
                             selected = draft.actionType == ActionType.APP_TAP,
-                            onClick = { draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "") },
-                            label = "פתיחת אפליקציה + לחיצה",
-                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "")
+                            },
+                            label = "פתיחה+לחיצות",
+                            modifier = Modifier.weight(1f),
+                            enabled = AdvancedRuleRepository.currentMode(context) == AppMode.FULL,
                         )
                     }
 
                     when (draft.actionType) {
                         ActionType.SYSTEM -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                SystemActionPreset.entries.forEach { action ->
-                                    ChoiceChip(
-                                        selected = draft.systemActionId == action.id,
-                                        onClick = { draft = draft.copy(systemActionId = action.id) },
-                                        label = action.titleHebrew,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
+                            val groups = listOf(
+                                "ניווט" to listOf(
+                                    SystemActionPreset.HOME,
+                                    SystemActionPreset.BACK,
+                                    SystemActionPreset.RECENTS,
+                                    SystemActionPreset.NOTIFICATIONS,
+                                ),
+                                "מדיה" to listOf(
+                                    SystemActionPreset.MEDIA_PLAY_PAUSE,
+                                    SystemActionPreset.MEDIA_NEXT,
+                                    SystemActionPreset.MEDIA_PREVIOUS,
+                                ),
+                                "שמע" to listOf(
+                                    SystemActionPreset.VOLUME_UP,
+                                    SystemActionPreset.VOLUME_DOWN,
+                                ),
+                                "מערכת" to listOf(
+                                    SystemActionPreset.SETTINGS,
+                                    SystemActionPreset.DIALER,
+                                ),
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                groups.forEach { (groupTitle, actions) ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Icon(
+                                            when (groupTitle) {
+                                                "ניווט" -> Icons.Outlined.ArrowForward
+                                                "מדיה" -> Icons.Outlined.PlayArrow
+                                                "שמע" -> Icons.Outlined.Tune
+                                                else -> Icons.Outlined.Settings
+                                            },
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                        Text(
+                                            groupTitle,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                    Row(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState()),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        actions.forEach { action ->
+                                            ChoiceChip(
+                                                selected = draft.systemActionId == action.id,
+                                                onClick = {
+                                                    draft = draft.copy(systemActionId = action.id)
+                                                },
+                                                label = action.titleHebrew,
+                                                modifier = Modifier.widthIn(min = 140.dp),
+                                                enabled = isSystemActionAvailable(
+                                                    AdvancedRuleRepository.currentMode(context),
+                                                    action,
+                                                ),
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1804,6 +2546,29 @@ private fun EditorScreen(
                             }
                         }
                         ActionType.APP_TAP -> {
+                            Text(
+                                "מספר לחיצות",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                (1..10).forEach { n ->
+                                    CompactChoiceChip(
+                                        selected = draft.actionTapCount == n,
+                                        onClick = {
+                                            draft = draft.copy(actionTapCount = n)
+                                        },
+                                        label = n.toString(),
+                                        modifier = Modifier.width(42.dp),
+                                    )
+                                }
+                            }
+
                             OutlinedButton(
                                 onClick = {
                                     if (!isAccessibilityEnabled(context)) {
@@ -1812,7 +2577,10 @@ private fun EditorScreen(
                                         screenAppDialog = true
                                     } else {
                                         val p = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                                        tapPreviewImage = null
                                         p.edit()
+                                            .remove("tap_capture_screenshot_path")
+                                            .putBoolean("tap_capture_preview_requested", false)
                                             .putBoolean("tap_learning", true)
                                             .putString("tap_learning_package", draft.screenTapPackage)
                                             .apply()
@@ -1890,6 +2658,7 @@ private fun EditorScreen(
                                     y = y,
                                     toleranceX = metadata.toleranceXRatio,
                                     toleranceY = metadata.toleranceYRatio,
+                                    screenshot = tapPreviewImage,
                                     onChange = { nx, ny ->
                                         draft = draft.copy(screenTapXRatio = nx, screenTapYRatio = ny)
                                         metadata = if (orientation == "landscape") {
@@ -1911,6 +2680,20 @@ private fun EditorScreen(
                         Text(
                             "יעד: " + draft.targetAppName.ifBlank { draft.targetPackage },
                             style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+
+                    permissionRequirementFor(context, draft)?.let { requirement ->
+                        PermissionRequirementCard(
+                            message = requirement.first,
+                            onClick = requirement.second,
+                        )
+                    }
+
+                    if (AdvancedRuleRepository.currentMode(context) == AppMode.BASIC) {
+                        Text(
+                            "אפשרויות שאינן נתמכות במצב בסיסי מוצגות מושבתות.",
+                            style = MaterialTheme.typography.labelSmall,
                         )
                     }
                 }
@@ -1991,25 +2774,49 @@ private fun EditorScreen(
                         onSelect = { metadata = metadata.copy(profileId = it) },
                     )
 
-                    OutlinedButton(
-                        onClick = {
-                            val performer = when (AdvancedRuleRepository.currentMode(context)) {
-                                AppMode.BASIC -> BasicActionPerformer(context)
-                                AppMode.FULL -> KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
-                                    ?: UnavailableActionPerformer("מצב מלא נבחר, אבל שירות הנגישות אינו פעיל.")
-                            }
-                            RuleExecutionCoordinator(context, performer).execute(
-                                draft,
-                                test = true,
-                                reason = "בדיקה ידנית",
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Outlined.PlayArrow, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("בדיקת הפעולה")
+                    val selectedProfile = repo.profiles().firstOrNull { it.id == metadata.profileId }
+                    if (selectedProfile != null && selectedProfile.id != repo.activeProfileId()) {
+                        Text(
+                            "הפעולה משויכת לפרופיל שאינו פעיל כרגע. היא תפעל רק כאשר הפרופיל הזה יהיה פעיל.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
                     }
+                }
+            }
+
+            item {
+                OutlinedButton(
+                    onClick = {
+                        val performer = when (AdvancedRuleRepository.currentMode(context)) {
+                            AppMode.BASIC -> BasicActionPerformer(context)
+                            AppMode.FULL -> KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
+                                ?: UnavailableActionPerformer("מצב מלא נבחר, אבל שירות הנגישות אינו פעיל.")
+                        }
+                        RuleExecutionCoordinator(context, performer).execute(
+                            draft,
+                            test = true,
+                            reason = "בדיקה ידנית",
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 2.dp),
+                ) {
+                    Icon(Icons.Outlined.PlayArrow, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("בדיקת הפעולה")
+                }
+            }
+
+            if (validationMessage.isNotBlank()) {
+                item {
+                    Text(
+                        validationMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    )
                 }
             }
         }
@@ -2060,6 +2867,11 @@ private fun EditorScreen(
                     screenTapXRatio = -1f,
                     screenTapYRatio = -1f,
                 )
+                tapPreviewImage = null
+                context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                    .edit()
+                    .remove("tap_capture_screenshot_path")
+                    .apply()
                 screenAppDialog = false
             },
         )
@@ -2221,8 +3033,9 @@ private fun AppPickerDialog(
                 label = { Text("חיפוש אפליקציה") },
                 leadingIcon = { Icon(Icons.Outlined.Search, null) },
             )
+            val pickerHeight = (LocalConfiguration.current.screenHeightDp * 0.58f).dp.coerceIn(260.dp, 480.dp)
             LazyColumn(
-                Modifier.fillMaxWidth().height(460.dp),
+                Modifier.fillMaxWidth().height(pickerHeight),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
                 items(filtered, key = { it.packageName }) { app ->
@@ -2255,15 +3068,14 @@ private fun AppPickerDialog(
                             }
                         }
                         Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(app.label, fontWeight = FontWeight.Bold)
-                            Text(
-                                app.packageName,
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
+                        Text(
+                            app.label,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                 }
             }
@@ -2292,6 +3104,7 @@ private fun PointEditor(
     y: Float,
     toleranceX: Float,
     toleranceY: Float,
+    screenshot: androidx.compose.ui.graphics.ImageBitmap? = null,
     onChange: (Float, Float) -> Unit,
 ) {
     val safeX = x.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
@@ -2301,14 +3114,28 @@ private fun PointEditor(
     val primaryColor = MaterialTheme.colorScheme.primary
     val outlineColor = MaterialTheme.colorScheme.outline
     val surfaceColor = MaterialTheme.colorScheme.surfaceVariant
+    val previewHeight = (LocalConfiguration.current.screenWidthDp * 0.53f).dp.coerceIn(170.dp, 260.dp)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("תצוגה מקדימה · גרור את הנקודה למיקום המדויק")
         Box(
-            Modifier.fillMaxWidth().height(210.dp).background(
-                surfaceColor,
-                RoundedCornerShape(18.dp),
-            ),
+            Modifier
+                .fillMaxWidth()
+                .height(previewHeight)
+                .background(
+                    surfaceColor,
+                    RoundedCornerShape(18.dp),
+                ),
         ) {
+            if (screenshot != null) {
+                Image(
+                    bitmap = screenshot,
+                    contentDescription = "צילום מסך של האפליקציה",
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(2.dp),
+                )
+            }
             Canvas(
                 Modifier
                     .fillMaxSize()
@@ -2365,6 +3192,206 @@ private fun SimpleTopBar(title: String, onBack: () -> Unit) {
         title = { Text(title) },
         navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
     )
+}
+
+private fun requestRuntimePermission(context: Context, permission: String) {
+    if (permission == Manifest.permission.POST_NOTIFICATIONS && Build.VERSION.SDK_INT < 33) return
+    if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) return
+    (context as? Activity)?.requestPermissions(arrayOf(permission), permission.hashCode() and 0x7fff)
+}
+
+private fun formatDurationMs(value: Long): String {
+    val safe = value.coerceAtLeast(0L)
+    if (safe == 0L) return "ללא המתנה"
+    val seconds = safe / 1000f
+    val formatted = String.format(
+        Locale.ROOT,
+        "%.1f",
+        seconds,
+    ).trimEnd('0').trimEnd('.')
+    return if (formatted == "1") "שנייה אחת" else formatted + " שניות"
+}
+
+private fun isContextConditionAvailable(
+    mode: AppMode,
+    type: ContextConditionType,
+): Boolean = when (mode) {
+    AppMode.FULL -> true
+    AppMode.BASIC -> type == ContextConditionType.ANY || type == ContextConditionType.APP
+}
+
+private fun isSystemActionAvailable(
+    mode: AppMode,
+    action: SystemActionPreset,
+): Boolean {
+    if (mode == AppMode.FULL) return true
+    return action.id in setOf(
+        SystemActionPreset.MEDIA_PLAY_PAUSE.id,
+        SystemActionPreset.MEDIA_NEXT.id,
+        SystemActionPreset.MEDIA_PREVIOUS.id,
+        SystemActionPreset.VOLUME_UP.id,
+        SystemActionPreset.VOLUME_DOWN.id,
+        SystemActionPreset.SETTINGS.id,
+        SystemActionPreset.DIALER.id,
+    )
+}
+
+private fun permissionRequirementFor(
+    context: Context,
+    config: KeyActionConfig,
+): Pair<String, () -> Unit>? {
+    if (config.triggerType == TriggerType.SCREEN_TAP ||
+        config.actionType == ActionType.APP_TAP ||
+        (
+            config.actionType == ActionType.SYSTEM &&
+                config.systemActionId in setOf(
+                    SystemActionPreset.HOME.id,
+                    SystemActionPreset.BACK.id,
+                    SystemActionPreset.RECENTS.id,
+                    SystemActionPreset.NOTIFICATIONS.id,
+                )
+        )
+    ) {
+        if (!isAccessibilityEnabled(context)) {
+            return "הפעולה הזאת דורשת שירות נגישות." to {
+                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        }
+    }
+
+    if (config.triggerType == TriggerType.APP_ENTRY &&
+        config.contextConditionType in setOf(
+            ContextConditionType.APP,
+            ContextConditionType.RADIO,
+        ) &&
+        AdvancedRuleRepository.currentMode(context) == AppMode.BASIC &&
+        !hasUsageAccess(context)
+    ) {
+        return "המצב שבחרת דורש הרשאת נתוני שימוש." to {
+            context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        }
+    }
+
+    if (config.triggerType == TriggerType.APP_ENTRY &&
+        config.contextConditionType == ContextConditionType.RINGING &&
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_PHONE_STATE,
+        ) != PackageManager.PERMISSION_GRANTED
+    ) {
+        return "המצב שבחרת דורש הרשאת מצב טלפון." to {
+            requestRuntimePermission(context, Manifest.permission.READ_PHONE_STATE)
+        }
+    }
+
+    return null
+}
+
+@Composable
+private fun PermissionRequirementCard(
+    message: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                message,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(
+                onClick = onClick,
+                Modifier.fillMaxWidth(),
+            ) {
+                Text("מתן הרשאה")
+            }
+        }
+    }
+}
+
+private fun validateRuleBeforeSave(
+    context: Context,
+    config: KeyActionConfig,
+    metadata: RuleAdvancedMetadata,
+    repo: AdvancedRuleRepository,
+): String? {
+    val mode = AdvancedRuleRepository.currentMode(context)
+    if (config.triggerType == TriggerType.SCREEN_TAP && mode != AppMode.FULL) {
+        return "טריגר לחיצה במיקום דורש מצב מלא עם שירות נגישות."
+    }
+
+    if (config.triggerType == TriggerType.APP_ENTRY) {
+        if ((config.contextConditionType == ContextConditionType.APP ||
+                config.contextConditionType == ContextConditionType.RADIO) &&
+            config.contextConditionValue.isBlank()
+        ) {
+            return "צריך לבחור אפליקציה עבור המצב שנבחר."
+        }
+        if (mode == AppMode.BASIC &&
+            config.contextConditionType in setOf(
+                ContextConditionType.MUSIC,
+                ContextConditionType.MUTED,
+                ContextConditionType.RINGING,
+                ContextConditionType.RADIO,
+            )
+        ) {
+            return "המצב שבחרת אינו זמין במצב בסיסי ללא נגישות."
+        }
+        if (mode == AppMode.BASIC &&
+            (config.contextConditionType == ContextConditionType.APP ||
+                config.contextConditionType == ContextConditionType.RADIO) &&
+            !hasUsageAccess(context)
+        ) {
+            return "המצב שנבחר דורש הרשאת נתוני שימוש."
+        }
+    }
+
+    if (config.actionType == ActionType.APP && config.targetPackage.isBlank()) {
+        return "צריך לבחור אפליקציית יעד."
+    }
+
+    if (config.actionType == ActionType.APP_TAP) {
+        if (mode != AppMode.FULL) {
+            return "פתיחה+לחיצות דורשת מצב מלא עם שירות נגישות."
+        }
+        if (config.screenTapPackage.isBlank()) {
+            return "צריך לבחור אפליקציה וללמוד נקודת לחיצה."
+        }
+        if (config.screenTapXRatio !in 0f..1f || config.screenTapYRatio !in 0f..1f) {
+            return "צריך ללמוד או להגדיר מיקום לחיצה תקין."
+        }
+    }
+
+    if (config.triggerType == TriggerType.SCREEN_TAP) {
+        if (config.screenTapPackage.isBlank()) return "צריך לבחור אפליקציה לזיהוי הלחיצה."
+        val meta = repo.getRuleMetadata(config.id)
+        val validCurrentOrientation =
+            if (context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+                meta.landscapeX >= 0f && meta.landscapeY >= 0f
+            } else {
+                meta.portraitX >= 0f && meta.portraitY >= 0f
+            }
+        if (!validCurrentOrientation &&
+            (config.screenTapXRatio !in 0f..1f || config.screenTapYRatio !in 0f..1f)
+        ) {
+            return "צריך להגדיר מיקום לחיצה."
+        }
+    }
+
+    if (repo.profiles().none { it.id == metadata.profileId }) {
+        return "צריך לבחור פרופיל קיים."
+    }
+
+    return null
 }
 
 private fun isAccessibilityEnabled(context: Context): Boolean {

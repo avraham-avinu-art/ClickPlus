@@ -96,6 +96,8 @@ object StandaloneLauncherEngine {
                             appPackage = foreground,
                             success = false,
                             detail = "הכלל הופעל, אך שירות הנגישות אינו פעיל ולכן אי אפשר לבצע את הפעולה במצב מלא.",
+                            triggerDescription = "כניסה ל-ClickPlus",
+                            actionDescription = rule.actionSummary(),
                         ),
                     )
                 }
@@ -128,7 +130,7 @@ object StandaloneLauncherEngine {
                     latestPackage = pkg
                 }
             }
-            latestPackage
+            if (latestTimestamp == Long.MIN_VALUE || end - latestTimestamp > 3000L) "" else latestPackage
         }.getOrDefault("")
     }
 

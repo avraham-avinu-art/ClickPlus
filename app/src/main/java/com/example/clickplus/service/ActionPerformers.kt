@@ -13,10 +13,11 @@ data class ActionExecutionResult(
     val success: Boolean,
     val reason: String = "",
     val pending: Boolean = false,
+    val pendingId: String? = null,
 ) {
     companion object {
         fun success(reason: String = "הפעולה בוצעה בהצלחה") = ActionExecutionResult(true, reason)
-        fun pending(reason: String) = ActionExecutionResult(true, reason, pending = true)
+        fun pending(reason: String, pendingId: String) = ActionExecutionResult(true, reason, pending = true, pendingId = pendingId)
         fun failure(reason: String) = ActionExecutionResult(false, reason)
     }
 }
