@@ -1892,6 +1892,7 @@ private fun EditorScreen(
                             onClick = { draft = draft.copy(triggerType = TriggerType.SCREEN_TAP) },
                             label = "לחיצה במיקום",
                             modifier = Modifier.weight(1f),
+                            enabled = AdvancedRuleRepository.currentMode(context) == AppMode.FULL,
                         )
                     }
                     Text(
@@ -1967,6 +1968,10 @@ private fun EditorScreen(
                                             },
                                             label = type.titleHebrew,
                                             modifier = Modifier.width(132.dp),
+                                            enabled = isContextConditionAvailable(
+                                                AdvancedRuleRepository.currentMode(context),
+                                                type,
+                                            ),
                                         )
                                     }
                             }
@@ -2120,6 +2125,7 @@ private fun EditorScreen(
                             },
                             label = "פתיחה+לחיצות",
                             modifier = Modifier.weight(1f),
+                            enabled = AdvancedRuleRepository.currentMode(context) == AppMode.FULL,
                         )
                     }
 
@@ -2132,6 +2138,10 @@ private fun EditorScreen(
                                         onClick = { draft = draft.copy(systemActionId = action.id) },
                                         label = action.titleHebrew,
                                         modifier = Modifier.fillMaxWidth(),
+                                        enabled = isSystemActionAvailable(
+                                            AdvancedRuleRepository.currentMode(context),
+                                            action,
+                                        ),
                                     )
                                 }
                             }
