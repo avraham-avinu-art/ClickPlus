@@ -960,7 +960,9 @@ private fun StatusCard(
 private fun LogsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var items by remember { mutableStateOf(AdvancedRuleRepository.logs(context)) }
+    var confirmClear by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -975,18 +977,27 @@ private fun LogsScreen(onBack: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text("יומן פעילות") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Outlined.ArrowForward, "חזרה")
+                    }
+                },
                 actions = {
-                    TextButton(onClick = {
-                        AdvancedRuleRepository.clearLogs(context)
-                        items = emptyList()
-                    }) { Text("ניקוי") }
+                    TextButton(
+                        onClick = { confirmClear = true },
+                        enabled = items.isNotEmpty(),
+                    ) {
+                        Text("ניקוי")
+                    }
                 },
             )
         },
     ) { padding ->
         if (items.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
                 Text("אין אירועים להצגה עדיין.")
             }
         } else {
@@ -995,11 +1006,22 @@ private fun LogsScreen(onBack: () -> Unit) {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(items) { log ->
-                    val (statusText, statusColor, statusTextColor) = when (log.success) {
-                        true -> Triple("הצליח", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-                        false -> Triple("נכשל", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-                        null -> Triple("ממתין", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                items(items, key = { it.id }) { log ->
+                    val statusText = when (log.success) {
+                        true -> "הצליח"
+                        false -> "נכשל"
+                        null -> "בביצוע"
+                    }
+                    val statusWithDetail = if (log.success == false && log.detail.isNotBlank()) {
+                        statusText + " — " + log.detail
+                    } else {
+                        statusText
+                    }
+                    val trigger = log.triggerDescription.ifBlank {
+                        if (log.message.contains("בדיקה ידנית")) "בדיקה ידנית" else "הפעלה"
+                    }
+                    val action = log.actionDescription.ifBlank {
+                        log.detail.ifBlank { log.message }
                     }
 
                     OutlinedCard(
@@ -1008,65 +1030,57 @@ private fun LogsScreen(onBack: () -> Unit) {
                     ) {
                         Column(
                             Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
                         ) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = statusColor,
-                                ) {
-                                    Text(
-                                        statusText,
-                                        color = statusTextColor,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    )
-                                }
-                                Text(
-                                    SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(log.timestamp)),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-
                             Text(
-                                log.message,
+                                "הטריגר המפעיל: " + trigger,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
                             )
-
-                            if (log.success == false) {
-                                Text(
-                                    "סיבת הכישלון: " + log.detail.ifBlank { "לא נמסר הסבר." },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            } else if (log.detail.isNotBlank()) {
-                                Text(
-                                    log.detail,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-
-                            if (log.appPackage.isNotBlank()) {
-                                Text(log.appPackage, style = MaterialTheme.typography.labelSmall)
-                            }
-
-                            if (log.xRatio >= 0f && log.yRatio >= 0f) {
-                                Text(
-                                    "מיקום: X " + (log.xRatio * 100f).toInt() + "% · Y " + (log.yRatio * 100f).toInt() + "%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Center,
-                                )
-                            }
+                            Text(
+                                "פעולה: " + action,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                "סטטוס: " + statusWithDetail +
+                                    " · " +
+                                    SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                                        .format(Date(log.timestamp)),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }
             }
         }
+    }
+
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("לנקות את היומן?") },
+            text = { Text("כל הרשומות ביומן הפעילות יימחקו.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    AdvancedRuleRepository.clearLogs(context)
+                    items = emptyList()
+                    confirmClear = false
+                }) {
+                    Text("מחיקה")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClear = false }) {
+                    Text("ביטול")
+                }
+            },
+        )
     }
 }
 
