@@ -500,6 +500,36 @@ private fun HomeDashboard(
             }
 
             item {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StatCard(
+                        "פעולות פעילות",
+                        mappings.count { it.enabled }.toString(),
+                        Modifier.weight(1f),
+                    )
+                    StatCard(
+                        "אפליקציות",
+                        mappings.mapNotNull {
+                            when {
+                                it.triggerType == TriggerType.SCREEN_TAP -> it.screenTapPackage
+                                it.actionType == ActionType.APP -> it.targetPackage
+                                it.contextConditionType == ContextConditionType.APP -> it.contextConditionValue
+                                else -> null
+                            }
+                        }.filter { it.isNotBlank() }.distinct().size.toString(),
+                        Modifier.weight(1f),
+                    )
+                    StatCard(
+                        "סה״כ פעולות",
+                        mappings.size.toString(),
+                        Modifier.weight(1f),
+                    )
+                }
+            }
+
+            item {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
