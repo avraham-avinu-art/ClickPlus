@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.view.KeyEvent
 import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.AdvancedRuleRepository
+import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.SystemActionPreset
 import java.util.UUID
@@ -111,14 +112,41 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                 }
 
                 if (service.isPackageInForeground(targetPackage)) {
-                    dispatchLearnedTap(
-                        config,
-                        targetPackage,
-                        xRatio,
-                        yRatio,
-                        tapCount,
-                        executionId,
-                    )
+                    val delay = AppPreferencesRepository.actionDelaySnapshot(service)
+                    if (delay > 0L) {
+                        handler.postDelayed(
+                            {
+                                if (service.isPackageInForeground(targetPackage)) {
+                                    dispatchLearnedTap(
+                                        config,
+                                        targetPackage,
+                                        xRatio,
+                                        yRatio,
+                                        tapCount,
+                                        executionId,
+                                    )
+                                } else {
+                                    logAppTapResult(
+                                        config,
+                                        targetPackage,
+                                        executionId,
+                                        false,
+                                        "אפליקציית היעד כבר אינה בחזית בזמן ההשהיה",
+                                    )
+                                }
+                            },
+                            delay,
+                        )
+                    } else {
+                        dispatchLearnedTap(
+                            config,
+                            targetPackage,
+                            xRatio,
+                            yRatio,
+                            tapCount,
+                            executionId,
+                        )
+                    }
                 } else {
                     handler.postDelayed(this, 80L)
                 }
@@ -143,6 +171,16 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         val y = (yRatio * height).coerceIn(0f, height - 1f)
 
         fun sendTap(index: Int) {
+            if (!service.isPackageInForeground(targetPackage)) {
+                logAppTapResult(
+                    config,
+                    targetPackage,
+                    executionId,
+                    false,
+                    "אפליקציית היעד אינה בחזית ולכן הלחיצה הופסקה",
+                )
+                return
+            }
             if (index >= tapCount) {
                 logAppTapResult(
                     config,
