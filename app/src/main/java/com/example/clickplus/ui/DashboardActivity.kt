@@ -963,8 +963,8 @@ private fun LogsScreen(
                                             else -> currentRule.actionSummary()
                                         }
                                         ActionType.APP -> "פתיחת " + currentRule.targetAppName.ifBlank { "האפליקציה שנבחרה" }
-                                        ActionType.APP_TAP -> "פתיחת " + currentRule.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " וביצוע לחיצה במיקום שנלמד"
-                                        ActionType.MULTI_POINT_TAP -> "פתיחת " + currentRule.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " וביצוע שתי לחיצות במיקומים שנלמדו"
+                                        ActionType.APP_TAP -> "פתיחה + " + currentRule.screenTapCount.coerceIn(1, 10) + " לחיצות ב-" + currentRule.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " במיקום שנלמד"
+                                        ActionType.MULTI_POINT_TAP -> "פתיחה + שתי לחיצות ב-" + currentRule.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " במיקומים שנלמדו"
                                         ActionType.PROFILE -> {
                                             val targetProfileId = profileIdFromActionId(currentRule.systemActionId)
                                             val targetProfile = targetProfileId?.let { id ->
