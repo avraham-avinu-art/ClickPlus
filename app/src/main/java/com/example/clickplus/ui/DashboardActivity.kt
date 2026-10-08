@@ -2277,18 +2277,55 @@ private fun EditorScreen(
 
                     when (draft.actionType) {
                         ActionType.SYSTEM -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                SystemActionPreset.entries.forEach { action ->
-                                    ChoiceChip(
-                                        selected = draft.systemActionId == action.id,
-                                        onClick = { draft = draft.copy(systemActionId = action.id) },
-                                        label = action.titleHebrew,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        enabled = isSystemActionAvailable(
-                                            AdvancedRuleRepository.currentMode(context),
-                                            action,
-                                        ),
+                            val groups = listOf(
+                                "ניווט" to listOf(
+                                    SystemActionPreset.HOME,
+                                    SystemActionPreset.BACK,
+                                    SystemActionPreset.RECENTS,
+                                    SystemActionPreset.NOTIFICATIONS,
+                                ),
+                                "מדיה" to listOf(
+                                    SystemActionPreset.MEDIA_PLAY_PAUSE,
+                                    SystemActionPreset.MEDIA_NEXT,
+                                    SystemActionPreset.MEDIA_PREVIOUS,
+                                ),
+                                "שמע" to listOf(
+                                    SystemActionPreset.VOLUME_UP,
+                                    SystemActionPreset.VOLUME_DOWN,
+                                ),
+                                "מערכת" to listOf(
+                                    SystemActionPreset.SETTINGS,
+                                    SystemActionPreset.DIALER,
+                                ),
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                groups.forEach { (groupTitle, actions) ->
+                                    Text(
+                                        groupTitle,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
                                     )
+                                    Row(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState()),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        actions.forEach { action ->
+                                            ChoiceChip(
+                                                selected = draft.systemActionId == action.id,
+                                                onClick = {
+                                                    draft = draft.copy(systemActionId = action.id)
+                                                },
+                                                label = action.titleHebrew,
+                                                modifier = Modifier.widthIn(min = 140.dp),
+                                                enabled = isSystemActionAvailable(
+                                                    AdvancedRuleRepository.currentMode(context),
+                                                    action,
+                                                ),
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
