@@ -6,10 +6,16 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
 import android.graphics.Rect
+import android.graphics.Path
+import android.accessibilityservice.GestureDescription
 import android.os.Build
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
+import android.os.Handler
+import android.os.Looper
+import java.io.File
 import androidx.core.app.NotificationCompat
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.AppPreferencesRepository
@@ -37,6 +43,17 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     private lateinit var tapCountOverlay: TapCountOverlay
     private lateinit var tapLearningOverlay: TapLearningOverlay
     private val serviceScope = CoroutineScope(Dispatchers.Main.immediate + Job())
+    private val uiHandler = Handler(Looper.getMainLooper())
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+                .edit()
+                .putBoolean("accessibility_service_alive", true)
+                .putLong("accessibility_service_heartbeat", System.currentTimeMillis())
+                .apply()
+            uiHandler.postDelayed(this, 2000L)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -45,18 +62,37 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         actionExecutor = ActionExecutor(this)
         executionCoordinator = RuleExecutionCoordinator(applicationContext, actionExecutor)
         tapCountOverlay = TapCountOverlay(this)
-        tapLearningOverlay = TapLearningOverlay(this)
+        tapLearningOverlay = TapLearningOverlay(
+            this,
+            onTargetTap = { x, y -> captureLearningTap(x, y) },
+            onCancel = {
+                cancelLearning()
+            },
+        )
         prefsRepository = AppPreferencesRepository(applicationContext)
         tapDetector = TapDetector(applicationContext, executionCoordinator) { count ->
             if (tapCountOverlayEnabled) tapCountOverlay.show(count)
         }
+        markServiceAlive()
         startAsForeground()
         observePreferences()
         consumePendingLaunches()
+        uiHandler.removeCallbacks(heartbeatRunnable)
+        uiHandler.post(heartbeatRunnable)
+    }
+
+    fun onClickPlusEntry() {
+        tapDetector.processClickPlusEntry(lastExternalPackage)
     }
 
     fun onLauncherEntry() {
-        tapDetector.processActivationLaunch(lastExternalPackage)
+        onClickPlusEntry()
+    }
+
+    fun resetOpenAppTracking() {
+        tapDetector.resetOpenAppState()
+        lastExternalPackage = ""
+        AdvancedRuleRepository.setLastExternalPackage(applicationContext, "")
     }
 
     fun openMainInterface() {
@@ -74,15 +110,23 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         val count = prefs.getInt("pending_activation_launches", 0)
         if (count <= 0) return
         prefs.edit().putInt("pending_activation_launches", 0).apply()
-        repeat(count.coerceAtMost(10)) { tapDetector.processActivationLaunch(lastExternalPackage) }
+        repeat(count.coerceAtMost(10)) { onClickPlusEntry() }
     }
 
     private fun startAsForeground() {
-        val channelId = "clickplus_service_channel"
+        val channelId = "clickplus_service_channel_silent_v2"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(channelId, "שירות קליק פלוס", NotificationManager.IMPORTANCE_LOW)
-            )
+            val channel = NotificationChannel(
+                channelId,
+                "שירות קליק פלוס",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "התראה שקטה המציגה שהשירות פעיל"
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            }
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
 
         val openIntent = Intent(this, DashboardActivity::class.java).addFlags(
@@ -97,6 +141,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             .setSmallIcon(com.example.clickplus.R.drawable.ic_notification_transparent)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setAutoCancel(false)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setDefaults(0)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
 
         runCatching {
@@ -124,6 +174,23 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             }
         }
         serviceScope.launch {
+            prefsRepository.tapCountXFlow.collectLatest { x ->
+                val y = AppPreferencesRepository.tapCountYSnapshot(applicationContext)
+                tapCountOverlay.setPosition(x, y)
+            }
+        }
+        serviceScope.launch {
+            prefsRepository.tapCountYFlow.collectLatest { y ->
+                val x = AppPreferencesRepository.tapCountXSnapshot(applicationContext)
+                tapCountOverlay.setPosition(x, y)
+            }
+        }
+        serviceScope.launch {
+            prefsRepository.tapCountSizeFlow.collectLatest { size ->
+                tapCountOverlay.setSize(size)
+            }
+        }
+        serviceScope.launch {
             prefsRepository.mappingsFlow.collectLatest { tapDetector.updateProfiles(it) }
         }
     }
@@ -131,8 +198,43 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        markServiceAlive()
         startAsForeground()
         consumePendingLaunches()
+        uiHandler.removeCallbacks(heartbeatRunnable)
+        uiHandler.post(heartbeatRunnable)
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // The UI task is independent from this accessibility service.
+        // Keep the service foreground notification present after task removal.
+        startAsForeground()
+        super.onTaskRemoved(rootIntent)
+    }
+
+    override fun onDestroy() {
+        uiHandler.removeCallbacks(heartbeatRunnable)
+        getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+            .edit()
+            .putBoolean("accessibility_service_alive", false)
+            .apply()
+        tapLearningOverlay.destroy()
+        tapCountOverlay.destroy()
+        serviceScope.cancel()
+        instance = null
+        super.onDestroy()
+    }
+
+    private fun markServiceAlive() {
+        getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+            .edit()
+            .putBoolean("accessibility_service_alive", true)
+            .putLong("accessibility_service_heartbeat", System.currentTimeMillis())
+            .apply()
+    }
+
+    override fun onInterrupt() {
+        // Required by AccessibilityService; no interrupted gesture state is retained here.
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -143,15 +245,36 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
-                if (shouldTrackExternalPackage(eventPackage)) {
-                    lastExternalPackage = eventPackage
-                    AdvancedRuleRepository.setLastExternalPackage(applicationContext, eventPackage)
+                when {
+                    isLauncherPackage(eventPackage) -> {
+                        tapDetector.resetOpenAppState()
+                        // Leaving an app for the launcher must break the foreground
+                        // package identity so the next return to the same app is a new entry.
+                        lastExternalPackage = ""
+                        AdvancedRuleRepository.setLastExternalPackage(applicationContext, "")
+                    }
+                    eventPackage == "com.android.systemui" -> {
+                        tapDetector.resetOpenAppState()
+                        // System UI is not a target app; clear the previous foreground
+                        // package so the next external app is always treated as a new entry.
+                        lastExternalPackage = ""
+                        AdvancedRuleRepository.setLastExternalPackage(applicationContext, "")
+                    }
+                    shouldTrackExternalPackage(eventPackage) -> {
+                        val previousApp = lastExternalPackage
+                        if (eventPackage != lastExternalPackage) {
+                            tapDetector.processAppEntry(eventPackage, previousApp)
+                        }
+                        lastExternalPackage = eventPackage
+                        AdvancedRuleRepository.setLastExternalPackage(applicationContext, eventPackage)
+                    }
                 }
                 updateLearningOverlay(eventPackage)
             }
             AccessibilityEvent.TYPE_VIEW_CLICKED -> {
-                if (captureTapLocationIfRequested(event)) return
-                tapDetector.processViewClicked(event)
+                // Normal clicks inside other apps are deliberately not a trigger.
+                // The trigger is app entry; click gestures are actions only.
+                captureTapLocationIfRequested(event)
             }
         }
     }
@@ -161,7 +284,8 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         val learning = prefs.getBoolean("tap_learning", false)
         val target = prefs.getString("tap_learning_package", "").orEmpty()
         if (learning && target.isNotBlank() && target == eventPackage) {
-            tapLearningOverlay.show()
+            val stage = prefs.getInt("tap_learning_stage", 1).coerceIn(1, 2)
+            tapLearningOverlay.show(stage)
         } else if (!learning) {
             tapLearningOverlay.hide()
         }
@@ -170,59 +294,158 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     private fun shouldTrackExternalPackage(eventPackage: String): Boolean {
         val defaultIme = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
             ?.substringBefore('/').orEmpty()
-        return eventPackage != defaultIme && eventPackage != "com.android.systemui"
+        return eventPackage != defaultIme &&
+            eventPackage != "com.android.systemui" &&
+            eventPackage != packageName
     }
 
-    private fun captureTapLocationIfRequested(event: AccessibilityEvent): Boolean {
+    private fun isLauncherPackage(eventPackage: String): Boolean {
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val homePackage = packageManager.resolveActivity(
+            homeIntent,
+            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
+        )?.activityInfo?.packageName
+        return !homePackage.isNullOrBlank() && homePackage == eventPackage
+    }
+
+    private fun saveLearningScreenshot(stage: Int, attempt: Int = 0) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
-        if (!prefs.getBoolean("tap_learning", false)) return false
-        val requestedPackage = prefs.getString("tap_learning_package", "").orEmpty()
-        if (requestedPackage.isNotBlank() && requestedPackage != event.packageName?.toString()) return true
+        val targetPackage = prefs.getString("tap_learning_package", "").orEmpty()
+        if (targetPackage.isBlank()) return
 
-        val source = event.source ?: return true
-        val bounds = Rect()
-        runCatching { source.getBoundsInScreen(bounds) }.getOrNull() ?: return true
-        if (bounds.isEmpty) return true
+        takeScreenshot(
+            android.view.Display.DEFAULT_DISPLAY,
+            mainExecutor,
+            object : AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                    var hardwareBuffer: android.hardware.HardwareBuffer? = null
+                    var hardwareBitmap: Bitmap? = null
+                    try {
+                        hardwareBuffer = result.hardwareBuffer
+                        hardwareBitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, result.colorSpace)
+                        val softwareBitmap = hardwareBitmap?.copy(Bitmap.Config.ARGB_8888, false)
+                        if (softwareBitmap == null) {
+                            throw IllegalStateException("Android לא החזיר תמונת מסך זמינה")
+                        }
+                        val file = File(cacheDir, "tap-learning-$stage.png")
+                        file.outputStream().use { output ->
+                            check(softwareBitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                                "שמירת צילום המסך נכשלה"
+                            }
+                        }
+                        softwareBitmap.recycle()
+                        prefs.edit()
+                            .putString("tap_learning_screenshot_$stage", file.absolutePath)
+                            .remove("tap_learning_screenshot_error_$stage")
+                            .apply()
+                    } catch (error: Throwable) {
+                        if (attempt < 2) {
+                            uiHandler.postDelayed({ saveLearningScreenshot(stage, attempt + 1) }, 700L)
+                        } else {
+                            prefs.edit()
+                                .putString(
+                                    "tap_learning_screenshot_error_$stage",
+                                    error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName,
+                                )
+                                .apply()
+                        }
+                    } finally {
+                        runCatching { hardwareBitmap?.recycle() }
+                        runCatching { hardwareBuffer?.close() }
+                    }
+                }
 
-        val width = resources.displayMetrics.widthPixels.coerceAtLeast(1).toFloat()
-        val height = resources.displayMetrics.heightPixels.coerceAtLeast(1).toFloat()
-        val xRatio = (bounds.centerX() / width).coerceIn(0f, 1f)
-        val yRatio = (bounds.centerY() / height).coerceIn(0f, 1f)
-        val appPackage = event.packageName?.toString().orEmpty()
+                override fun onFailure(errorCode: Int) {
+                    if (attempt < 2) {
+                        uiHandler.postDelayed({ saveLearningScreenshot(stage, attempt + 1) }, 700L)
+                    } else {
+                        prefs.edit()
+                            .putString("tap_learning_screenshot_error_$stage", "Android לא אפשר צילום מסך (קוד $errorCode)")
+                            .apply()
+                    }
+                }
+            },
+        )
+    }
+
+    private fun captureLearningTap(screenX: Float, screenY: Float) {
+        val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+        if (!prefs.getBoolean("tap_learning", false)) return
+
+        val metrics = resources.displayMetrics
+        val width = metrics.widthPixels.coerceAtLeast(1).toFloat()
+        val height = metrics.heightPixels.coerceAtLeast(1).toFloat()
+        val xRatio = (screenX / width).coerceIn(0f, 1f)
+        val yRatio = (screenY / height).coerceIn(0f, 1f)
+        val targetPackage = prefs.getString("tap_learning_package", "").orEmpty()
+        val stage = prefs.getInt("tap_learning_stage", 1).coerceIn(1, 2)
+        if (targetPackage.isBlank()) {
+            cancelLearning()
+            return
+        }
+
+        val appName = runCatching {
+            packageManager.getApplicationLabel(
+                packageManager.getApplicationInfo(targetPackage, 0)
+            ).toString()
+        }.getOrDefault("")
 
         prefs.edit()
-            .putBoolean("tap_learning", false)
             .putBoolean("tap_capture_ready", true)
             .putFloat("tap_capture_x_ratio", xRatio)
             .putFloat("tap_capture_y_ratio", yRatio)
-            .putString("tap_capture_package", appPackage)
-            .putString(
-                "tap_capture_app_name",
-                runCatching {
-                    packageManager.getApplicationLabel(packageManager.getApplicationInfo(appPackage, 0)).toString()
-                }.getOrDefault("")
-            )
+            .putInt("tap_capture_stage", stage)
+            .putString("tap_capture_package", targetPackage)
+            .putString("tap_capture_app_name", appName)
+            .putBoolean("tap_learning", false)
+            .remove("tap_learning_stage")
+            .remove("tap_learning_multi")
+            .apply()
+
+        // Hide the learning panel before taking the screenshot so the stored
+        // image represents the target app itself, not the teaching overlay.
+        tapLearningOverlay.hide()
+        uiHandler.postDelayed({ saveLearningScreenshot(stage) }, 350L)
+        uiHandler.postDelayed({ openEditor() }, 700L)
+    }
+
+    private fun cancelLearning() {
+        getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+            .edit()
+            .putBoolean("tap_learning", false)
+            .putBoolean("tap_capture_ready", false)
+            .remove("tap_learning_stage")
+            .remove("tap_learning_screenshot_1")
+            .remove("tap_learning_screenshot_2")
+            .remove("tap_learning_screenshot_error_1")
+            .remove("tap_learning_screenshot_error_2")
+            .remove("tap_learning_multi")
             .apply()
         tapLearningOverlay.hide()
+    }
 
+    private fun captureTapLocationIfRequested(event: AccessibilityEvent): Boolean {
+        // Location learning is handled by the accessibility overlay itself.
+        // Returning false keeps normal accessibility event processing intact.
+        return false
+    }
+
+    private fun openEditor() {
         runCatching {
+            // Bring the existing editor instance back to the front so its draft
+            // (including point 1) is preserved for point 2.
             startActivity(
                 Intent(this, DashboardActivity::class.java).addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 )
             )
         }
-        return true
     }
 
-    override fun onInterrupt() = Unit
-    override fun onUnbind(intent: Intent?): Boolean = true
-
-    override fun onDestroy() {
-        tapLearningOverlay.destroy()
-        tapCountOverlay.destroy()
-        if (instance === this) instance = null
-        serviceScope.cancel()
-        super.onDestroy()
+    private fun replayLearningTouch(screenX: Float, screenY: Float) {
+        // Intentionally unused: learning captures the point without replaying
+        // a click into the target app.
     }
 }

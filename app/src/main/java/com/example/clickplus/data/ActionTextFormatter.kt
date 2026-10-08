@@ -3,34 +3,30 @@ package com.example.clickplus.data
 import java.util.Locale
 
 object ActionTextFormatter {
-    fun actionDetails(config: KeyActionConfig, profileName: String? = null): String = when (config.actionType) {
-        ActionType.SYSTEM -> {
-            val action = SystemActionPreset.entries.firstOrNull { it.id == config.systemActionId }
-            when (action?.id) {
-                SystemActionPreset.DIAL_NUMBER.id ->
-                    "חיוג ל-" + config.actionParameter.ifBlank { "מספר" }
-                SystemActionPreset.DIAL_CONTACT.id ->
-                    "חיוג ל-" + config.contactName.ifBlank { "איש קשר" }
-                else -> action?.titleHebrew ?: config.systemActionId.ifBlank { "פעולת מכשיר" }
+    fun actionDetails(config: KeyActionConfig, profileName: String? = null): String =
+        when (config.actionType) {
+            ActionType.SYSTEM -> {
+                val action = SystemActionPreset.entries.firstOrNull { it.id == config.systemActionId }
+                when (action?.id) {
+                    SystemActionPreset.DIAL_NUMBER.id ->
+                        "חיוג ל-" + config.actionParameter.ifBlank { "מספר" }
+                    SystemActionPreset.DIAL_CONTACT.id ->
+                        "חיוג ל-" + config.contactName.ifBlank { "איש קשר" }
+                    else -> action?.titleHebrew ?: config.systemActionId.ifBlank { "פעולת מכשיר" }
+                }
             }
-        }
-        ActionType.APP ->
-            "פתיחת " + config.targetAppName.ifBlank { "האפליקציה שנבחרה" }
-        ActionType.APP_TAP -> {
-            val app = config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" }
-            val count = config.screenTapCount.coerceIn(1, 10)
-            if (count == 1) {
+            ActionType.APP ->
+                "פתיחת " + config.targetAppName.ifBlank { "האפליקציה שנבחרה" }
+            ActionType.APP_TAP -> {
+                val app = config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" }
                 "פתיחת $app וביצוע לחיצה במיקום שנלמד"
-            } else {
-                "פתיחת $app וביצוע $count לחיצות במיקום שנלמד"
             }
+            ActionType.MULTI_POINT_TAP ->
+                "פתיחת " + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } +
+                    " וביצוע שתי לחיצות במיקומים שנלמדו"
+            ActionType.PROFILE ->
+                "מעבר לפרופיל שנבחר"
         }
-        ActionType.MULTI_POINT_TAP ->
-            "פתיחת " + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } +
-                " וביצוע שתי לחיצות במיקומים שנלמדו"
-        ActionType.PROFILE ->
-            "מעבר לפרופיל " + (profileName?.ifBlank { null } ?: "שנבחר")
-    }
 
     fun actionLabel(config: KeyActionConfig, profileName: String? = null): String =
         config.name.ifBlank { actionDetails(config, profileName) }
