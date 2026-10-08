@@ -64,6 +64,23 @@ class AdvancedRuleRepository(private val context: Context) {
         fun activeProfileId(context: Context): String =
             AdvancedRuleRepository(context).activeProfileId()
 
+        internal fun normalizeProfiles(
+            items: List<ClickPlusProfile>,
+            storedActiveId: String = "",
+        ): Pair<List<ClickPlusProfile>, String> {
+            val safeList = if (items.isEmpty()) {
+                listOf(ClickPlusProfile("default", "כללי", true))
+            } else {
+                items
+            }
+            val activeId = when {
+                safeList.any { it.id == storedActiveId } -> storedActiveId
+                safeList.any { it.enabled } -> safeList.first { it.enabled }.id
+                else -> safeList.first().id
+            }
+            return safeList.map { it.copy(enabled = it.id == activeId) } to activeId
+        }
+
         fun logs(context: Context): List<ActivityLog> =
             runCatching {
                 val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LOGS, "[]") ?: "[]"
@@ -174,20 +191,15 @@ class AdvancedRuleRepository(private val context: Context) {
     }
 
     fun saveProfiles(items: List<ClickPlusProfile>) {
-        val safeList = if (items.isEmpty()) listOf(ClickPlusProfile("default", "כללי", true)) else items
         val storedActive = prefs.getString(ACTIVE_PROFILE, "").orEmpty()
-        val activeId = when {
-            safeList.any { it.id == storedActive } -> storedActive
-            safeList.any { it.enabled } -> safeList.first { it.enabled }.id
-            else -> safeList.first().id
-        }
+        val (safeList, activeId) = normalizeProfiles(items, storedActive)
         val array = JSONArray()
         safeList.forEach {
             array.put(
                 JSONObject()
                     .put("id", it.id)
                     .put("name", it.name)
-                    .put("enabled", it.id == activeId),
+                    .put("enabled", it.enabled),
             )
         }
         prefs.edit()
