@@ -65,8 +65,14 @@ class AdvancedRuleRepository(private val context: Context) {
                 .ifBlank { "default" }
 
         fun setActiveProfileId(context: Context, profileId: String) {
+            val repo = AdvancedRuleRepository(context)
+            val profiles = repo.profiles()
+            val selected = profiles.firstOrNull { it.id == profileId && it.enabled }?.id
+                ?: profiles.firstOrNull { it.id == "default" && it.enabled }?.id
+                ?: profiles.firstOrNull { it.enabled }?.id
+                ?: "default"
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(ACTIVE_PROFILE, profileId.ifBlank { "default" }).apply()
+                .edit().putString(ACTIVE_PROFILE, selected).apply()
         }
 
         fun isRuleInActiveProfile(context: Context, ruleId: String): Boolean {
