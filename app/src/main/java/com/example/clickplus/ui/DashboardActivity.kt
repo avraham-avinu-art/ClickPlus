@@ -1457,21 +1457,6 @@ private fun SettingsScreen(
 
             item {
                 SettingCard("מראה", "בחירת ערכת הצבעים של האפליקציה.") {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("הצגת מונה לחיצות", Modifier.weight(1f))
-                        Switch(
-                            checked = showTapCount,
-                            onCheckedChange = onShowTapCount,
-                        )
-                    }
-                }
-            }
-
-            item {
-                SettingCard("מראה", "בחירת ערכת הצבעים של האפליקציה.") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         ThemeChip("מערכת", "system", themeMode, onTheme, Icons.Outlined.BrightnessAuto)
                         ThemeChip("בהיר", "light", themeMode, onTheme, Icons.Outlined.LightMode)
