@@ -280,6 +280,7 @@ private fun ClickPlusDashboard(
     val showTapCount by prefs.showTapCountFlow.collectAsState(initial = false)
     val tapCountX by prefs.tapCountXFlow.collectAsState(initial = 50)
     val tapCountY by prefs.tapCountYFlow.collectAsState(initial = 65)
+    val tapCountSize by prefs.tapCountSizeFlow.collectAsState(initial = 48)
     var route by remember { mutableStateOf<DashboardRoute>(DashboardRoute.Home) }
     var themeMode by remember { mutableStateOf(advanced.themeMode()) }
     var mode by remember { mutableStateOf(AdvancedRuleRepository.currentMode(context)) }
@@ -340,6 +341,7 @@ private fun ClickPlusDashboard(
                     showTapCount = showTapCount,
                     tapCountX = tapCountX,
                     tapCountY = tapCountY,
+                    tapCountSize = tapCountSize,
                     currentMode = mode,
                     themeMode = themeMode,
                     onBack = { route = DashboardRoute.Home },
@@ -348,6 +350,7 @@ private fun ClickPlusDashboard(
                     onShowTapCount = { v -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveShowTapCount(v) } },
                     onTapCountX = { v -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapCountX(v) } },
                     onTapCountY = { v -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapCountY(v) } },
+                    onTapCountSize = { v -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapCountSize(v) } },
                     onMode = { v -> mode = v; AdvancedRuleRepository.setMode(context, v) },
                     onTheme = { v -> themeMode = v; advanced.saveThemeMode(v) },
                     onBackup = { route = DashboardRoute.Backup },
@@ -1198,6 +1201,7 @@ private fun SettingsScreen(
     showTapCount: Boolean,
     tapCountX: Int,
     tapCountY: Int,
+    tapCountSize: Int,
     currentMode: AppMode,
     themeMode: String,
     onBack: () -> Unit,
@@ -1206,6 +1210,7 @@ private fun SettingsScreen(
     onShowTapCount: (Boolean) -> Unit,
     onTapCountX: (Int) -> Unit,
     onTapCountY: (Int) -> Unit,
+    onTapCountSize: (Int) -> Unit,
     onMode: (AppMode) -> Unit,
     onTheme: (String) -> Unit,
     onBackup: () -> Unit,
@@ -1301,6 +1306,13 @@ private fun SettingsScreen(
                         value = tapCountY.toFloat(),
                         onValueChange = { onTapCountY(it.toInt()) },
                         valueRange = 0f..100f,
+                    )
+                    Text("גודל החיווי: " + tapCountSize + "dp")
+                    Slider(
+                        value = tapCountSize.toFloat(),
+                        onValueChange = { onTapCountSize(it.toInt()) },
+                        valueRange = 32f..96f,
+                        steps = 15,
                     )
                     PositionPreview(tapCountX, tapCountY)
                 }
