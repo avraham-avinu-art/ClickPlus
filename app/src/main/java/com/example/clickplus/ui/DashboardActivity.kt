@@ -2589,6 +2589,15 @@ private fun EditorScreen(
                         selectedId = metadata.profileId,
                         onSelect = { metadata = metadata.copy(profileId = it) },
                     )
+
+                    val selectedProfile = repo.profiles().firstOrNull { it.id == metadata.profileId }
+                    if (selectedProfile != null && selectedProfile.id != repo.activeProfileId()) {
+                        Text(
+                            "הפעולה משויכת לפרופיל שאינו פעיל כרגע. היא תפעל רק כאשר הפרופיל הזה יהיה פעיל.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
                 }
             }
 
