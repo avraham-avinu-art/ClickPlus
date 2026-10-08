@@ -443,6 +443,8 @@ internal fun LearningScreenshotPreview(
         runCatching { BitmapFactory.decodeFile(filePath)?.asImageBitmap() }.getOrNull()
     } ?: return
 
+    val previewPrimary = MaterialTheme.colorScheme.primary
+    val previewSurface = MaterialTheme.colorScheme.surface
     Box(
         Modifier
             .fillMaxWidth()
@@ -466,12 +468,12 @@ internal fun LearningScreenshotPreview(
             val px = offsetX + shownWidth * x.coerceIn(0f, 1f)
             val py = offsetY + shownHeight * y.coerceIn(0f, 1f)
             drawCircle(
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
+                previewPrimary.copy(alpha = 0.24f),
                 radius = 30f,
                 center = Offset(px, py),
             )
             drawCircle(
-                MaterialTheme.colorScheme.primary,
+                previewPrimary,
                 radius = 10f,
                 center = Offset(px, py),
             )
@@ -479,7 +481,7 @@ internal fun LearningScreenshotPreview(
         Surface(
             Modifier.align(Alignment.TopEnd).padding(8.dp),
             shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+            color = previewSurface.copy(alpha = 0.9f),
         ) {
             Text(
                 "צילום מסך · המיקום שנלמד",
