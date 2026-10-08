@@ -122,6 +122,7 @@ data class KeyActionConfig(
     val screenTapSecondXRatio: Float = -1f,
     val screenTapSecondYRatio: Float = -1f,
     val screenTapIntervalMs: Long = 1000L,
+    val screenTapCount: Int = 1,
     val screenTapToleranceRatio: Float = 0.08f
 ) {
     fun pressSummary(): String =
@@ -180,6 +181,7 @@ data class KeyActionConfig(
         put("screenTapXRatio", screenTapXRatio); put("screenTapYRatio", screenTapYRatio)
         put("screenTapSecondXRatio", screenTapSecondXRatio); put("screenTapSecondYRatio", screenTapSecondYRatio)
         put("screenTapIntervalMs", screenTapIntervalMs)
+        put("screenTapCount", screenTapCount.coerceIn(1, 10))
         put("screenTapToleranceRatio", screenTapToleranceRatio)
     }
 
@@ -221,6 +223,7 @@ data class KeyActionConfig(
             screenTapSecondXRatio = json.optDouble("screenTapSecondXRatio", -1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(-1f, 1f) ?: -1f,
             screenTapSecondYRatio = json.optDouble("screenTapSecondYRatio", -1.0).toFloat().takeIf { it.isFinite() }?.coerceIn(-1f, 1f) ?: -1f,
             screenTapIntervalMs = json.optLong("screenTapIntervalMs", 1000L).coerceIn(500L, 10_000L),
+            screenTapCount = json.optInt("screenTapCount", 1).coerceIn(1, 10),
             screenTapToleranceRatio = json.optDouble("screenTapToleranceRatio", 0.08).toFloat().coerceIn(0.01f, 0.25f)
         )
     }
@@ -298,8 +301,11 @@ class AppPreferencesRepository(private val context: Context) {
     val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { it[ONBOARDING_COMPLETED] ?: false }
 
     suspend fun saveBackgroundOnly(enabled: Boolean) {
-        context.dataStore.edit { it[BACKGROUND_ONLY] = true }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE).edit().putBoolean("background_only", true).apply()
+        context.dataStore.edit { it[BACKGROUND_ONLY] = enabled }
+        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("background_only", enabled)
+            .apply()
     }
     suspend fun saveTapTimeout(ms: Long) {
         val safe = ms.coerceIn(300L, 1500L)
