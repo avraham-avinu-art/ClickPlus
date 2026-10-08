@@ -14,9 +14,11 @@ import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.SystemActionPreset
+import java.util.UUID
 
 class ActionExecutor(private val service: AccessibilityService) : ClickActionPerformer {
     private val handler = Handler(Looper.getMainLooper())
+
     override fun supports(config: KeyActionConfig): Boolean {
         return config.actionType == ActionType.APP_TAP ||
             config.actionType == ActionType.APP ||
@@ -45,7 +47,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         } catch (error: Throwable) {
             ActionExecutionResult.failure(
                 "Android לא הצליח לבצע את הפעולה: " +
-                    (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName)
+                    (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName),
             )
         }
     }
@@ -68,8 +70,20 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
         service.startActivity(intent)
 
-        scheduleTapWhenAppIsVisible(config, targetPackage, xRatio, yRatio)
-        return ActionExecutionResult.pending("האפליקציה נפתחה; ממתינים להופעתה על המסך ואז תתבצע הלחיצה")
+        val executionId = UUID.randomUUID().toString()
+        scheduleTapWhenAppIsVisible(
+            config = config,
+            targetPackage = targetPackage,
+            xRatio = xRatio,
+            yRatio = yRatio,
+            tapCount = config.actionTapCount.coerceIn(1, 10),
+            executionId = executionId,
+        )
+
+        return ActionExecutionResult.pending(
+            "האפליקציה נפתחה; ממתינים להופעתה על המסך ואז תתבצע הלחיצה",
+            executionId,
+        )
     }
 
     private fun scheduleTapWhenAppIsVisible(
@@ -77,6 +91,8 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         targetPackage: String,
         xRatio: Float,
         yRatio: Float,
+        tapCount: Int,
+        executionId: String,
     ) {
         val startedAt = System.currentTimeMillis()
         val timeoutMs = 6000L
@@ -84,18 +100,31 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         val check = object : Runnable {
             override fun run() {
                 if (System.currentTimeMillis() - startedAt >= timeoutMs) {
-                    logAppTapResult(config, targetPackage, false, "האפליקציה נפתחה, אך לא זוהתה בחזית בתוך 6 שניות")
+                    logAppTapResult(
+                        config,
+                        targetPackage,
+                        executionId,
+                        false,
+                        "האפליקציה נפתחה, אך לא זוהתה בחזית בתוך 6 שניות",
+                    )
                     return
                 }
 
-                val foregroundPackage = service.rootInActiveWindow?.packageName?.toString().orEmpty()
-                if (foregroundPackage == targetPackage) {
-                    dispatchLearnedTap(config, targetPackage, xRatio, yRatio)
+                if (service.isPackageInForeground(targetPackage)) {
+                    dispatchLearnedTap(
+                        config,
+                        targetPackage,
+                        xRatio,
+                        yRatio,
+                        tapCount,
+                        executionId,
+                    )
                 } else {
-                    handler.postDelayed(this, 150L)
+                    handler.postDelayed(this, 80L)
                 }
             }
         }
+
         handler.post(check)
     }
 
@@ -104,6 +133,8 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         targetPackage: String,
         xRatio: Float,
         yRatio: Float,
+        tapCount: Int,
+        executionId: String,
     ) {
         val metrics = service.resources.displayMetrics
         val width = metrics.widthPixels.coerceAtLeast(1).toFloat()
@@ -111,50 +142,77 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         val x = (xRatio * width).coerceIn(0f, width - 1f)
         val y = (yRatio * height).coerceIn(0f, height - 1f)
 
-        val path = Path().apply { moveTo(x, y) }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0L, 60L))
-            .build()
+        fun sendTap(index: Int) {
+            if (index >= tapCount) {
+                logAppTapResult(
+                    config,
+                    targetPackage,
+                    executionId,
+                    true,
+                    "בוצעו " + tapCount + " לחיצות ב-X " +
+                        (xRatio * 100f).toInt() + "% · Y " +
+                        (yRatio * 100f).toInt() + "%",
+                )
+                return
+            }
 
-        runCatching {
-            service.dispatchGesture(
-                gesture,
-                object : AccessibilityService.GestureResultCallback() {
-                    override fun onCompleted(gestureDescription: GestureDescription?) {
-                        super.onCompleted(gestureDescription)
-                        logAppTapResult(
-                            config,
-                            targetPackage,
-                            true,
-                            "הלחיצה בוצעה ב-X ${(xRatio * 100f).toInt()}% · Y ${(yRatio * 100f).toInt()}%",
-                        )
-                    }
+            val path = Path().apply { moveTo(x, y) }
+            val gesture = GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0L, 70L))
+                .build()
 
-                    override fun onCancelled(gestureDescription: GestureDescription?) {
-                        super.onCancelled(gestureDescription)
-                        logAppTapResult(config, targetPackage, false, "Android ביטל את הלחיצה באפליקציית היעד")
-                    }
-                },
-                handler,
-            )
-        }.onFailure { error ->
-            logAppTapResult(
-                config,
-                targetPackage,
-                false,
-                "לא ניתן לשלוח את הלחיצה: " + (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName),
-            )
+            runCatching {
+                service.dispatchGesture(
+                    gesture,
+                    object : AccessibilityService.GestureResultCallback() {
+                        override fun onCompleted(gestureDescription: GestureDescription?) {
+                            super.onCompleted(gestureDescription)
+                            if (index + 1 < tapCount) {
+                                handler.postDelayed({ sendTap(index + 1) }, 90L)
+                            } else {
+                                sendTap(tapCount)
+                            }
+                        }
+
+                        override fun onCancelled(gestureDescription: GestureDescription?) {
+                            super.onCancelled(gestureDescription)
+                            logAppTapResult(
+                                config,
+                                targetPackage,
+                                executionId,
+                                false,
+                                "Android ביטל את לחיצה מספר " +
+                                    (index + 1) + " באפליקציית היעד",
+                            )
+                        }
+                    },
+                    handler,
+                )
+            }.onFailure { error ->
+                logAppTapResult(
+                    config,
+                    targetPackage,
+                    executionId,
+                    false,
+                    "לא ניתן לשלוח לחיצה מספר " + (index + 1) + ": " +
+                        (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName),
+                )
+            }
         }
+
+        sendTap(0)
     }
+
     private fun logAppTapResult(
         config: KeyActionConfig,
         targetPackage: String,
+        executionId: String,
         success: Boolean,
         detail: String,
     ) {
-        AdvancedRuleRepository.updateLatestPendingActionLog(
+        AdvancedRuleRepository.updatePendingActionLog(
             context = service,
-            ruleId = config.id,
+            logId = executionId,
             appPackage = targetPackage,
             success = success,
             detail = detail,
@@ -201,7 +259,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
     } catch (error: Throwable) {
         ActionExecutionResult.failure(
             "Android לא הצליח לפתוח את המסך: " +
-                (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName)
+                (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName),
         )
     }
 
@@ -219,7 +277,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         audio.adjustSuggestedStreamVolume(
             direction,
             AudioManager.USE_DEFAULT_STREAM_TYPE,
-            AudioManager.FLAG_SHOW_UI
+            AudioManager.FLAG_SHOW_UI,
         )
         return ActionExecutionResult.success(reason)
     }
