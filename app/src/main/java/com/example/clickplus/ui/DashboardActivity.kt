@@ -2852,6 +2852,7 @@ private fun PointEditor(
     y: Float,
     toleranceX: Float,
     toleranceY: Float,
+    screenshot: androidx.compose.ui.graphics.ImageBitmap? = null,
     onChange: (Float, Float) -> Unit,
 ) {
     val safeX = x.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f
@@ -2864,11 +2865,24 @@ private fun PointEditor(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("תצוגה מקדימה · גרור את הנקודה למיקום המדויק")
         Box(
-            Modifier.fillMaxWidth().height(210.dp).background(
-                surfaceColor,
-                RoundedCornerShape(18.dp),
-            ),
+            Modifier
+                .fillMaxWidth()
+                .height(210.dp)
+                .background(
+                    surfaceColor,
+                    RoundedCornerShape(18.dp),
+                ),
         ) {
+            if (screenshot != null) {
+                Image(
+                    bitmap = screenshot,
+                    contentDescription = "צילום מסך של האפליקציה",
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(2.dp),
+                )
+            }
             Canvas(
                 Modifier
                     .fillMaxSize()
