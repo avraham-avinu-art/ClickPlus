@@ -60,14 +60,31 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         }
     }
 
+    private fun pointForCurrentOrientation(
+        config: KeyActionConfig,
+        second: Boolean,
+    ): Pair<Float, Float> {
+        val defaultX = if (second) config.screenTapSecondXRatio else config.screenTapXRatio
+        val defaultY = if (second) config.screenTapSecondYRatio else config.screenTapYRatio
+        val meta = AdvancedRuleRepository(service).getRuleMetadata(config.id)
+        if (!meta.useOrientationSpecificPosition) return defaultX to defaultY
+
+        val landscape = service.resources.configuration.orientation ==
+            android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val x = if (landscape) meta.landscapeX else meta.portraitX
+        val y = if (landscape) meta.landscapeY else meta.portraitY
+        return if (x >= 0f && y >= 0f) x to y else defaultX to defaultY
+    }
+
     private fun executeAppTap(config: KeyActionConfig): ActionExecutionResult {
         val targetPackage = config.screenTapPackage.trim()
         if (targetPackage.isBlank()) {
             return ActionExecutionResult.failure("לא נבחרה אפליקציה לביצוע הלחיצה")
         }
 
-        val xRatio = config.screenTapXRatio.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
-        val yRatio = config.screenTapYRatio.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
+        val point = pointForCurrentOrientation(config, second = false)
+        val xRatio = point.first.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
+        val yRatio = point.second.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
         if (xRatio == null || yRatio == null || config.screenTapXRatio < 0f || config.screenTapYRatio < 0f) {
             return ActionExecutionResult.failure("לא נלמד מיקום לחיצה תקין באפליקציה")
         }
@@ -89,10 +106,12 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
     private fun executeMultiPointTap(config: KeyActionConfig): ActionExecutionResult {
         val targetPackage = config.screenTapPackage.trim()
         if (targetPackage.isBlank()) return ActionExecutionResult.failure("לא נבחרה אפליקציה")
-        val x1 = config.screenTapXRatio
-        val y1 = config.screenTapYRatio
-        val x2 = config.screenTapSecondXRatio
-        val y2 = config.screenTapSecondYRatio
+        val first = pointForCurrentOrientation(config, second = false)
+        val second = pointForCurrentOrientation(config, second = true)
+        val x1 = first.first
+        val y1 = first.second
+        val x2 = second.first
+        val y2 = second.second
         if (x1 < 0f || y1 < 0f || x2 < 0f || y2 < 0f) {
             return ActionExecutionResult.failure("לא נלמדו שתי נקודות לחיצה")
         }
@@ -125,7 +144,17 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                     return
                 }
                 if (service.rootInActiveWindow?.packageName?.toString().orEmpty() == targetPackage) {
-                    dispatchTwoTaps(config, targetPackage, x1, y1, x2, y2, executionId)
+                    val meta = AdvancedRuleRepository(service).getRuleMetadata(config.id)
+                    val delayMs = (if (meta.delayMs > 0L) meta.delayMs else AppPreferencesRepository.actionDelaySnapshot(service))
+                        .coerceIn(0L, 10_000L)
+                    if (delayMs == 0L) {
+                        dispatchTwoTaps(config, targetPackage, x1, y1, x2, y2, executionId)
+                    } else {
+                        handler.postDelayed(
+                            { dispatchTwoTaps(config, targetPackage, x1, y1, x2, y2, executionId) },
+                            delayMs,
+                        )
+                    }
                 } else handler.postDelayed(this, 150L)
             }
         }
@@ -156,6 +185,16 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                 override fun onCompleted(gestureDescription: GestureDescription?) {
                     val delay = config.screenTapIntervalMs.coerceIn(500L, 10_000L)
                     handler.postDelayed({
+                        if (service.rootInActiveWindow?.packageName?.toString().orEmpty() != targetPackage) {
+                            logAppTapResult(
+                                config,
+                                targetPackage,
+                                false,
+                                "אפליקציית היעד יצאה מהחזית לפני הלחיצה השנייה",
+                                executionId,
+                            )
+                            return@postDelayed
+                        }
                         val path2 = Path().apply {
                             moveTo((x2 * width).coerceIn(0f, width - 1f), (y2 * height).coerceIn(0f, height - 1f))
                         }
@@ -203,7 +242,17 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
 
                 val foregroundPackage = service.rootInActiveWindow?.packageName?.toString().orEmpty()
                 if (foregroundPackage == targetPackage) {
-                    dispatchLearnedTap(config, targetPackage, xRatio, yRatio, executionId)
+                    val meta = AdvancedRuleRepository(service).getRuleMetadata(config.id)
+                    val delayMs = (if (meta.delayMs > 0L) meta.delayMs else AppPreferencesRepository.actionDelaySnapshot(service))
+                        .coerceIn(0L, 10_000L)
+                    if (delayMs == 0L) {
+                        dispatchLearnedTap(config, targetPackage, xRatio, yRatio, executionId)
+                    } else {
+                        handler.postDelayed(
+                            { dispatchLearnedTap(config, targetPackage, xRatio, yRatio, executionId) },
+                            delayMs,
+                        )
+                    }
                 } else {
                     handler.postDelayed(this, 150L)
                 }
@@ -224,6 +273,17 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         val height = metrics.heightPixels.coerceAtLeast(1).toFloat()
         val x = (xRatio * width).coerceIn(0f, width - 1f)
         val y = (yRatio * height).coerceIn(0f, height - 1f)
+
+        if (service.rootInActiveWindow?.packageName?.toString().orEmpty() != targetPackage) {
+            logAppTapResult(
+                config,
+                targetPackage,
+                false,
+                "אפליקציית היעד כבר אינה בחזית בזמן הלחיצה",
+                executionId,
+            )
+            return
+        }
 
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
