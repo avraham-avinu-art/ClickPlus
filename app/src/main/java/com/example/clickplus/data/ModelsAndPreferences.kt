@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -32,7 +34,10 @@ enum class SystemActionPreset(val id: String, val titleHebrew: String) {
 data class KeyActionConfig(
     val id: String = java.util.UUID.randomUUID().toString(),
     val name: String = "",
+    /** Number of trigger presses/entries required to activate the rule. */
     val pressCount: Int = 1,
+    /** Number of taps performed by an APP_TAP action after the target app is visible. */
+    val actionTapCount: Int = 1,
     val actionType: ActionType = ActionType.SYSTEM,
     val systemActionId: String = SystemActionPreset.HOME.id,
     val targetPackage: String = "",
@@ -48,12 +53,32 @@ data class KeyActionConfig(
     val screenTapYRatio: Float = -1f,
     val screenTapToleranceRatio: Float = 0.08f
 ) {
-    fun pressSummary(): String = if (pressCount == 1) "כניסה אחת" else pressCount.toString() + " כניסות"
+    fun pressSummary(): String = when {
+        triggerType == TriggerType.SCREEN_TAP && pressCount == 1 -> "לחיצה אחת"
+        triggerType == TriggerType.SCREEN_TAP -> pressCount.toString() + " לחיצות"
+        pressCount == 1 -> "כניסה אחת"
+        else -> pressCount.toString() + " כניסות"
+    }
+
+    fun triggerSummary(): String = when (triggerType) {
+        TriggerType.APP_ENTRY -> {
+            val condition = contextSummary()
+            "כניסה לאפליקציה · " + condition + " · " + pressSummary()
+        }
+        TriggerType.SCREEN_TAP -> {
+            "לחיצה במיקום · " + screenTapAppName.ifBlank { "אפליקציה" } + " · " + pressSummary()
+        }
+    }
+
     fun actionSummary(): String = when (actionType) {
         ActionType.SYSTEM -> SystemActionPreset.entries.firstOrNull { it.id == systemActionId }?.titleHebrew ?: "פעולת מערכת"
         ActionType.APP -> "פתיחת " + targetAppName.ifBlank { "אפליקציה" }
-        ActionType.APP_TAP -> "לחיצה ב-" + screenTapAppName.ifBlank { "אפליקציה" }
+        ActionType.APP_TAP -> {
+            val countText = if (actionTapCount == 1) "לחיצה" else actionTapCount.toString() + " לחיצות"
+            "פתיחה+" + countText + " · " + screenTapAppName.ifBlank { "אפליקציה" }
+        }
     }
+
     fun contextSummary(): String {
         if (triggerType == TriggerType.SCREEN_TAP) {
             val x = if (screenTapXRatio >= 0f) (screenTapXRatio * 100f).toInt().toString() + "%" else "לא הוגדר"
@@ -70,7 +95,7 @@ data class KeyActionConfig(
         }
     }
     fun toJson() = JSONObject().apply {
-        put("id", id); put("name", name); put("pressCount", pressCount)
+        put("id", id); put("name", name); put("pressCount", pressCount); put("actionTapCount", actionTapCount)
         put("actionType", actionType.name); put("systemActionId", systemActionId)
         put("targetPackage", targetPackage); put("targetAppName", targetAppName)
         put("contextConditionType", contextConditionType.name)
@@ -85,6 +110,7 @@ data class KeyActionConfig(
             id = json.optString("id", java.util.UUID.randomUUID().toString()),
             name = json.optString("name", json.optString("customLabel", "")),
             pressCount = json.optInt("pressCount", json.optInt("tapCount", 1)).coerceIn(1, 10),
+            actionTapCount = json.optInt("actionTapCount", 1).coerceIn(1, 10),
             actionType = runCatching { ActionType.valueOf(json.optString("actionType", ActionType.SYSTEM.name)) }.getOrDefault(ActionType.SYSTEM),
             systemActionId = json.optString("systemActionId", SystemActionPreset.HOME.id),
             targetPackage = json.optString("targetPackage", ""),
@@ -124,18 +150,18 @@ class AppPreferencesRepository(private val context: Context) {
                 .getLong("action_delay_ms", 0L)
                 .coerceIn(0L, 5000L)
 
-        fun mappingsSnapshot(context: Context): List<KeyActionConfig> {
-            val raw = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                .getString("mappings_json", "[]") ?: "[]"
-            return runCatching {
-                val array = JSONArray(raw)
-                buildList {
-                    for (i in 0 until array.length()) {
-                        array.optJSONObject(i)?.let { add(KeyActionConfig.fromJson(it)) }
+        fun mappingsSnapshot(context: Context): List<KeyActionConfig> =
+            runBlocking {
+                runCatching {
+                    val prefs = context.dataStore.data.first()
+                    val array = JSONArray(prefs[MAPPINGS_JSON] ?: "[]")
+                    buildList {
+                        for (i in 0 until array.length()) {
+                            array.optJSONObject(i)?.let { add(KeyActionConfig.fromJson(it)) }
+                        }
                     }
-                }
-            }.getOrDefault(emptyList())
-        }
+                }.getOrDefault(emptyList())
+            }
     }
 
     val backgroundOnlyFlow: Flow<Boolean> = context.dataStore.data.map { it[BACKGROUND_ONLY] ?: true }
@@ -153,28 +179,21 @@ class AppPreferencesRepository(private val context: Context) {
     val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { it[ONBOARDING_COMPLETED] ?: false }
 
     suspend fun saveBackgroundOnly(enabled: Boolean) {
-        context.dataStore.edit { it[BACKGROUND_ONLY] = true }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE).edit().putBoolean("background_only", true).apply()
+        context.dataStore.edit { it[BACKGROUND_ONLY] = enabled }
     }
     suspend fun saveTapTimeout(ms: Long) {
         val safe = ms.coerceIn(300L, 1500L)
         context.dataStore.edit { it[TAP_TIMEOUT_MS] = safe }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit().putLong("tap_timeout_ms", safe).apply()
     }
     suspend fun saveActionDelay(ms: Long) {
         val safe = ms.coerceIn(0L, 5000L)
         context.dataStore.edit { it[ACTION_DELAY_MS] = safe }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit().putLong("action_delay_ms", safe).apply()
     }
     suspend fun saveShowTapCount(enabled: Boolean) { context.dataStore.edit { it[SHOW_TAP_COUNT] = enabled } }
     suspend fun setOnboardingCompleted(completed: Boolean) { context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed } }
     suspend fun saveMappings(mappings: List<KeyActionConfig>) {
         val array = JSONArray()
         mappings.forEach { array.put(it.toJson()) }
-        val raw = array.toString()
-        context.dataStore.edit { it[MAPPINGS_JSON] = raw }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE).edit().putString("mappings_json", raw).apply()
+        context.dataStore.edit { it[MAPPINGS_JSON] = array.toString() }
     }
 }
