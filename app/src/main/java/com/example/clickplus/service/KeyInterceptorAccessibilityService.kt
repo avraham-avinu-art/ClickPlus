@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo
 import android.graphics.Rect
 import android.os.Build
 import android.provider.Settings
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import androidx.core.app.NotificationCompat
 import com.example.clickplus.data.AdvancedRuleRepository
@@ -214,6 +215,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             )
             .apply()
         tapLearningOverlay.hide()
+        captureScreenPreview()
 
         runCatching {
             startActivity(
@@ -223,6 +225,55 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             )
         }
         return true
+    }
+
+    private fun captureScreenPreview() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+
+        runCatching {
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                mainExecutor,
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: ScreenshotResult) {
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+                        runCatching {
+                            val source = Bitmap.wrapHardwareBuffer(
+                                screenshot.hardwareBuffer,
+                                screenshot.colorSpace,
+                            )
+                            val bitmap = source?.copy(Bitmap.Config.ARGB_8888, false)
+                            screenshot.hardwareBuffer.close()
+                            source?.recycle()
+
+                            if (bitmap != null) {
+                                val file = java.io.File(cacheDir, "tap-preview-" + System.currentTimeMillis() + ".png")
+                                file.outputStream().use {
+                                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                                }
+                                bitmap.recycle()
+
+                                getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+                                    .edit()
+                                    .putString("tap_capture_screenshot_path", file.absolutePath)
+                                    .apply()
+                            }
+                        }.onFailure { error ->
+                            android.util.Log.w("ClickPlus", "Could not save tap preview", error)
+                        }
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        android.util.Log.w(
+                            "ClickPlus",
+                            "Screenshot capture failed: " + errorCode,
+                        )
+                    }
+                },
+            )
+        }.onFailure { error ->
+            android.util.Log.w("ClickPlus", "Screenshot capture unavailable", error)
+        }
     }
 
     override fun onInterrupt() = Unit
