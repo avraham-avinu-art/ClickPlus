@@ -1017,8 +1017,6 @@ private fun LogsScreen(
             }
         }
     }
-}
-
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
@@ -1036,6 +1034,8 @@ private fun LogsScreen(
             },
         )
     }
+
+}
 
 @Composable
 private fun ProfilesScreen(
@@ -2889,16 +2889,18 @@ private fun LearningScreenshotPreview(
             modifier = Modifier.fillMaxSize(),
             contentScale = androidx.compose.ui.layout.ContentScale.Fit,
         )
+        val ringColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+        val dotColor = MaterialTheme.colorScheme.primary
         androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
             val px = size.width * x.coerceIn(0f, 1f)
             val py = size.height * y.coerceIn(0f, 1f)
             drawCircle(
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                ringColor,
                 radius = 30f,
                 center = Offset(px, py),
             )
             drawCircle(
-                MaterialTheme.colorScheme.primary,
+                dotColor,
                 radius = 10f,
                 center = Offset(px, py),
             )
