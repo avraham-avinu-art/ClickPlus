@@ -7,6 +7,7 @@
 package com.example.clickplus.ui
 
 import android.Manifest
+import android.app.Activity
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
@@ -326,9 +327,10 @@ private fun ClickPlusDashboard(
                     AdvancedRuleRepository.setMode(context, it)
                 },
                 onRequestNotification = {
-                    if (Build.VERSION.SDK_INT >= 33) {
-                        runtimePermissionLauncherFromCompose(context, this@DashboardActivity)
-                    }
+                    requestRuntimePermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                },
+                onRequestPhone = {
+                    requestRuntimePermission(context, Manifest.permission.READ_PHONE_STATE)
                 },
                 onOpenAccessibility = {
                     context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -1346,13 +1348,21 @@ private fun SettingsScreen(
     actionDelay: Long,
     showTapCount: Boolean,
     themeMode: String,
+    workMode: AppMode,
     onBack: () -> Unit,
     onTimeout: (Long) -> Unit,
     onActionDelay: (Long) -> Unit,
     onShowTapCount: (Boolean) -> Unit,
     onTheme: (String) -> Unit,
+    onMode: (AppMode) -> Unit,
+    onRequestNotification: () -> Unit,
+    onRequestPhone: () -> Unit,
+    onOpenAccessibility: () -> Unit,
+    onOpenUsage: () -> Unit,
     onBackup: () -> Unit,
 ) {
+    val context = LocalContext.current
+
     Scaffold(topBar = { SimpleTopBar("הגדרות", onBack) }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
@@ -1360,37 +1370,71 @@ private fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                SettingCard("זמן חלון לחיצות", "כמה זמן יש בין כניסות/לחיצות חוזרות.") {
-                    Text(timeout.toString() + "ms", style = MaterialTheme.typography.titleMedium)
-                    Slider(
-                        value = timeout.toFloat(),
-                        onValueChange = { onTimeout(it.toLong()) },
-                        valueRange = 300f..1500f,
-                        steps = 11,
-                    )
-                }
-            }
-            item {
-                SettingCard("השהיה לפני פעולה", "המתנה אחידה אחרי שהרצף זוהה ולפני ביצוע הפעולה.") {
-                    Text(actionDelay.toString() + "ms", style = MaterialTheme.typography.titleMedium)
-                    Slider(
-                        value = actionDelay.toFloat(),
-                        onValueChange = { onActionDelay(it.toLong()) },
-                        valueRange = 0f..5000f,
-                        steps = 9,
-                    )
-                }
-            }
-            item {
-                SettingCard("הצגת מונה לחיצות", "הצג מספר לחיצות זמנית מעל המסך.") {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("מונה פעיל", Modifier.weight(1f))
-                        Switch(checked = showTapCount, onCheckedChange = onShowTapCount)
+                SettingCard("הפעלת המערכת", "הגדרות שקובעות מתי המערכת מזהה רצף ומתי היא מבצעת פעולה.") {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("מצב עבודה", fontWeight = FontWeight.Bold)
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ChoiceChip(
+                                selected = workMode == AppMode.FULL,
+                                onClick = { onMode(AppMode.FULL) },
+                                label = "מלא",
+                                modifier = Modifier.weight(1f),
+                            )
+                            ChoiceChip(
+                                selected = workMode == AppMode.BASIC,
+                                onClick = { onMode(AppMode.BASIC) },
+                                label = "בסיסי ללא נגישות",
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+
+                        EditorSliderRow(
+                            title = "זמן חלון",
+                            valueText = formatDurationMs(timeout),
+                        ) {
+                            Slider(
+                                value = timeout.toFloat(),
+                                onValueChange = { onTimeout(it.toLong()) },
+                                valueRange = 300f..1500f,
+                                steps = 11,
+                            )
+                        }
+
+                        EditorSliderRow(
+                            title = "השהיה לפני פעולה",
+                            valueText = formatDurationMs(actionDelay),
+                        ) {
+                            Slider(
+                                value = actionDelay.toFloat(),
+                                onValueChange = { onActionDelay(it.toLong()) },
+                                valueRange = 0f..5000f,
+                                steps = 9,
+                            )
+                        }
                     }
                 }
             }
+
             item {
-                SettingCard("מראה", "ערכת צבעים ועדכון אוטומטי לפי המכשיר.") {
+                SettingCard("חיווי", "האם להציג מונה קצר של מספר הלחיצות.") {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("הצגת מונה לחיצות", Modifier.weight(1f))
+                        Switch(
+                            checked = showTapCount,
+                            onCheckedChange = onShowTapCount,
+                        )
+                    }
+                }
+            }
+
+            item {
+                SettingCard("מראה", "בחירת ערכת הצבעים של האפליקציה.") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         ThemeChip("מערכת", "system", themeMode, onTheme, Icons.Outlined.BrightnessAuto)
                         ThemeChip("בהיר", "light", themeMode, onTheme, Icons.Outlined.LightMode)
@@ -1401,12 +1445,69 @@ private fun SettingsScreen(
                     }
                 }
             }
+
             item {
-                SettingCard("גיבוי והעברה", "ייצוא, ייבוא ואיפוס של כל ההגדרות.") {
-                    Button(onClick = onBackup, Modifier.fillMaxWidth()) { Text("פתח גיבוי") }
+                SettingCard("הרשאות", "כל הרשאה ניתנת בנפרד לפי הצורך.") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingsPermissionButton(
+                            title = "התראות",
+                            granted = Build.VERSION.SDK_INT < 33 ||
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS,
+                                ) == PackageManager.PERMISSION_GRANTED,
+                            onClick = onRequestNotification,
+                            disabled = Build.VERSION.SDK_INT < 33,
+                        )
+                        SettingsPermissionButton(
+                            title = "מצב טלפון",
+                            granted = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.READ_PHONE_STATE,
+                            ) == PackageManager.PERMISSION_GRANTED,
+                            onClick = onRequestPhone,
+                        )
+                        SettingsPermissionButton(
+                            title = "שירות נגישות",
+                            granted = isAccessibilityEnabled(context),
+                            onClick = onOpenAccessibility,
+                        )
+                        SettingsPermissionButton(
+                            title = "נתוני שימוש",
+                            granted = hasUsageAccess(context),
+                            onClick = onOpenUsage,
+                        )
+                    }
+                }
+            }
+
+            item {
+                SettingCard("גיבוי", "שמירה, שחזור ואיפוס של נתוני האפליקציה.") {
+                    Button(
+                        onClick = onBackup,
+                        Modifier.fillMaxWidth(),
+                    ) {
+                        Text("פתח גיבוי")
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsPermissionButton(
+    title: String,
+    granted: Boolean,
+    onClick: () -> Unit,
+    disabled: Boolean = false,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = !granted && !disabled,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(title + if (granted) " · מאושר" else "")
     }
 }
 
