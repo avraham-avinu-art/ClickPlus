@@ -2307,11 +2307,26 @@ private fun EditorScreen(
                             )
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 groups.forEach { (groupTitle, actions) ->
-                                    Text(
-                                        groupTitle,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Bold,
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Icon(
+                                            when (groupTitle) {
+                                                "ניווט" -> Icons.Outlined.ArrowForward
+                                                "מדיה" -> Icons.Outlined.PlayArrow
+                                                "שמע" -> Icons.Outlined.Tune
+                                                else -> Icons.Outlined.Settings
+                                            },
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                        Text(
+                                            groupTitle,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
                                     Row(
                                         Modifier
                                             .fillMaxWidth()
@@ -2994,8 +3009,12 @@ private fun formatDurationMs(value: Long): String {
     val safe = value.coerceAtLeast(0L)
     if (safe == 0L) return "ללא המתנה"
     val seconds = safe / 1000f
-    val rounded = (seconds * 10f).toInt() / 10f
-    return if (rounded == 1f) "שנייה אחת" else rounded.toString() + " שניות"
+    val formatted = String.format(
+        Locale.ROOT,
+        "%.1f",
+        seconds,
+    ).trimEnd('0').trimEnd('.')
+    return if (formatted == "1") "שנייה אחת" else formatted + " שניות"
 }
 
 private fun isContextConditionAvailable(
