@@ -12,6 +12,9 @@ import android.accessibilityservice.GestureDescription
 import android.os.Build
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
+import android.os.Handler
+import android.os.Looper
+import java.io.File
 import androidx.core.app.NotificationCompat
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.AppPreferencesRepository
@@ -257,6 +260,38 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         return !homePackage.isNullOrBlank() && homePackage == eventPackage
     }
 
+    private fun saveLearningScreenshot(stage: Int) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
+        val targetPackage = prefs.getString("tap_learning_package", "").orEmpty()
+        if (targetPackage.isBlank()) return
+
+        takeScreenshot(
+            android.view.Display.DEFAULT_DISPLAY,
+            mainExecutor,
+            object : AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                    runCatching {
+                        val hardwareBuffer = result.hardwareBuffer
+                        val bitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, result.colorSpace)
+                            ?: return@runCatching
+                        val file = File(cacheDir, "tap-learning-$stage.png")
+                        file.outputStream().use { output ->
+                            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+                        }
+                        bitmap.recycle()
+                        hardwareBuffer.close()
+                        prefs.edit().putString("tap_learning_screenshot_$stage", file.absolutePath).apply()
+                    }
+                }
+
+                override fun onFailure(errorCode: Int) {
+                    // Screenshot is a visual aid only; learning still succeeds without it.
+                }
+            },
+        )
+    }
+
     private fun captureLearningTap(screenX: Float, screenY: Float) {
         val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
         if (!prefs.getBoolean("tap_learning", false)) return
@@ -282,6 +317,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         // Consume this tap exactly once. This prevents the first point from
         // being processed repeatedly while the editor is switching to stage 2.
         prefs.edit().putBoolean("tap_capture_ready", false).apply()
+        saveLearningScreenshot(stage)
 
         when {
             stage == 1 && prefs.getBoolean("tap_learning_multi", false) -> {
@@ -336,6 +372,8 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             .putBoolean("tap_learning", false)
             .putBoolean("tap_capture_ready", false)
             .remove("tap_learning_stage")
+            .remove("tap_learning_screenshot_1")
+            .remove("tap_learning_screenshot_2")
             .remove("tap_learning_multi")
             .apply()
         tapLearningOverlay.hide()
