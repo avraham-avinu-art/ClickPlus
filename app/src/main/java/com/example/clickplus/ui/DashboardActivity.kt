@@ -2747,6 +2747,96 @@ private fun SimpleTopBar(title: String, onBack: () -> Unit) {
     )
 }
 
+private fun requestRuntimePermission(context: Context, permission: String) {
+    if (permission == Manifest.permission.POST_NOTIFICATIONS && Build.VERSION.SDK_INT < 33) return
+    if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) return
+    (context as? Activity)?.requestPermissions(arrayOf(permission), permission.hashCode() and 0x7fff)
+}
+
+private fun formatDurationMs(value: Long): String {
+    val safe = value.coerceAtLeast(0L)
+    if (safe == 0L) return "ללא המתנה"
+    val seconds = safe / 1000f
+    val rounded = (seconds * 10f).toInt() / 10f
+    return if (rounded == 1f) "שנייה אחת" else rounded.toString() + " שניות"
+}
+
+private fun validateRuleBeforeSave(
+    context: Context,
+    config: KeyActionConfig,
+    metadata: RuleAdvancedMetadata,
+    repo: AdvancedRuleRepository,
+): String? {
+    val mode = AdvancedRuleRepository.currentMode(context)
+    if (config.triggerType == TriggerType.SCREEN_TAP && mode != AppMode.FULL) {
+        return "טריגר לחיצה במיקום דורש מצב מלא עם שירות נגישות."
+    }
+
+    if (config.triggerType == TriggerType.APP_ENTRY) {
+        if ((config.contextConditionType == ContextConditionType.APP ||
+                config.contextConditionType == ContextConditionType.RADIO) &&
+            config.contextConditionValue.isBlank()
+        ) {
+            return "צריך לבחור אפליקציה עבור המצב שנבחר."
+        }
+        if (mode == AppMode.BASIC &&
+            config.contextConditionType in setOf(
+                ContextConditionType.MUSIC,
+                ContextConditionType.MUTED,
+                ContextConditionType.RINGING,
+                ContextConditionType.RADIO,
+            )
+        ) {
+            return "המצב שבחרת אינו זמין במצב בסיסי ללא נגישות."
+        }
+        if (mode == AppMode.BASIC &&
+            (config.contextConditionType == ContextConditionType.APP ||
+                config.contextConditionType == ContextConditionType.RADIO) &&
+            !hasUsageAccess(context)
+        ) {
+            return "המצב שנבחר דורש הרשאת נתוני שימוש."
+        }
+    }
+
+    if (config.actionType == ActionType.APP && config.targetPackage.isBlank()) {
+        return "צריך לבחור אפליקציית יעד."
+    }
+
+    if (config.actionType == ActionType.APP_TAP) {
+        if (mode != AppMode.FULL) {
+            return "פתיחה+לחיצות דורשת מצב מלא עם שירות נגישות."
+        }
+        if (config.screenTapPackage.isBlank()) {
+            return "צריך לבחור אפליקציה וללמוד נקודת לחיצה."
+        }
+        if (config.screenTapXRatio !in 0f..1f || config.screenTapYRatio !in 0f..1f) {
+            return "צריך ללמוד או להגדיר מיקום לחיצה תקין."
+        }
+    }
+
+    if (config.triggerType == TriggerType.SCREEN_TAP) {
+        if (config.screenTapPackage.isBlank()) return "צריך לבחור אפליקציה לזיהוי הלחיצה."
+        val meta = repo.getRuleMetadata(config.id)
+        val validCurrentOrientation =
+            if (context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+                meta.landscapeX >= 0f && meta.landscapeY >= 0f
+            } else {
+                meta.portraitX >= 0f && meta.portraitY >= 0f
+            }
+        if (!validCurrentOrientation &&
+            (config.screenTapXRatio !in 0f..1f || config.screenTapYRatio !in 0f..1f)
+        ) {
+            return "צריך להגדיר מיקום לחיצה."
+        }
+    }
+
+    if (repo.profiles().none { it.id == metadata.profileId }) {
+        return "צריך לבחור פרופיל קיים."
+    }
+
+    return null
+}
+
 private fun isAccessibilityEnabled(context: Context): Boolean {
     val enabled = Settings.Secure.getString(
         context.contentResolver,
