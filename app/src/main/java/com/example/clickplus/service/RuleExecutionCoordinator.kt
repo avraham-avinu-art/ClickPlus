@@ -7,6 +7,7 @@ import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.RuleAdvancedMetadata
+import java.util.UUID
 
 class RuleExecutionCoordinator(
     private val context: android.content.Context,
@@ -36,10 +37,14 @@ class RuleExecutionCoordinator(
 
         val meta = advanced.getRuleMetadata(config.id)
         if (!test) {
-            val profiles = advanced.profiles()
-            val selectedProfile = profiles.firstOrNull { it.id == meta.profileId }
-            if (selectedProfile != null && !selectedProfile.enabled) {
-                logFailure(config, sourcePackage, "הפרופיל \"" + selectedProfile.name + "\" מושבת")
+            val activeProfileId = advanced.activeProfileId()
+            val selectedProfile = advanced.profiles().firstOrNull { it.id == meta.profileId }
+            if (selectedProfile == null) {
+                logFailure(config, sourcePackage, "הפרופיל של הפעולה אינו קיים")
+                return false
+            }
+            if (selectedProfile.id != activeProfileId) {
+                logFailure(config, sourcePackage, "הפרופיל \"" + selectedProfile.name + "\" אינו הפרופיל הפעיל")
                 return false
             }
 
@@ -61,6 +66,7 @@ class RuleExecutionCoordinator(
                 result.success -> "הפעולה הצליחה"
                 else -> "הפעולה נכשלה"
             }
+            val logId = result.pendingId ?: UUID.randomUUID().toString()
             AdvancedRuleRepository.addLog(
                 context,
                 ActivityLog(
@@ -78,7 +84,10 @@ class RuleExecutionCoordinator(
                         result.reason
                     } else {
                         result.reason.ifBlank { "לא נמסר הסבר מהמבצע" }
-                    }
+                    },
+                    id = logId,
+                    triggerDescription = if (test) "בדיקה ידנית" else reason,
+                    actionDescription = config.actionSummary(),
                 )
             )
             if (!result.success && attempt < attempts) {
