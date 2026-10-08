@@ -3,10 +3,14 @@ package com.example.clickplus.service
 import android.os.Handler
 import android.os.Looper
 import com.example.clickplus.data.ActivityLog
+import com.example.clickplus.data.ActionType
+import com.example.clickplus.data.SystemActionPreset
+import com.example.clickplus.data.profileIdFromActionId
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.RuleAdvancedMetadata
+import com.example.clickplus.data.ActionTextFormatter
 
 class RuleExecutionCoordinator(
     private val context: android.content.Context,
@@ -25,12 +29,12 @@ class RuleExecutionCoordinator(
         test: Boolean = false,
     ): Boolean {
         if (!config.enabled) {
-            logFailure(config, sourcePackage, "הכלל מושבת")
+            logFailure(config, sourcePackage, reason, "הכלל מושבת")
             return false
         }
 
         if (!performer.supports(config)) {
-            logFailure(config, sourcePackage, "הפעולה אינה נתמכת במצב העבודה הנוכחי")
+            logFailure(config, sourcePackage, reason, "הפעולה אינה נתמכת במצב העבודה הנוכחי")
             return false
         }
 
@@ -38,8 +42,16 @@ class RuleExecutionCoordinator(
         if (!test) {
             val profiles = advanced.profiles()
             val selectedProfile = profiles.firstOrNull { it.id == meta.profileId }
-            if (selectedProfile != null && !selectedProfile.enabled) {
-                logFailure(config, sourcePackage, "הפרופיל \"" + selectedProfile.name + "\" מושבת")
+            val activeProfileId = AdvancedRuleRepository.activeProfileId(context)
+            if (selectedProfile == null) {
+                logFailure(config, sourcePackage, reason, "הפעולה אינה משויכת לפרופיל קיים")
+                return false
+            }
+            if (selectedProfile.id != activeProfileId) {
+                return false
+            }
+            if (!selectedProfile.enabled) {
+                logFailure(config, sourcePackage, reason, "הפרופיל \"" + selectedProfile.name + "\" מושבת")
                 return false
             }
 
@@ -47,7 +59,7 @@ class RuleExecutionCoordinator(
             val last = lastExecution[config.id] ?: 0L
             if (meta.cooldownMs > 0L && now - last < meta.cooldownMs) {
                 val remaining = (meta.cooldownMs - (now - last)).coerceAtLeast(0L)
-                logFailure(config, sourcePackage, "הפעולה נחסמה בגלל Cooldown; נותרו " + remaining + "ms")
+                logFailure(config, sourcePackage, reason, "הפעולה נחסמה בגלל מרווח ההמתנה; נותרו " + ActionTextFormatter.durationMs(remaining))
                 return false
             }
             lastExecution[config.id] = now
@@ -61,6 +73,7 @@ class RuleExecutionCoordinator(
                 result.success -> "הפעולה הצליחה"
                 else -> "הפעולה נכשלה"
             }
+            val executionId = result.executionId ?: java.util.UUID.randomUUID().toString()
             AdvancedRuleRepository.addLog(
                 context,
                 ActivityLog(
@@ -69,16 +82,23 @@ class RuleExecutionCoordinator(
                     message = actionMessage,
                     ruleId = config.id,
                     appPackage = sourcePackage,
+                    actionLabel = ActionTextFormatter.actionLabel(
+                        config,
+                        advanced.profiles().firstOrNull { it.id == meta.profileId }?.name,
+                    ),
                     success = if (result.pending) null else result.success,
-                    detail = if (test && result.success && result.reason.isBlank()) {
-                        "בדיקה ידנית הסתיימה בהצלחה."
-                    } else if (test && result.success) {
-                        "בדיקה ידנית: " + result.reason
-                    } else if (result.pending || result.success) {
-                        result.reason
-                    } else {
-                        result.reason.ifBlank { "לא נמסר הסבר מהמבצע" }
-                    }
+                    detail = ActionTextFormatter.actionDetails(
+                        config,
+                        advanced.profiles().firstOrNull { it.id == meta.profileId }?.name,
+                    ),
+                    triggerLabel = if (test) "בדיקה ידנית" else reason,
+                    actionDetails = ActionTextFormatter.actionDetails(
+                        config,
+                        advanced.profiles().firstOrNull { it.id == meta.profileId }?.name,
+                    ),
+                    actualAction = result.reason.ifBlank { actionMessage },
+                    failureReason = if (result.success || result.pending) "" else result.reason,
+                    id = executionId,
                 )
             )
             if (!result.success && attempt < attempts) {
@@ -86,22 +106,44 @@ class RuleExecutionCoordinator(
             }
         }
 
-        val delay = AppPreferencesRepository.actionDelaySnapshot(context)
+        val globalDelay = AppPreferencesRepository.actionDelaySnapshot(context)
+        val configuredDelay = if (meta.delayMs > 0L) meta.delayMs.coerceIn(0L, 10_000L) else globalDelay
+        val delay = if (
+            config.actionType == com.example.clickplus.data.ActionType.APP_TAP ||
+            config.actionType == com.example.clickplus.data.ActionType.MULTI_POINT_TAP
+        ) {
+            0L
+        } else {
+            configuredDelay
+        }
         if (delay == 0L) runAttempt(1) else handler.postDelayed({ runAttempt(1) }, delay)
         return true
     }
 
-    private fun logFailure(config: KeyActionConfig, sourcePackage: String, detail: String) {
+    private fun logFailure(
+        config: KeyActionConfig,
+        sourcePackage: String,
+        triggerLabel: String,
+        failureReason: String,
+    ) {
+        val metadata = advanced.getRuleMetadata(config.id)
+        val profileName = advanced.profiles().firstOrNull { it.id == metadata.profileId }?.name
+        val actionDetails = ActionTextFormatter.actionDetails(config, profileName)
         AdvancedRuleRepository.addLog(
             context,
             ActivityLog(
-                System.currentTimeMillis(),
-                "ACTION",
-                "הפעולה נכשלה",
-                config.id,
-                sourcePackage,
+                timestamp = System.currentTimeMillis(),
+                type = "ACTION",
+                message = "הפעולה נכשלה",
+                ruleId = config.id,
+                appPackage = sourcePackage,
                 success = false,
-                detail = detail
+                actionLabel = ActionTextFormatter.actionLabel(config, profileName),
+                detail = actionDetails,
+                triggerLabel = triggerLabel,
+                actionDetails = actionDetails,
+                actualAction = "הפעולה לא בוצעה",
+                failureReason = failureReason,
             )
         )
     }

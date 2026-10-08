@@ -5,31 +5,163 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
+    <!-- Deep charcoal base with a precise rounded silhouette -->
     <path
-        android:fillColor="#11181B"
-        android:pathData="M18,2 L90,2 C98.84,2 106,9.16 106,18 L106,90 C106,98.84 98.84,106 90,106 L18,106 C9.16,106 2,98.84 2,90 L2,18 C2,9.16 9.16,2 18,2 Z" />
-
+        android:fillColor="#0A0F11"
+        android:pathData="M20,2 L88,2 C99,2 106,9 106,20 L106,88 C106,99 99,106 88,106 L20,106 C9,106 2,99 2,88 L2,20 C2,9 9,2 20,2 Z" />
     <path
-        android:fillColor="#15231A"
-        android:pathData="M18,6 L90,6 C96.63,6 102,11.37 102,18 L102,90 C102,96.63 96.63,102 90,102 L18,102 C11.37,102 6,96.63 6,90 L6,18 C6,11.37 11.37,6 18,6 Z"
-        android:fillAlpha="0.55" />
+        android:fillColor="#151B1E"
+        android:pathData="M20,6 L88,6 C96.2,6 102,11.8 102,20 L102,88 C102,96.2 96.2,102 88,102 L20,102 C11.8,102 6,96.2 6,88 L6,20 C6,11.8 11.8,6 20,6 Z" />
+    <path
+        android:fillColor="#20272A"
+        android:fillAlpha="0.40"
+        android:pathData="M20,8 L88,8 C95,8 100,13 100,20 L100,27 C82,20 66,16 54,16 C41,16 25,20 8,27 L8,20 C8,13 13,8 20,8 Z" />
 
+    <!-- Soft concentric lime ripple -->
     <path
         android:fillColor="#7DFF12"
-        android:fillAlpha="0.14"
-        android:pathData="M24,42 L42,42 L42,24 L66,24 L66,42 L84,42 L84,66 L66,66 L66,84 L42,84 L42,66 L24,66 Z" />
+        android:fillAlpha="0.035"
+        android:pathData="M54,11 A43,43 0,1 1,54,97 A43,43 0,1 1,54,11 Z" />
+    <path
+        android:fillColor="#7DFF12"
+        android:fillAlpha="0.035"
+        android:pathData="M54,18 A36,36 0,1 1,54,90 A36,36 0,1 1,54,18 Z" />
+    <path
+        android:fillColor="#7DFF12"
+        android:fillAlpha="0.045"
+        android:pathData="M54,25 A29,29 0,1 1,54,83 A29,29 0,1 1,54,25 Z" />
 
     <path
-        android:fillColor="#B7FF35"
-        android:pathData="M22,43 L43,43 L43,22 L65,22 L65,43 L86,43 L86,65 L65,65 L65,86 L43,86 L43,65 L22,65 Z" />
-
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#A5FF31"
+        android:strokeAlpha="0.22"
+        android:strokeWidth="1.0"
+        android:pathData="M54,12 A42,42 0,1 1,54,96 A42,42 0,1 1,54,12 Z" />
     <path
-        android:fillColor="#E8FFAF"
-        android:fillAlpha="0.7"
-        android:pathData="M43,27 L65,27 L65,47 L81,47 L81,61 L65,61 L65,81 L43,81 L43,61 L27,61 L27,47 L43,47 Z" />
-
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#A5FF31"
+        android:strokeAlpha="0.32"
+        android:strokeWidth="1.05"
+        android:pathData="M54,20 A34,34 0,1 1,54,88 A34,34 0,1 1,54,20 Z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:fillAlpha="0.9"
-        android:pathData="M45,30 L63,30 L63,45 L78,45 L78,63 L63,63 L63,78 L45,78 L45,63 L30,63 L30,45 L45,45 Z" />
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#A5FF31"
+        android:strokeAlpha="0.42"
+        android:strokeWidth="1.15"
+        android:pathData="M54,28 A26,26 0,1 1,54,80 A26,26 0,1 1,54,28 Z" />
+
+    <!-- Controlled central green glow -->
+    <path
+        android:fillColor="#7DFF12"
+        android:fillAlpha="0.12"
+        android:pathData="M54,34 A20,20 0,1 1,54,74 A20,20 0,1 1,54,34 Z" />
+    <path
+        android:fillColor="#A7FF2F"
+        android:fillAlpha="0.09"
+        android:pathData="M54,41 A13,13 0,1 1,54,67 A13,13 0,1 1,54,41 Z" />
+
+    <!-- Inner crystal emblem: exactly 40% scale and rotated 180°, yielding an inverted upper-T (┬) -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.40"
+        android:scaleY="0.40"
+        android:rotation="180">
+
+        <!-- Three equal-thickness arms: left, right and descending stem -->
+        <path
+            android:fillColor="#59C90A"
+            android:fillAlpha="0.20"
+            android:pathData="M20,39 L45,39 L45,34 L63,34 L63,39 L88,39 L98,48 L88,57 L63,57 L62,85 L54,97 L46,85 L45,57 L20,57 L10,48 Z" />
+        <path
+            android:fillColor="#8CFF22"
+            android:pathData="M22,42 L47,42 L47,38 L61,38 L61,42 L86,42 L93,48 L86,54 L61,54 L60,84 L54,93 L48,84 L47,54 L22,54 L15,48 Z" />
+
+        <!-- Left jewel arm: 12 units thick -->
+        <path
+            android:fillColor="#D7FF83"
+            android:fillAlpha="0.88"
+            android:pathData="M15,48 L22,42 L47,42 L47,54 L22,54 Z" />
+        <path
+            android:fillColor="#42AF07"
+            android:fillAlpha="0.92"
+            android:pathData="M15,48 L47,42 L47,48 Z" />
+        <path
+            android:fillColor="#92FF2C"
+            android:fillAlpha="0.76"
+            android:pathData="M47,48 L22,54 L15,48 Z" />
+
+        <!-- Right jewel arm: same 12-unit thickness -->
+        <path
+            android:fillColor="#D7FF83"
+            android:fillAlpha="0.88"
+            android:pathData="M47,42 L86,42 L93,48 L86,54 L47,54 Z" />
+        <path
+            android:fillColor="#42AF07"
+            android:fillAlpha="0.92"
+            android:pathData="M47,42 L93,48 L47,48 Z" />
+        <path
+            android:fillColor="#92FF2C"
+            android:fillAlpha="0.76"
+            android:pathData="M47,48 L86,54 L93,48 Z" />
+
+        <!-- Bottom jewel stem: same 12-unit thickness -->
+        <path
+            android:fillColor="#D8FF88"
+            android:fillAlpha="0.86"
+            android:pathData="M47,48 L61,48 L60,84 L54,93 L48,84 Z" />
+        <path
+            android:fillColor="#3EAB06"
+            android:fillAlpha="0.92"
+            android:pathData="M47,48 L54,48 L48,84 Z" />
+        <path
+            android:fillColor="#95FF2E"
+            android:fillAlpha="0.82"
+            android:pathData="M54,48 L61,48 L60,84 L54,93 Z" />
+
+        <!-- Central faceted diamond -->
+        <path
+            android:fillColor="#B5FF45"
+            android:pathData="M54,39 L69,54 L54,69 L39,54 Z" />
+        <path
+            android:fillColor="#F1FFD0"
+            android:fillAlpha="0.78"
+            android:pathData="M54,39 L69,54 L54,54 Z" />
+        <path
+            android:fillColor="#60E80B"
+            android:fillAlpha="0.90"
+            android:pathData="M54,54 L69,54 L54,69 Z" />
+        <path
+            android:fillColor="#A6FF31"
+            android:fillAlpha="0.86"
+            android:pathData="M39,54 L54,39 L54,54 Z" />
+        <path
+            android:fillColor="#D9FF8A"
+            android:fillAlpha="0.78"
+            android:pathData="M39,54 L54,54 L54,69 Z" />
+
+        <!-- Hot luminous nucleus -->
+        <path
+            android:fillColor="#F5FFD8"
+            android:fillAlpha="0.94"
+            android:pathData="M54,47 L61,54 L54,61 L47,54 Z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.90"
+            android:pathData="M54,50 L58,54 L54,58 L50,54 Z" />
+    </group>
+
+    <!-- Subtle bevel and reflection on the dark tile -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#AFC4C9"
+        android:strokeAlpha="0.22"
+        android:strokeWidth="0.9"
+        android:pathData="M20,6 L88,6 C96.2,6 102,11.8 102,20" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#7DFF12"
+        android:strokeAlpha="0.24"
+        android:strokeWidth="0.9"
+        android:pathData="M20,102 L88,102 C96.2,102 102,96.2 102,88" />
 </vector>
