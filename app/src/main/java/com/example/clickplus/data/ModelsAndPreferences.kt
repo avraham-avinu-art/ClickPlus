@@ -140,8 +140,8 @@ data class KeyActionConfig(
             }
         }
         ActionType.APP -> "פתיחת " + targetAppName.ifBlank { "אפליקציה" }
-        ActionType.APP_TAP -> "לחיצה אוטומטית ב-" + screenTapAppName.ifBlank { "אפליקציה" }
-        ActionType.MULTI_POINT_TAP -> "שתי לחיצות אוטומטיות ב-" + screenTapAppName.ifBlank { "אפליקציה" }
+        ActionType.APP_TAP -> "פתיחה + " + screenTapCount.coerceIn(1, 10) + " לחיצות ב-" + screenTapAppName.ifBlank { "אפליקציה" }
+        ActionType.MULTI_POINT_TAP -> "פתיחה + שתי לחיצות ב-" + screenTapAppName.ifBlank { "אפליקציה" }
         ActionType.PROFILE -> "החלפת פרופיל"
     }
 
