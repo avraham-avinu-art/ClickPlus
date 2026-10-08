@@ -85,14 +85,14 @@ class TapCountOverlay(private val context: Context) {
         }
     }
 
-    fun setSize(sizeDp: Int) {
-        sizeDp = sizeDp.coerceIn(32, 96)
+    fun setSize(newSizeDp: Int) {
+        val safeSizeDp = newSizeDp.coerceIn(32, 96)
         val oldVisible = textView.visibility == View.VISIBLE
         if (attached) {
             runCatching { windowManager.removeView(textView) }
             attached = false
         }
-        this.sizeDp = sizeDp
+        this.sizeDp = safeSizeDp
         if (oldVisible) show(textView.text?.toString()?.toIntOrNull() ?: 1)
     }
 
