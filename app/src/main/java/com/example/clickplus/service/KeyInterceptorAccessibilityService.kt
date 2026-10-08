@@ -65,7 +65,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     fun isPackageInForeground(targetPackage: String): Boolean {
         if (targetPackage.isBlank()) return false
         val rootPackage = rootInActiveWindow?.packageName?.toString().orEmpty()
-        return currentForegroundPackage == targetPackage || rootPackage == targetPackage
+        return rootPackage == targetPackage
     }
 
     fun openMainInterface() {
@@ -180,6 +180,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         val target = prefs.getString("tap_learning_package", "").orEmpty()
         if (learning && target.isNotBlank() && target == eventPackage) {
             tapLearningOverlay.show()
+            if (!prefs.getBoolean("tap_capture_preview_requested", false) &&
+                rootInActiveWindow?.packageName?.toString() == target
+            ) {
+                prefs.edit().putBoolean("tap_capture_preview_requested", true).apply()
+                captureScreenPreview()
+            }
         } else if (!learning) {
             tapLearningOverlay.hide()
         }
@@ -222,7 +228,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             )
             .apply()
         tapLearningOverlay.hide()
-        captureScreenPreview()
+        prefs.edit().putBoolean("tap_capture_preview_requested", false).apply()
 
         runCatching {
             startActivity(
@@ -243,7 +249,6 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
                 mainExecutor,
                 object : TakeScreenshotCallback {
                     override fun onSuccess(screenshot: ScreenshotResult) {
-                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
                         runCatching {
                             val source = Bitmap.wrapHardwareBuffer(
                                 screenshot.hardwareBuffer,
