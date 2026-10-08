@@ -1768,6 +1768,10 @@ private fun EditorScreen(
         }
     }
 
+    val phoneCallPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     val contactPermission = androidx.activity.compose.rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -2210,6 +2214,7 @@ private fun EditorScreen(
                             )
                             ChoiceChip(
                                 selected = actionTypeChosen && draft.actionType == ActionType.APP_TAP,
+                                enabled = AdvancedRuleRepository.currentMode(context) == AppMode.FULL,
                                 onClick = {
                                     actionTypeChosen = true
                                     selectedSystemCategory = null
@@ -2262,6 +2267,13 @@ private fun EditorScreen(
                     }
 
 
+                    if (AdvancedRuleRepository.currentMode(context) == AppMode.BASIC) {
+                        Text(
+                            "במצב בסיסי פעולות שדורשות שירות נגישות, כמו לחיצה בתוך אפליקציה, מוצגות כלא זמינות.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+
                     if (!actionTypeChosen) {
                         Text(
                             "בחר קודם סוג פעולה. האפשרויות המפורטות יופיעו רק לאחר הבחירה.",
@@ -2270,17 +2282,57 @@ private fun EditorScreen(
                         )
                     } else {
                         val permissionNeeded =
-                            if (draft.actionType == ActionType.APP_TAP || draft.actionType == ActionType.MULTI_POINT_TAP) {
-                                AdvancedRuleRepository.currentMode(context) == AppMode.FULL && !isAccessibilityEnabled(context)
-                            } else {
+                            when {
+                                (draft.actionType == ActionType.APP_TAP || draft.actionType == ActionType.MULTI_POINT_TAP) &&
+                                    AdvancedRuleRepository.currentMode(context) == AppMode.FULL &&
+                                    !isAccessibilityEnabled(context) -> true
+                                draft.triggerType == TriggerType.APP_ENTRY &&
+                                    AdvancedRuleRepository.currentMode(context) == AppMode.BASIC &&
+                                    !hasUsageAccess(context) -> true
                                 draft.actionType == ActionType.SYSTEM &&
-                                    draft.systemActionId == SystemActionPreset.BRIGHTNESS_SET.id &&
-                                    !Settings.System.canWrite(context)
+                                    draft.systemActionId in setOf(
+                                        SystemActionPreset.BRIGHTNESS_UP.id,
+                                        SystemActionPreset.BRIGHTNESS_DOWN.id,
+                                        SystemActionPreset.BRIGHTNESS_SET.id,
+                                    ) &&
+                                    !Settings.System.canWrite(context) -> true
+                                draft.actionType == ActionType.SYSTEM &&
+                                    draft.systemActionId in setOf(
+                                        SystemActionPreset.ANSWER_CALL.id,
+                                        SystemActionPreset.DECLINE_CALL.id,
+                                    ) &&
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.ANSWER_PHONE_CALLS,
+                                    ) != PackageManager.PERMISSION_GRANTED -> true
+                                else -> false
                             }
                         if (permissionNeeded) {
                             val accessibilityMissing =
                                 (draft.actionType == ActionType.APP_TAP || draft.actionType == ActionType.MULTI_POINT_TAP) &&
                                     !isAccessibilityEnabled(context)
+                            val usageMissing =
+                                draft.triggerType == TriggerType.APP_ENTRY &&
+                                    AdvancedRuleRepository.currentMode(context) == AppMode.BASIC &&
+                                    !hasUsageAccess(context)
+                            val brightnessMissing =
+                                draft.actionType == ActionType.SYSTEM &&
+                                    draft.systemActionId in setOf(
+                                        SystemActionPreset.BRIGHTNESS_UP.id,
+                                        SystemActionPreset.BRIGHTNESS_DOWN.id,
+                                        SystemActionPreset.BRIGHTNESS_SET.id,
+                                    ) &&
+                                    !Settings.System.canWrite(context)
+                            val phoneMissing =
+                                draft.actionType == ActionType.SYSTEM &&
+                                    draft.systemActionId in setOf(
+                                        SystemActionPreset.ANSWER_CALL.id,
+                                        SystemActionPreset.DECLINE_CALL.id,
+                                    ) &&
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.ANSWER_PHONE_CALLS,
+                                    ) != PackageManager.PERMISSION_GRANTED
                             Surface(
                                 Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(11.dp),
@@ -2288,24 +2340,27 @@ private fun EditorScreen(
                             ) {
                                 Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                     Text(
-                                        if (accessibilityMissing) {
-                                            "הפעולה הזאת דורשת את שירות הנגישות כדי לבצע לחיצה בתוך האפליקציה."
-                                        } else {
-                                            "הפעולה הזאת דורשת הרשאה לשינוי בהירות המסך."
+                                        when {
+                                            accessibilityMissing -> "הפעולה הזאת דורשת את שירות הנגישות כדי לבצע לחיצה בתוך האפליקציה."
+                                            usageMissing -> "הטריגר הזה במצב בסיסי דורש גישה לנתוני שימוש כדי לזהות איזו אפליקציה נמצאת על המסך."
+                                            brightnessMissing -> "הפעולה הזאת דורשת הרשאה לשינוי בהירות המסך."
+                                            phoneMissing -> "פעולת השיחה הזאת דורשת הרשאת טלפון כדי לפעול."
+                                            else -> ""
                                         },
                                         color = MaterialTheme.colorScheme.onErrorContainer,
                                     )
                                     TextButton(
                                         onClick = {
-                                            if (accessibilityMissing) {
-                                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                                            } else {
-                                                context.startActivity(
+                                            when {
+                                                accessibilityMissing -> context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                                usageMissing -> context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                                brightnessMissing -> context.startActivity(
                                                     Intent(
                                                         Settings.ACTION_MANAGE_WRITE_SETTINGS,
                                                         Uri.parse("package:" + context.packageName),
                                                     )
                                                 )
+                                                phoneMissing -> phoneCallPermission.launch(Manifest.permission.ANSWER_PHONE_CALLS)
                                             }
                                         },
                                     ) {
@@ -2941,6 +2996,7 @@ private fun SystemActionPicker(
     onCategorySelected: (String?) -> Unit,
     onActionSelected: (String) -> Unit,
 ) {
+    val context = LocalContext.current
     val systemActions = SystemActionPreset.entries
     val categories = systemActions.map { it.categoryHebrew }.distinct()
     val selected = selectedCategory
@@ -2980,10 +3036,15 @@ private fun SystemActionPicker(
                 }
             }
             actions.forEach { action ->
+                val supported = AdvancedRuleRepository.currentMode(context) != AppMode.BASIC ||
+                    BasicActionPerformer(context).supports(
+                        KeyActionConfig(actionType = ActionType.SYSTEM, systemActionId = action.id)
+                    )
                 ChoiceChip(
                     selected = selectedId == action.id,
-                    onClick = { onActionSelected(action.id) },
-                    label = action.titleHebrew,
+                    enabled = supported,
+                    onClick = { if (supported) onActionSelected(action.id) },
+                    label = if (supported) action.titleHebrew else action.titleHebrew + " · לא זמין במצב בסיסי",
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
