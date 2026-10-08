@@ -161,15 +161,13 @@ private sealed interface DashboardRoute {
 }
 
 class DashboardActivity : ComponentActivity() {
-    private var settingsStepActive = false
-    private var runtimeRequestActive = false
     private var showPermissionIntro by mutableStateOf(false)
+    private var permissionRefreshKey by mutableIntStateOf(0)
 
     private val runtimePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
-        runtimeRequestActive = false
-        continueFirstLaunchPermissions()
+        permissionRefreshKey++
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -181,13 +179,38 @@ class DashboardActivity : ComponentActivity() {
             .putBoolean("first_ui_opened", true)
             .putBoolean("background_only", false)
             .apply()
+
         setContent {
             ClickPlusDashboard(
                 showPermissionIntro = showPermissionIntro,
-                onBeginPermissionSetup = {
-                    runtimePrefs.edit().putBoolean("permission_intro_completed", true).apply()
+                permissionRefreshKey = permissionRefreshKey,
+                onRequestNotification = {
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        runtimePermissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+                    }
+                },
+                onRequestPhone = {
+                    if (ContextCompat.checkSelfPermission(
+                            this,
+                            Manifest.permission.READ_PHONE_STATE,
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        runtimePermissionLauncher.launch(arrayOf(Manifest.permission.READ_PHONE_STATE))
+                    }
+                },
+                onOpenAccessibility = {
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                },
+                onOpenUsage = {
+                    startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                },
+                onEnterApp = {
+                    runtimePrefs.edit()
+                        .putBoolean("permission_intro_completed", true)
+                        .putBoolean("permission_bootstrap_done", true)
+                        .putBoolean("background_only", false)
+                        .apply()
                     showPermissionIntro = false
-                    continueFirstLaunchPermissions()
                 },
             )
         }
@@ -195,66 +218,8 @@ class DashboardActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (runtimeRequestActive) return
-        val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
-        if (!prefs.getBoolean("first_ui_opened", false) ||
-            prefs.getBoolean("permission_bootstrap_done", false) ||
-            !prefs.getBoolean("permission_intro_completed", false)
-        ) return
-
-        if (settingsStepActive) {
-            settingsStepActive = false
-        }
-        continueFirstLaunchPermissions()
+        permissionRefreshKey++
     }
-
-    private fun continueFirstLaunchPermissions() {
-        if (runtimeRequestActive) return
-
-        val runtimePermissions = buildList {
-            if (Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(
-                    this@DashboardActivity,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            if (ContextCompat.checkSelfPermission(
-                    this@DashboardActivity,
-                    Manifest.permission.READ_PHONE_STATE
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                add(Manifest.permission.READ_PHONE_STATE)
-            }
-        }
-
-        if (runtimePermissions.isNotEmpty()) {
-            runtimeRequestActive = true
-            runtimePermissionLauncher.launch(runtimePermissions.toTypedArray())
-            return
-        }
-
-        val serviceEnabled = isAccessibilityEnabled(this)
-        if (!serviceEnabled) {
-            settingsStepActive = true
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            return
-        }
-
-        val usageEnabled = hasUsageAccess(this)
-        if (!usageEnabled) {
-            settingsStepActive = true
-            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-            return
-        }
-
-        getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
-            .edit()
-            .putBoolean("permission_bootstrap_done", true)
-            .apply()
-    }
-}
 
 @Composable
 private fun ClickPlusDashboard(
