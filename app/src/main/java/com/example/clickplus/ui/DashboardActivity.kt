@@ -2111,6 +2111,13 @@ private fun EditorScreen(
                             )
                         }
                     }
+                    if (draft.triggerType == TriggerType.APP_ENTRY && draft.pressCount == 1) {
+                        Text(
+                            "כאשר הטריגר מבוסס על פתיחת אפליקציה אחרת, לא מומלץ לבחור כניסה אחת: הכניסה הראשונה משמשת לפתיחת האפליקציה עצמה על המסך.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
                 }
             }
 
