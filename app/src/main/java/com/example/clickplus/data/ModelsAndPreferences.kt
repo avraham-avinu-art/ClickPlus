@@ -238,6 +238,7 @@ class AppPreferencesRepository(private val context: Context) {
         val TAP_COUNT_X = longPreferencesKey("tap_count_x")
         val TAP_COUNT_Y = longPreferencesKey("tap_count_y")
         val TAP_COUNT_POSITION = longPreferencesKey("tap_count_position")
+        val TAP_COUNT_SIZE = longPreferencesKey("tap_count_size")
         val MAPPINGS_JSON = stringPreferencesKey("mappings_json")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
 
@@ -266,6 +267,12 @@ class AppPreferencesRepository(private val context: Context) {
         fun tapCountPositionSnapshot(context: Context): Int =
             (100 - tapCountYSnapshot(context)).coerceIn(0, 100)
 
+        fun tapCountSizeSnapshot(context: Context): Int =
+            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                .getLong("tap_count_size", 48L)
+                .toInt()
+                .coerceIn(32, 96)
+
         fun mappingsSnapshot(context: Context): List<KeyActionConfig> {
             val raw = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
                 .getString("mappings_json", "[]") ?: "[]"
@@ -290,6 +297,9 @@ class AppPreferencesRepository(private val context: Context) {
             ?: (100 - (it[TAP_COUNT_POSITION]?.toInt()?.coerceIn(5, 90) ?: 35))
     }
     val tapCountPositionFlow: Flow<Int> = tapCountYFlow.map { (100 - it).coerceIn(0, 100) }
+    val tapCountSizeFlow: Flow<Int> = context.dataStore.data.map {
+        it[TAP_COUNT_SIZE]?.toInt()?.coerceIn(32, 96) ?: 48
+    }
     val mappingsFlow: Flow<List<KeyActionConfig>> = context.dataStore.data.map { prefs ->
         val array = runCatching { JSONArray(prefs[MAPPINGS_JSON] ?: "[]") }.getOrDefault(JSONArray())
         buildList {
@@ -324,6 +334,15 @@ class AppPreferencesRepository(private val context: Context) {
         context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
             .edit().putBoolean("show_tap_count", enabled).apply()
     }
+    suspend fun saveTapCountSize(sizeDp: Int) {
+        val safe = sizeDp.coerceIn(32, 96)
+        context.dataStore.edit { it[TAP_COUNT_SIZE] = safe.toLong() }
+        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+            .edit()
+            .putLong("tap_count_size", safe.toLong())
+            .apply()
+    }
+
     suspend fun saveTapCountPosition(percentFromBottom: Int) {
         val safe = percentFromBottom.coerceIn(0, 100)
         saveTapCountY(100 - safe)
