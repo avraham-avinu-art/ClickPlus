@@ -13,7 +13,7 @@ class KeyActionConfigTest {
             actionType = ActionType.APP,
             targetPackage = "com.example.target",
             targetAppName = "Target",
-            triggerType = TriggerType.SCREEN_TAP,
+            triggerType = TriggerType.APP_ENTRY,
             screenTapPackage = "com.example.source",
             screenTapAppName = "Source",
             screenTapXRatio = 0.42f,

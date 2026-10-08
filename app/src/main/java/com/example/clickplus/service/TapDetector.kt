@@ -25,6 +25,8 @@ class TapDetector(
     private var tapCount = 0
     private var lastLaunchTime = 0L
     private var pendingForegroundPackage = ""
+    private var pendingEnteredPackage = ""
+    private var pendingTriggerType = TriggerType.CLICKPLUS_ENTRY
     private val handler = Handler(Looper.getMainLooper())
     private val resetRunnable = Runnable {
         resolveActivationLaunch()
@@ -33,39 +35,98 @@ class TapDetector(
     private val screenReset = mutableMapOf<String, Runnable>()
     private var profiles = emptyList<KeyActionConfig>()
     private val advanced = AdvancedRuleRepository(context)
+    // The first entry opens the selected app and is not counted as a trigger.
+    // Re-entering an already-opened app can be counted.
+    private val enteredAppPackages = mutableSetOf<String>()
 
     fun updateProfiles(newProfiles: List<KeyActionConfig>) {
         profiles = newProfiles.filter { it.enabled }
     }
 
-    fun processActivationLaunch(previousForegroundPackage: String) {
-        val all = profiles.filter { it.triggerType == TriggerType.APP_ENTRY }
+    fun resetOpenAppState() { enteredAppPackages.clear() }
+
+    fun processClickPlusEntry(previousForegroundPackage: String) {
+        registerTrigger(
+            triggerType = TriggerType.CLICKPLUS_ENTRY,
+            enteredPackage = "",
+            previousForegroundPackage = previousForegroundPackage,
+        )
+    }
+
+    fun processAppEntry(enteredPackage: String, previousForegroundPackage: String) {
+        if (enteredPackage.isBlank()) return
+
+        val wasAlreadyOpened = enteredAppPackages.contains(enteredPackage)
+        enteredAppPackages.add(enteredPackage)
+        if (!wasAlreadyOpened) return
+
+        registerTrigger(
+            triggerType = TriggerType.APP_ENTRY,
+            enteredPackage = enteredPackage,
+            previousForegroundPackage = previousForegroundPackage,
+        )
+    }
+
+    private fun registerTrigger(
+        triggerType: TriggerType,
+        enteredPackage: String,
+        previousForegroundPackage: String,
+    ) {
+        val all = profiles.filter {
+            it.enabled &&
+                it.triggerType == triggerType &&
+                (triggerType == TriggerType.CLICKPLUS_ENTRY || (
+                    it.triggerPackage.isNotBlank() &&
+                        it.triggerPackage == enteredPackage
+                )) &&
+                AdvancedRuleRepository.isRuleInActiveProfile(context, it.id)
+        }
         if (all.isEmpty()) return
 
         val now = System.currentTimeMillis()
         if (now - lastLaunchTime < 100L) return
         lastLaunchTime = now
 
+        if (tapCount == 0) {
+            pendingEnteredPackage = enteredPackage
+            pendingTriggerType = triggerType
+        } else if (
+            pendingTriggerType != triggerType ||
+            (triggerType == TriggerType.APP_ENTRY && pendingEnteredPackage != enteredPackage)
+        ) {
+            // A different trigger source starts a fresh sequence.
+            tapCount = 0
+            pendingForegroundPackage = ""
+            pendingEnteredPackage = enteredPackage
+            pendingTriggerType = triggerType
+        }
         tapCount = (tapCount + 1).coerceAtMost(10)
         pendingForegroundPackage = previousForegroundPackage
         handler.removeCallbacks(resetRunnable)
         onTapCount(tapCount)
+        handler.postDelayed(resetRunnable, tapTimeoutMs.coerceIn(300L, 1500L))
+    }
 
-        // Do not execute a 1-press rule immediately. Wait for the full global
-        // window so a 4-press rule can win when the user continues the sequence.
-        handler.postDelayed(
-            resetRunnable,
-            tapTimeoutMs.coerceIn(300L, 1500L),
-        )
+    fun processActivationLaunch(previousForegroundPackage: String) {
+        // Launcher entry is the ClickPlus trigger.
+        processClickPlusEntry(previousForegroundPackage)
     }
 
     private fun resolveActivationLaunch() {
         val finalCount = tapCount.coerceIn(1, 10)
         val previousForegroundPackage = pendingForegroundPackage
+        val enteredPackage = pendingEnteredPackage
+        val triggerType = pendingTriggerType
         tapCount = 0
         pendingForegroundPackage = ""
+        pendingEnteredPackage = ""
 
-        val all = profiles.filter { it.triggerType == TriggerType.APP_ENTRY }
+        val all = profiles.filter {
+            it.enabled &&
+                it.triggerType == triggerType &&
+                (triggerType == TriggerType.CLICKPLUS_ENTRY || it.triggerPackage == enteredPackage) &&
+                AdvancedRuleRepository.isRuleInActiveProfile(context, it.id)
+        }
         val matchingSpecific = all
             .filter { it.pressCount == finalCount && it.contextConditionType != ContextConditionType.ANY }
             .filter { contextMatches(it, previousForegroundPackage) }
@@ -77,72 +138,17 @@ class TapDetector(
             .firstOrNull()
 
         if (chosen != null) {
-            actionExecutor.execute(chosen, previousForegroundPackage, "כניסה ל-ClickPlus")
+            val reason = when (triggerType) {
+                TriggerType.CLICKPLUS_ENTRY -> "לחיצות כניסה לקליק פלוס"
+                TriggerType.APP_ENTRY -> "לחיצות כניסה לאפליקציה אחרת"
+            }
+            actionExecutor.execute(chosen, previousForegroundPackage, reason)
         }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun processViewClicked(event: AccessibilityEvent) {
-        val all = profiles.filter { it.triggerType == TriggerType.SCREEN_TAP }
-        if (all.isEmpty()) return
-        val packageName = event.packageName?.toString().orEmpty()
-        val source = event.source ?: return
-        runCatching { source.refresh() }
-        val bounds = Rect()
-        runCatching { source.getBoundsInScreen(bounds) }.getOrNull() ?: return
-        if (bounds.isEmpty) return
-
-        val width = context.resources.displayMetrics.widthPixels.coerceAtLeast(1).toFloat()
-        val height = context.resources.displayMetrics.heightPixels.coerceAtLeast(1).toFloat()
-        val xRatio = (bounds.centerX() / width).coerceIn(0f, 1f)
-        val yRatio = (bounds.centerY() / height).coerceIn(0f, 1f)
-
-        // Some apps expose a small icon/text node for the click while the
-        // actual clickable target is one of its parents. Check the source and
-        // a few clickable ancestors without treating a full-screen root as a
-        // match.
-        val candidateBounds = buildList {
-            var node: android.view.accessibility.AccessibilityNodeInfo? = source
-            repeat(5) {
-                if (node == null) return@repeat
-                val nodeBounds = Rect()
-                if (runCatching { node?.getBoundsInScreen(nodeBounds) }.isSuccess &&
-                    !nodeBounds.isEmpty &&
-                    runCatching { node?.isClickable == true }.getOrDefault(false)
-                ) {
-                    add(nodeBounds)
-                }
-                node = runCatching { node?.parent }.getOrNull()
-            }
-            if (isEmpty()) add(bounds)
-        }
-
-        all.filter { it.screenTapPackage.isBlank() || it.screenTapPackage == packageName }
-            .filter { config ->
-                candidateBounds.any { candidate ->
-                    tapLocationMatches(config, xRatio, yRatio, candidate, width, height)
-                }
-            }
-            .sortedByDescending { advanced.getRuleMetadata(it.id).priority }
-            .forEach { config ->
-                val count = (screenTapCounts[config.id] ?: 0) + 1
-                screenTapCounts[config.id] = count
-                onTapCount(count)
-                screenReset[config.id]?.let(handler::removeCallbacks)
-                // Resolve only after the global window closes. This prevents a
-                // 1-press rule from firing before a longer multi-press sequence is complete.
-                val reset = Runnable {
-                    val finalCount = screenTapCounts.remove(config.id) ?: 0
-                    screenReset.remove(config.id)
-                    if (finalCount == config.pressCount) {
-                        actionExecutor.execute(config, packageName, "לחיצה במיקום במסך")
-                    }
-                }
-                screenReset[config.id] = reset
-                handler.postDelayed(
-                    reset,
-                    tapTimeoutMs.coerceIn(300L, 1500L),
-                )
-            }
+        // Intentionally not used: in-app touch is an action mechanism, not a trigger.
     }
 
     private fun tapLocationMatches(
@@ -155,12 +161,16 @@ class TapDetector(
     ): Boolean {
         val meta = advanced.getRuleMetadata(config.id)
         val landscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val targetX = if (landscape && meta.landscapeX >= 0f) meta.landscapeX
-        else if (!landscape && meta.portraitX >= 0f) meta.portraitX
-        else config.screenTapXRatio
-        val targetY = if (landscape && meta.landscapeY >= 0f) meta.landscapeY
-        else if (!landscape && meta.portraitY >= 0f) meta.portraitY
-        else config.screenTapYRatio
+        val targetX = if (meta.useOrientationSpecificPosition && landscape && meta.landscapeX >= 0f) {
+            meta.landscapeX
+        } else if (meta.useOrientationSpecificPosition && !landscape && meta.portraitX >= 0f) {
+            meta.portraitX
+        } else config.screenTapXRatio
+        val targetY = if (meta.useOrientationSpecificPosition && landscape && meta.landscapeY >= 0f) {
+            meta.landscapeY
+        } else if (meta.useOrientationSpecificPosition && !landscape && meta.portraitY >= 0f) {
+            meta.portraitY
+        } else config.screenTapYRatio
 
         if (!targetX.isFinite() || !targetY.isFinite() || targetX < 0f || targetY < 0f) return false
 
@@ -218,6 +228,25 @@ class TapDetector(
                     if (config.contextConditionValue.isBlank()) {
                         value.contains("radio") || value.contains("fm") || value.contains("dab") || value.contains("tuner")
                     } else foregroundPackage == config.contextConditionValue
+            }
+            ContextConditionType.BRIGHTNESS_LOW -> {
+                val current = runCatching {
+                    android.provider.Settings.System.getInt(
+                        context.contentResolver,
+                        android.provider.Settings.System.SCREEN_BRIGHTNESS,
+                        255,
+                    )
+                }.getOrDefault(255)
+                current <= 64
+            }
+            ContextConditionType.VOLUME_LEVEL -> {
+                val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                if (audio == null) false else {
+                    val expected = config.contextConditionValue.toIntOrNull()?.coerceIn(1, 30) ?: return false
+                    val maxVolume = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                    val current = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+                    kotlin.math.round(current.toDouble() / maxVolume.toDouble() * 30.0).toInt().coerceIn(0, 30) == expected
+                }
             }
         }
     }

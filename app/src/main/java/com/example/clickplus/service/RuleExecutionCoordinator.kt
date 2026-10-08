@@ -3,6 +3,9 @@ package com.example.clickplus.service
 import android.os.Handler
 import android.os.Looper
 import com.example.clickplus.data.ActivityLog
+import com.example.clickplus.data.ActionType
+import com.example.clickplus.data.SystemActionPreset
+import com.example.clickplus.data.profileIdFromActionId
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.KeyActionConfig
@@ -38,7 +41,15 @@ class RuleExecutionCoordinator(
         if (!test) {
             val profiles = advanced.profiles()
             val selectedProfile = profiles.firstOrNull { it.id == meta.profileId }
-            if (selectedProfile != null && !selectedProfile.enabled) {
+            val activeProfileId = AdvancedRuleRepository.activeProfileId(context)
+            if (selectedProfile == null) {
+                logFailure(config, sourcePackage, "הפעולה אינה משויכת לפרופיל קיים")
+                return false
+            }
+            if (selectedProfile.id != activeProfileId) {
+                return false
+            }
+            if (!selectedProfile.enabled) {
                 logFailure(config, sourcePackage, "הפרופיל \"" + selectedProfile.name + "\" מושבת")
                 return false
             }
@@ -61,6 +72,7 @@ class RuleExecutionCoordinator(
                 result.success -> "הפעולה הצליחה"
                 else -> "הפעולה נכשלה"
             }
+            val executionId = result.executionId ?: java.util.UUID.randomUUID().toString()
             AdvancedRuleRepository.addLog(
                 context,
                 ActivityLog(
@@ -69,16 +81,10 @@ class RuleExecutionCoordinator(
                     message = actionMessage,
                     ruleId = config.id,
                     appPackage = sourcePackage,
+                    actionLabel = config.name.ifBlank { config.actionSummary() },
                     success = if (result.pending) null else result.success,
-                    detail = if (test && result.success && result.reason.isBlank()) {
-                        "בדיקה ידנית הסתיימה בהצלחה."
-                    } else if (test && result.success) {
-                        "בדיקה ידנית: " + result.reason
-                    } else if (result.pending || result.success) {
-                        result.reason
-                    } else {
-                        result.reason.ifBlank { "לא נמסר הסבר מהמבצע" }
-                    }
+                    detail = if (test) "בדיקה ידנית" else actualActionDetails(config),
+                    id = executionId,
                 )
             )
             if (!result.success && attempt < attempts) {
@@ -86,7 +92,16 @@ class RuleExecutionCoordinator(
             }
         }
 
-        val delay = AppPreferencesRepository.actionDelaySnapshot(context)
+        val globalDelay = AppPreferencesRepository.actionDelaySnapshot(context)
+        val configuredDelay = if (meta.delayMs > 0L) meta.delayMs.coerceIn(0L, 10_000L) else globalDelay
+        val delay = if (
+            config.actionType == com.example.clickplus.data.ActionType.APP_TAP ||
+            config.actionType == com.example.clickplus.data.ActionType.MULTI_POINT_TAP
+        ) {
+            0L
+        } else {
+            configuredDelay
+        }
         if (delay == 0L) runAttempt(1) else handler.postDelayed({ runAttempt(1) }, delay)
         return true
     }
@@ -101,9 +116,33 @@ class RuleExecutionCoordinator(
                 config.id,
                 sourcePackage,
                 success = false,
-                detail = detail
+                actionLabel = config.name.ifBlank { config.actionSummary() },
+                detail = actualActionDetails(config)
             )
         )
+    }
+
+    private fun actualActionDetails(config: KeyActionConfig): String = when (config.actionType) {
+        ActionType.SYSTEM -> when (config.systemActionId) {
+            SystemActionPreset.HOME.id -> "פתיחת מסך הבית"
+            SystemActionPreset.BACK.id -> "חזרה למסך הקודם"
+            SystemActionPreset.RECENTS.id -> "פתיחת היישומים האחרונים"
+            SystemActionPreset.NOTIFICATIONS.id -> "פתיחת חלונית ההתראות"
+            SystemActionPreset.LOCK_SCREEN.id -> "נעילת המסך"
+            SystemActionPreset.POWER_MENU.id -> "פתיחת תפריט הכיבוי"
+            SystemActionPreset.SCREENSHOT.id -> "צילום מסך"
+            else -> config.actionSummary()
+        }
+        ActionType.APP -> "פתיחת " + config.targetAppName.ifBlank { "האפליקציה שנבחרה" }
+        ActionType.APP_TAP -> "פתיחה + " + config.screenTapCount.coerceIn(1, 10) + " לחיצות ב-" + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " במיקום שנלמד"
+        ActionType.MULTI_POINT_TAP -> "פתיחה + שתי לחיצות ב-" + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " במיקומים שנלמדו"
+        ActionType.PROFILE -> {
+            val targetProfileId = profileIdFromActionId(config.systemActionId)
+            val targetProfile = targetProfileId?.let { id ->
+                advanced.profiles().firstOrNull { it.id == id }
+            }
+            "מעבר לפרופיל " + (targetProfile?.name ?: "שנבחר")
+        }
     }
 
     fun metadata(ruleId: String): RuleAdvancedMetadata = advanced.getRuleMetadata(ruleId)

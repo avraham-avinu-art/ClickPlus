@@ -20,6 +20,7 @@ data class RuleAdvancedMetadata(
     val portraitY: Float = -1f,
     val landscapeX: Float = -1f,
     val landscapeY: Float = -1f,
+    val useOrientationSpecificPosition: Boolean = false,
     val toleranceXRatio: Float = 0.08f,
     val toleranceYRatio: Float = 0.08f,
 )
@@ -39,6 +40,7 @@ class AdvancedRuleRepository(private val context: Context) {
         private const val THEME = "theme_mode"
         private const val LAST_PACKAGE = "last_external_package"
         private const val LOGS = "activity_logs"
+        private const val ACTIVE_PROFILE = "active_profile"
 
         fun currentMode(context: Context): AppMode =
             runCatching {
@@ -52,12 +54,44 @@ class AdvancedRuleRepository(private val context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(MODE, mode.name).apply()
         }
 
+        fun activeProfileId(context: Context): String =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(ACTIVE_PROFILE, "default")
+                .orEmpty()
+                .ifBlank { "default" }
+
+        fun setActiveProfileId(context: Context, profileId: String) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putString(ACTIVE_PROFILE, profileId.ifBlank { "default" }).apply()
+        }
+
+        fun isRuleInActiveProfile(context: Context, ruleId: String): Boolean {
+            val active = activeProfileId(context)
+            return AdvancedRuleRepository(context).getRuleMetadata(ruleId).profileId == active
+        }
+
+        fun cycleProfile(context: Context, direction: Int): String {
+            val repo = AdvancedRuleRepository(context)
+            val profiles = repo.profiles().filter { it.enabled }
+            if (profiles.isEmpty()) {
+                setActiveProfileId(context, "default")
+                return "default"
+            }
+            val current = activeProfileId(context)
+            val index = profiles.indexOfFirst { it.id == current }.let { if (it < 0) 0 else it }
+            val next = profiles[(index + direction + profiles.size) % profiles.size]
+            setActiveProfileId(context, next.id)
+            return next.name
+        }
+
         fun lastExternalPackage(context: Context): String =
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LAST_PACKAGE, "").orEmpty()
 
         fun setLastExternalPackage(context: Context, packageName: String) {
-            if (packageName.isBlank()) return
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LAST_PACKAGE, packageName).apply()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(LAST_PACKAGE, packageName)
+                .apply()
         }
 
         fun logs(context: Context): List<ActivityLog> =
@@ -79,20 +113,16 @@ class AdvancedRuleRepository(private val context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, array.toString()).apply()
         }
 
-        fun updateLatestPendingActionLog(
+        fun updateActionLog(
             context: Context,
-            ruleId: String,
+            logId: String,
             appPackage: String,
             success: Boolean,
             detail: String,
         ) {
+            if (logId.isBlank()) return
             val current = logs(context).toMutableList()
-            val index = current.indexOfFirst {
-                it.ruleId == ruleId &&
-                    it.type == "ACTION" &&
-                    it.success == null &&
-                    it.message == "הפעולה בביצוע"
-            }
+            val index = current.indexOfFirst { it.id == logId }
             if (index < 0) return
             current[index] = current[index].copy(
                 timestamp = System.currentTimeMillis(),
@@ -103,7 +133,10 @@ class AdvancedRuleRepository(private val context: Context) {
             )
             val array = JSONArray()
             current.take(120).forEach { array.put(it.toJson()) }
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, array.toString()).apply()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(LOGS, array.toString())
+                .apply()
         }
 
         fun clearLogs(context: Context) {
@@ -206,6 +239,7 @@ class AdvancedRuleRepository(private val context: Context) {
         .put("portraitY", m.portraitY)
         .put("landscapeX", m.landscapeX)
         .put("landscapeY", m.landscapeY)
+        .put("useOrientationSpecificPosition", m.useOrientationSpecificPosition)
         .put("toleranceXRatio", m.toleranceXRatio)
         .put("toleranceYRatio", m.toleranceYRatio)
 
@@ -227,6 +261,7 @@ class AdvancedRuleRepository(private val context: Context) {
             portraitY = ratio("portraitY"),
             landscapeX = ratio("landscapeX"),
             landscapeY = ratio("landscapeY"),
+            useOrientationSpecificPosition = o.optBoolean("useOrientationSpecificPosition", false),
             toleranceXRatio = tolerance("toleranceXRatio"),
             toleranceYRatio = tolerance("toleranceYRatio"),
         )
@@ -243,6 +278,7 @@ data class ActivityLog(
     val yRatio: Float = -1f,
     val success: Boolean? = null,
     val detail: String = "",
+    val actionLabel: String = "",
     val id: String = UUID.randomUUID().toString(),
 ) {
     fun toJson() = JSONObject()
@@ -256,6 +292,7 @@ data class ActivityLog(
         .put("yRatio", yRatio)
         .put("success", success)
         .put("detail", detail)
+        .put("actionLabel", actionLabel)
 
     companion object {
         fun fromJson(o: JSONObject): ActivityLog {
@@ -275,6 +312,7 @@ data class ActivityLog(
                 yRatio = o.optDouble("yRatio", -1.0).toFloat(),
                 success = if (type == "TRIGGER") null else storedSuccess,
                 detail = o.optString("detail"),
+                actionLabel = o.optString("actionLabel"),
                 id = o.optString("id", UUID.randomUUID().toString()),
             )
         }
