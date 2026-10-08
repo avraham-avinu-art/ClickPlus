@@ -1951,6 +1951,13 @@ private fun EditorScreen(
                             )
                         }
 
+                        if (AdvancedRuleRepository.currentMode(context) == AppMode.BASIC) {
+                            Text(
+                                "במצב בסיסי חלק מהמצבים אינם זמינים.",
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+
                         if (draft.contextConditionType != ContextConditionType.ANY) {
                             Row(
                                 Modifier
@@ -2288,6 +2295,20 @@ private fun EditorScreen(
                         Text(
                             "יעד: " + draft.targetAppName.ifBlank { draft.targetPackage },
                             style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+
+                    permissionRequirementFor(context, draft)?.let { requirement ->
+                        PermissionRequirementCard(
+                            message = requirement.first,
+                            onClick = requirement.second,
+                        )
+                    }
+
+                    if (AdvancedRuleRepository.currentMode(context) == AppMode.BASIC) {
+                        Text(
+                            "אפשרויות שאינן נתמכות במצב בסיסי מוצגות מושבתות.",
+                            style = MaterialTheme.typography.labelSmall,
                         )
                     }
                 }
