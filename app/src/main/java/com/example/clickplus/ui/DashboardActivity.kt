@@ -323,6 +323,7 @@ private fun ClickPlusDashboard(
                 onTimeout = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapTimeout(value) } },
                 onActionDelay = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveActionDelay(value) } },
                 onShowTapCount = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveShowTapCount(value) } },
+                onTapCountSize = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapCountSize(value) } },
                 onTheme = {
                     themeMode = it
                     advanced.saveThemeMode(it)
@@ -1597,7 +1598,7 @@ private fun BackupScreen(
                 .put("tapTimeoutMs", timeout)
                 .put("actionDelayMs", actionDelay)
                 .put("showTapCount", showTapCount)
-                .put("tapCountSizeSp", basePrefs.tapCountSizeSnapshot(context))
+                .put("tapCountSizeSp", AppPreferencesRepository.tapCountSizeSnapshot(context))
                 .put("mode", AdvancedRuleRepository.currentMode(context).name)
                 .put("themeMode", advanced.themeMode()),
         )
