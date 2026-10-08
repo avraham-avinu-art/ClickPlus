@@ -78,8 +78,12 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
         service.startActivity(intent)
 
-        scheduleTapWhenAppIsVisible(config, targetPackage, xRatio, yRatio)
-        return ActionExecutionResult.pending("האפליקציה נפתחה; ממתינים להופעתה על המסך ואז תתבצע הלחיצה")
+        val executionId = java.util.UUID.randomUUID().toString()
+        scheduleTapWhenAppIsVisible(config, targetPackage, xRatio, yRatio, executionId)
+        return ActionExecutionResult.pending(
+            "האפליקציה נפתחה; ממתינים להופעתה על המסך ואז תתבצע הלחיצה",
+            executionId,
+        )
     }
 
     private fun executeMultiPointTap(config: KeyActionConfig): ActionExecutionResult {
@@ -96,8 +100,12 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
             ?: return ActionExecutionResult.failure("אפליקציית היעד אינה מותקנת")
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
         service.startActivity(intent)
-        scheduleTwoTapsWhenAppIsVisible(config, targetPackage, x1, y1, x2, y2)
-        return ActionExecutionResult.pending("האפליקציה נפתחה; שתי הלחיצות יתבצעו כשהיא תהיה בחזית")
+        val executionId = java.util.UUID.randomUUID().toString()
+        scheduleTwoTapsWhenAppIsVisible(config, targetPackage, x1, y1, x2, y2, executionId)
+        return ActionExecutionResult.pending(
+            "האפליקציה נפתחה; שתי הלחיצות יתבצעו כשהיא תהיה בחזית",
+            executionId,
+        )
     }
 
     private fun scheduleTwoTapsWhenAppIsVisible(
@@ -107,6 +115,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         y1: Float,
         x2: Float,
         y2: Float,
+        executionId: String,
     ) {
         val startedAt = System.currentTimeMillis()
         val check = object : Runnable {
@@ -116,7 +125,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                     return
                 }
                 if (service.rootInActiveWindow?.packageName?.toString().orEmpty() == targetPackage) {
-                    dispatchTwoTaps(config, targetPackage, x1, y1, x2, y2)
+                    dispatchTwoTaps(config, targetPackage, x1, y1, x2, y2, executionId)
                 } else handler.postDelayed(this, 150L)
             }
         }
@@ -130,6 +139,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         y1: Float,
         x2: Float,
         y2: Float,
+        executionId: String,
     ) {
         val metrics = service.resources.displayMetrics
         val width = metrics.widthPixels.coerceAtLeast(1).toFloat()
@@ -179,6 +189,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         targetPackage: String,
         xRatio: Float,
         yRatio: Float,
+        executionId: String,
     ) {
         val startedAt = System.currentTimeMillis()
         val timeoutMs = 6000L
@@ -192,7 +203,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
 
                 val foregroundPackage = service.rootInActiveWindow?.packageName?.toString().orEmpty()
                 if (foregroundPackage == targetPackage) {
-                    dispatchLearnedTap(config, targetPackage, xRatio, yRatio)
+                    dispatchLearnedTap(config, targetPackage, xRatio, yRatio, executionId)
                 } else {
                     handler.postDelayed(this, 150L)
                 }
@@ -206,6 +217,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         targetPackage: String,
         xRatio: Float,
         yRatio: Float,
+        executionId: String,
     ) {
         val metrics = service.resources.displayMetrics
         val width = metrics.widthPixels.coerceAtLeast(1).toFloat()
@@ -253,6 +265,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         targetPackage: String,
         success: Boolean,
         detail: String,
+        executionId: String,
     ) {
         val actionDetails = when (config.actionType) {
             ActionType.APP_TAP ->
@@ -261,12 +274,12 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                 "פתיחת " + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " וביצוע שתי לחיצות במיקומים שנלמדו"
             else -> config.actionSummary()
         }
-        AdvancedRuleRepository.updateLatestPendingActionLog(
+        AdvancedRuleRepository.updateActionLog(
             context = service,
-            ruleId = config.id,
+            logId = executionId,
             appPackage = targetPackage,
             success = success,
-            detail = actionDetails,
+            detail = actionDetails + " · " + detail,
         )
     }
 
