@@ -1830,112 +1830,119 @@ internal fun EditorScreen(
                     "תנאי הפעלה",
                     "קודם בוחרים אם הפעולה עובדת בכל מצב או רק בתנאי מסוים.",
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                    ) {
-                        ChoiceChip(
-                            selected = draft.contextConditionType == ContextConditionType.ANY,
-                            onClick = {
-                                draft = draft.copy(
-                                    contextConditionType = ContextConditionType.ANY,
-                                    contextConditionValue = "",
-                                    contextConditionName = "",
-                                )
-                            },
-                            label = "בכל מצב",
-                            modifier = Modifier.weight(1f).height(52.dp),
-                        )
-                        ChoiceChip(
-                            selected = draft.contextConditionType != ContextConditionType.ANY,
-                            onClick = {
-                                if (draft.contextConditionType == ContextConditionType.ANY) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            ChoiceChip(
+                                selected = draft.contextConditionType == ContextConditionType.ANY,
+                                onClick = {
                                     draft = draft.copy(
-                                        contextConditionType = ContextConditionType.APP,
+                                        contextConditionType = ContextConditionType.ANY,
                                         contextConditionValue = "",
                                         contextConditionName = "",
                                     )
-                                }
-                            },
-                            label = "לפי מצב מסוים",
-                            modifier = Modifier.weight(1f).height(52.dp),
-                        )
-                    }
-
-                    if (draft.contextConditionType != ContextConditionType.ANY) {
-                        Spacer(Modifier.height(8.dp))
-                        val basicSupported = setOf(
-                            ContextConditionType.APP,
-                            ContextConditionType.BRIGHTNESS_LOW,
-                            ContextConditionType.VOLUME_LEVEL,
-                        )
-                        Text("בחר את המצב:", fontWeight = FontWeight.Medium)
-                        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            ContextConditionType.entries
-                                .filter { it != ContextConditionType.ANY }
-                                .forEach { condition ->
-                                    val supported = AdvancedRuleRepository.currentMode(context) != AppMode.BASIC ||
-                                        condition in setOf(
-                                            ContextConditionType.APP,
-                                            ContextConditionType.BRIGHTNESS_LOW,
-                                            ContextConditionType.VOLUME_LEVEL,
-                                        )
-                                    ChoiceChip(
-                                        selected = draft.contextConditionType == condition,
-                                        enabled = supported,
-                                        onClick = {
-                                            if (supported) {
-                                                draft = draft.copy(
-                                                    contextConditionType = condition,
-                                                    contextConditionValue = if (
-                                                        condition == ContextConditionType.VOLUME_LEVEL &&
-                                                        draft.contextConditionValue.isBlank()
-                                                    ) "15" else draft.contextConditionValue,
-                                                )
-                                            }
-                                        },
-                                        label = if (supported) {
-                                            condition.titleHebrew
-                                        } else {
-                                            condition.titleHebrew + " · לא זמין במצב בסיסי"
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(min = 48.dp),
-                                    )
-                                }
-                            }
-                        }
-                        if (draft.contextConditionType == ContextConditionType.APP ||
-                            draft.contextConditionType == ContextConditionType.RADIO
-                        ) {
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedButton(onClick = { appDialog = true }, Modifier.fillMaxWidth()) {
-                                Icon(Icons.Outlined.Apps, null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(draft.contextConditionName.ifBlank { "בחירת אפליקציה להשוואה" })
-                            }
-                        }
-                        if (draft.contextConditionType == ContextConditionType.VOLUME_LEVEL) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "עוצמת שמע: " + draft.contextConditionValue.ifBlank { "15" } + " מתוך 30",
-                                fontWeight = FontWeight.Medium,
-                            )
-                            Slider(
-                                value = draft.contextConditionValue.toFloatOrNull()?.coerceIn(1f, 30f) ?: 15f,
-                                onValueChange = {
-                                    draft = draft.copy(
-                                        contextConditionValue = it.toInt().coerceIn(1, 30).toString()
-                                    )
                                 },
-                                valueRange = 1f..30f,
-                                steps = 28,
+                                label = "בכל מצב",
+                                modifier = Modifier.weight(1f).height(52.dp),
                             )
+                            ChoiceChip(
+                                selected = draft.contextConditionType != ContextConditionType.ANY,
+                                onClick = {
+                                    if (draft.contextConditionType == ContextConditionType.ANY) {
+                                        draft = draft.copy(
+                                            contextConditionType = ContextConditionType.APP,
+                                            contextConditionValue = "",
+                                            contextConditionName = "",
+                                        )
+                                    }
+                                },
+                                label = "לפי מצב מסוים",
+                                modifier = Modifier.weight(1f).height(52.dp),
+                            )
+                        }
+
+                        if (draft.contextConditionType != ContextConditionType.ANY) {
+                            Text("בחר את המצב:", fontWeight = FontWeight.Medium)
+
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                ContextConditionType.entries
+                                    .filter { it != ContextConditionType.ANY }
+                                    .forEach { condition ->
+                                        val supported =
+                                            AdvancedRuleRepository.currentMode(context) != AppMode.BASIC ||
+                                                condition in setOf(
+                                                    ContextConditionType.APP,
+                                                    ContextConditionType.BRIGHTNESS_LOW,
+                                                    ContextConditionType.VOLUME_LEVEL,
+                                                )
+                                        ChoiceChip(
+                                            selected = draft.contextConditionType == condition,
+                                            enabled = supported,
+                                            onClick = {
+                                                if (supported) {
+                                                    draft = draft.copy(
+                                                        contextConditionType = condition,
+                                                        contextConditionValue =
+                                                            if (
+                                                                condition == ContextConditionType.VOLUME_LEVEL &&
+                                                                draft.contextConditionValue.isBlank()
+                                                            ) "15" else draft.contextConditionValue,
+                                                    )
+                                                }
+                                            },
+                                            label = if (supported) {
+                                                condition.titleHebrew
+                                            } else {
+                                                condition.titleHebrew + " · לא זמין במצב בסיסי"
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(min = 48.dp),
+                                        )
+                                    }
+                            }
+
+                            if (
+                                draft.contextConditionType == ContextConditionType.APP ||
+                                draft.contextConditionType == ContextConditionType.RADIO
+                            ) {
+                                OutlinedButton(
+                                    onClick = { appDialog = true },
+                                    Modifier.fillMaxWidth().heightIn(min = 46.dp),
+                                ) {
+                                    Icon(Icons.Outlined.Apps, null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        draft.contextConditionName.ifBlank { "בחירת אפליקציה להשוואה" },
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+
+                            if (draft.contextConditionType == ContextConditionType.VOLUME_LEVEL) {
+                                Text(
+                                    "עוצמת שמע: " + draft.contextConditionValue.ifBlank { "15" } + " מתוך 30",
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Slider(
+                                    value = draft.contextConditionValue.toFloatOrNull()?.coerceIn(1f, 30f) ?: 15f,
+                                    onValueChange = {
+                                        draft = draft.copy(
+                                            contextConditionValue = it.toInt().coerceIn(1, 30).toString(),
+                                        )
+                                    },
+                                    valueRange = 1f..30f,
+                                    steps = 28,
+                                )
+                            }
                         }
                     }
                 }
             }
+
             item {
                 EditorSectionCard(
                     "4",
