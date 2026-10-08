@@ -110,14 +110,16 @@ class RuleExecutionCoordinator(
         AdvancedRuleRepository.addLog(
             context,
             ActivityLog(
-                System.currentTimeMillis(),
-                "ACTION",
-                "הפעולה נכשלה",
-                config.id,
-                sourcePackage,
+                timestamp = System.currentTimeMillis(),
+                type = "ACTION",
+                message = "הפעולה נכשלה",
+                ruleId = config.id,
+                appPackage = sourcePackage,
                 success = false,
-                detail = detail
-            )
+                detail = detail,
+                triggerDescription = "הפעלה",
+                actionDescription = config.actionSummary(),
+            ),
         )
     }
 
