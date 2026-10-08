@@ -41,4 +41,36 @@ class KeyActionConfigTest {
         assertEquals("לחיצה אחת", config.pressSummary())
         assertTrue(config.actionSummary().contains("פתיחה+לחיצה"))
     }
+
+    @Test
+    fun exactlyOneProfileIsActive() {
+        val profiles = listOf(
+            ClickPlusProfile("a", "א", enabled = true),
+            ClickPlusProfile("b", "ב", enabled = true),
+            ClickPlusProfile("c", "ג", enabled = false),
+        )
+
+        val (normalized, activeId) =
+            AdvancedRuleRepository.normalizeProfiles(profiles, "b")
+
+        assertEquals("b", activeId)
+        assertEquals(1, normalized.count { it.enabled })
+        assertTrue(normalized.single { it.id == "b" }.enabled)
+        assertFalse(normalized.single { it.id == "a" }.enabled)
+        assertFalse(normalized.single { it.id == "c" }.enabled)
+    }
+
+    @Test
+    fun storedActiveProfileWinsOverLegacyFlags() {
+        val profiles = listOf(
+            ClickPlusProfile("a", "א", enabled = true),
+            ClickPlusProfile("b", "ב", enabled = false),
+        )
+
+        val (normalized, activeId) =
+            AdvancedRuleRepository.normalizeProfiles(profiles, "b")
+
+        assertEquals("b", activeId)
+        assertEquals("b", normalized.single { it.enabled }.id)
+    }
 }
