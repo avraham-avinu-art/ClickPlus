@@ -2384,7 +2384,6 @@ internal fun EditorScreen(
                                     }
                                 }
                             }
-                            }
                         }
                     }
                 }
