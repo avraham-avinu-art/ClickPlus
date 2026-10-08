@@ -780,16 +780,14 @@ private fun StatusScreen(
     val activeProfileId = AdvancedRuleRepository.activeProfileId(context)
     val repo = remember { AdvancedRuleRepository(context) }
     val activeProfile = repo.profiles().firstOrNull { it.id == activeProfileId }
-    val activeRules = mappings.count {
-        it.enabled && repo.getRuleMetadata(it.id).profileId == activeProfileId
-    }
+    val activeRules = mappings.count { repo.getRuleMetadata(it.id).profileId == activeProfileId && it.enabled }
 
     Scaffold(
         topBar = {
             SimpleTopBar(
                 "סטטוס השירות",
                 onBack,
-                "כאן מוצגים מצב העבודה, הפרופיל הפעיל וההרשאות. את מצב העבודה משנים בהגדרות.",
+                "כאן רואים במרוכז מה פעיל ומה חסר.",
             )
         },
     ) { padding ->
@@ -800,74 +798,65 @@ private fun StatusScreen(
         ) {
             item {
                 SettingCard(
-                    "הבדל בין סוגי הטריגר",
-                    "הסבר קבוע על אופן הספירה של שני סוגי הכניסה.",
-                ) {
-                    Text(
-                        "לחיצות כניסה לקליק פלוס: הלחיצה על הסמל אינה נועדה לפתוח מחדש את ממשק ClickPlus, ולכן היא מוגדרת כטריגר כבר מהלחיצה הראשונה. כל כניסה דרך הסמל נספרת מיד.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Text(
-                        "לחיצות כניסה לאפליקציה אחרת: הכניסה תלויה בכך שהאפליקציה שנבחרה כבר פתוחה וזמינה. אם היא לא פתוחה, הכניסה הראשונה רק פותחת אותה ואינה נספרת לטריגר. רק כניסות חוזרות לאחר שהאפליקציה כבר נפתחה נספרות.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-            item {
-                SettingCard(
                     "מצב עבודה",
                     if (mode == AppMode.FULL) {
-                        "מצב מלא משתמש בשירות נגישות כדי לזהות כניסות לאפליקציות ולבצע יכולות מתקדמות."
+                        "מצב מלא משתמש בשירות נגישות כדי לזהות כניסות לאפליקציות ולהפעיל יכולות מתקדמות."
                     } else {
-                        "מצב בסיסי אינו משתמש בשירות נגישות ולכן זמין רק ליכולות המוגבלות יותר של האפליקציה."
+                        "מצב בסיסי פועל ללא שירות נגישות וכולל רק את היכולות המתאימות למצב הזה."
                     },
                 ) {
                     Text(
-                        if (mode == AppMode.FULL) "מצב מלא" else "מצב בסיסי ללא נגישות",
+                        if (mode == AppMode.FULL) {
+                            if (service) "מצב מלא · השירות פעיל" else "מצב מלא · ממתין להפעלת שירות הנגישות"
+                        } else {
+                            "מצב בסיסי · ללא שירות נגישות"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
-                    Text(
-                        if (mode == AppMode.FULL) {
-                            if (service) "זיהוי כניסות לאפליקציות: פעיל" else "זיהוי כניסות לאפליקציות: ממתין להפעלת שירות הנגישות"
-                        } else {
-                            "זיהוי כניסות לאפליקציות באמצעות נגישות: לא פעיל במצב זה"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                    )
                 }
             }
-            item { StatusCard("שירות נגישות", service, if (service) "פעיל" else "כבוי") }
-            item { StatusCard("התראות", notification, if (notification) "ההרשאה פעילה" else "ההרשאה אינה פעילה") }
-            item {
-                StatusCard(
-                    "שימוש בנתוני שימוש",
-                    usage,
-                    if (usage) "הגישה פעילה" else "הגישה אינה פעילה · נדרשת רק בתרחישים מסוימים במצב בסיסי",
-                )
+
+            if (mode == AppMode.FULL && !service) {
+                item { StatusCard("שירות נגישות", false, "השירות אינו פעיל כרגע") }
             }
+            if (mode == AppMode.FULL && Build.VERSION.SDK_INT >= 33 && !notification) {
+                item { StatusCard("התראות", false, "נדרשת הרשאת התראות להצגת הודעת השירות") }
+            }
+            if (mode == AppMode.BASIC && !usage) {
+                item { StatusCard("נתוני שימוש", false, "נדרשת גישה זו כאשר פעולה במצב בסיסי צריכה לזהות אפליקציה פעילה") }
+            }
+            if (mappings.any {
+                    it.actionType == ActionType.SYSTEM &&
+                        (it.systemActionId == SystemActionPreset.ANSWER_CALL.id ||
+                            it.systemActionId == SystemActionPreset.DECLINE_CALL.id)
+                } && !phone
+            ) {
+                item { StatusCard("הרשאת טלפון", false, "נדרשת לאחת מפעולות השיחה שהגדרת") }
+            }
+
             item {
                 StatusCard(
-                    "הרשאת טלפון",
-                    phone,
-                    if (phone) "פעילה" else "לא ניתנה · נדרשת רק למצבי/פעולות שיחה",
+                    "שירות נגישות",
+                    mode == AppMode.BASIC || service,
+                    if (mode == AppMode.BASIC) "לא נדרש במצב בסיסי" else "פעיל",
                 )
             }
             item {
                 SettingCard(
-                    "פרופיל ClickPlus פעיל",
-                    "אלה פרופילים פנימיים של קליק פלוס, ולא פרופילי משתמש של Android.",
+                    "פרופיל פעיל",
+                    "רק פרופיל אחד יכול להיות פעיל בכל רגע.",
                 ) {
                     Text(
                         activeProfile?.name ?: "כללי",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
-                    Text("פעולות מופעלות בפרופיל: " + activeRules)
+                    Text("פעולות פעילות בפרופיל: $activeRules")
                 }
             }
             item {
-                SettingCard("סיכום", "נתונים שימושיים על ההפעלה הנוכחית.") {
+                SettingCard("סיכום", "מידע בסיסי על הפעולות ששמרת.") {
                     Text("סה״כ פעולות: " + mappings.size)
                     Text("פעולות מופעלות: " + mappings.count { it.enabled })
                 }
@@ -875,6 +864,8 @@ private fun StatusScreen(
         }
     }
 }
+
+private fun Boolean?.orDefaultTrue(): Boolean = this ?: true
 
 @Composable
 private fun StatusCard(title: String, ok: Boolean, detail: String) {
@@ -1023,10 +1014,12 @@ private fun ProfilesScreen(
     var activeId by remember { mutableStateOf(AdvancedRuleRepository.activeProfileId(context)) }
     var newProfileDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<ClickPlusProfile?>(null) }
 
     fun saveProfileList(next: List<ClickPlusProfile>) {
-        profiles = next
-        repo.saveProfiles(next)
+        val normalized = if (next.any { it.id == "default" }) next else listOf(ClickPlusProfile("default", "כללי", true)) + next
+        profiles = normalized
+        repo.saveProfiles(normalized)
     }
 
     Scaffold(
@@ -1041,7 +1034,7 @@ private fun ProfilesScreen(
                 actions = {
                     HelpIconButton(
                         "הסבר על פרופילים",
-                        "פרופילים הם קבוצות פנימיות של פעולות בתוך קליק פלוס. רק פעולות ששייכות לפרופיל הפעיל יכולות להופעל אוטומטית."
+                        "רק פרופיל אחד פעיל בכל רגע. פעולה משויכת לפרופיל מסוים ותפעל רק כשהוא פעיל."
                     )
                     IconButton(onClick = { newName = ""; newProfileDialog = true }) {
                         Icon(Icons.Outlined.Add, "פרופיל חדש")
@@ -1058,19 +1051,21 @@ private fun ProfilesScreen(
             item {
                 SettingCard(
                     "הפרופיל הפעיל",
-                    "בחירה של פרופיל בתוך ClickPlus. שינוי כאן אינו משנה שום פרופיל במכשיר.",
+                    "פרופיל מושבת לא ניתן לבחור כפרופיל פעיל.",
                 ) {
-                    FlowRow(
-                        Modifier.fillMaxWidth(),
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         profiles.forEach { profile ->
                             ChoiceChip(
                                 selected = activeId == profile.id,
+                                enabled = profile.enabled,
                                 onClick = {
-                                    activeId = profile.id
-                                    AdvancedRuleRepository.setActiveProfileId(context, profile.id)
+                                    if (profile.enabled) {
+                                        activeId = profile.id
+                                        AdvancedRuleRepository.setActiveProfileId(context, profile.id)
+                                    }
                                 },
                                 label = profile.name,
                                 modifier = Modifier.widthIn(min = 110.dp),
@@ -1079,6 +1074,7 @@ private fun ProfilesScreen(
                     }
                 }
             }
+
             items(profiles, key = { it.id }) { profile ->
                 val count = mappings.count { repo.getRuleMetadata(it.id).profileId == profile.id }
                 OutlinedCard(
@@ -1089,32 +1085,39 @@ private fun ProfilesScreen(
                         Modifier.fillMaxWidth().padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(Modifier.weight(1f)) {
+                        Column(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
                             Text(profile.name, fontWeight = FontWeight.Bold)
                             Text("$count פעולות משויכות", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Column(
+                            Modifier.width(78.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
                             if (profile.id == activeId) {
-                                Text("פעיל עכשיו", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Text(
+                                    "פעיל",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                )
                             }
                         }
                         Switch(
                             checked = profile.enabled,
                             onCheckedChange = {
-                                saveProfileList(profiles.map { p ->
-                                    if (p.id == profile.id) p.copy(enabled = it) else p
-                                })
+                                val nextEnabled = it
+                                if (!nextEnabled && activeId == profile.id) return@Switch
+                                saveProfileList(profiles.map { p -> if (p.id == profile.id) p.copy(enabled = nextEnabled) else p })
                             },
                         )
-                        if (profile.id != "default") {
-                            IconButton(onClick = {
-                                val wasActive = activeId == profile.id
-                                val next = profiles.filterNot { it.id == profile.id }
-                                saveProfileList(next)
-                                if (wasActive) {
-                                    activeId = "default"
-                                    AdvancedRuleRepository.setActiveProfileId(context, "default")
+                        Box(Modifier.width(44.dp), contentAlignment = Alignment.Center) {
+                            if (profile.id != "default") {
+                                IconButton(onClick = { deleteTarget = profile }) {
+                                    Icon(Icons.Outlined.Delete, "מחיקה")
                                 }
-                            }) {
-                                Icon(Icons.Outlined.Delete, "מחיקה")
                             }
                         }
                     }
@@ -1140,13 +1143,50 @@ private fun ProfilesScreen(
                 TextButton(onClick = {
                     val name = newName.trim()
                     if (name.isNotBlank()) {
-                        val next = profiles + ClickPlusProfile(name = name)
-                        saveProfileList(next)
+                        saveProfileList(profiles + ClickPlusProfile(name = name))
                     }
                     newProfileDialog = false
                 }) { Text("הוספה") }
             },
             dismissButton = { TextButton(onClick = { newProfileDialog = false }) { Text("ביטול") } },
+        )
+    }
+
+    deleteTarget?.let { target ->
+        val count = mappings.count { repo.getRuleMetadata(it.id).profileId == target.id }
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("למחוק את הפרופיל?") },
+            text = {
+                Text(
+                    if (count > 0) {
+                        "לפרופיל הזה משויכות $count פעולות. לפני המחיקה הן יועברו לפרופיל "כללי"."
+                    } else {
+                        "הפרופיל יימחק."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (count > 0) {
+                        mappings
+                            .filter { repo.getRuleMetadata(it.id).profileId == target.id }
+                            .forEach { rule ->
+                                repo.saveRuleMetadata(rule.id, repo.getRuleMetadata(rule.id).copy(profileId = "default"))
+                            }
+                    }
+                    val wasActive = activeId == target.id
+                    saveProfileList(profiles.filterNot { it.id == target.id })
+                    if (wasActive) {
+                        activeId = "default"
+                        AdvancedRuleRepository.setActiveProfileId(context, "default")
+                    }
+                    deleteTarget = null
+                }) { Text("מחיקה") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) { Text("ביטול") }
+            },
         )
     }
 }
@@ -2860,8 +2900,11 @@ private fun ChoiceChip(
     label: String,
     modifier: Modifier = Modifier,
     compactText: Boolean = false,
+    enabled: Boolean = true,
 ) {
-    val borderColor = if (selected) {
+    val borderColor = if (!enabled) {
+        MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    } else if (selected) {
         MaterialTheme.colorScheme.primary
     } else {
         MaterialTheme.colorScheme.outline
@@ -2871,7 +2914,9 @@ private fun ChoiceChip(
     } else {
         MaterialTheme.colorScheme.surface
     }
-    val labelColor = if (selected) {
+    val labelColor = if (!enabled) {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    } else if (selected) {
         MaterialTheme.colorScheme.onPrimaryContainer
     } else {
         MaterialTheme.colorScheme.onSurface
@@ -2879,7 +2924,7 @@ private fun ChoiceChip(
     Surface(
         modifier = modifier
             .heightIn(min = 42.dp)
-            .clickable(onClick = onClick),
+             .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(11.dp),
         color = containerColor,
         border = androidx.compose.foundation.BorderStroke(
