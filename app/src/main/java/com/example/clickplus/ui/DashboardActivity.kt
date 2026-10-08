@@ -1403,6 +1403,23 @@ private fun BackupScreen(
     val advanced = remember { AdvancedRuleRepository(context) }
     val basePrefs = remember { AppPreferencesRepository(context) }
     var message by remember { mutableStateOf("") }
+    var pendingImport by remember { mutableStateOf<JSONObject?>(null) }
+    var pendingImportActions by remember { mutableIntStateOf(0) }
+    var pendingImportProfiles by remember { mutableIntStateOf(0) }
+    var showImportConfirm by remember { mutableStateOf(false) }
+    var showResetActionsConfirm by remember { mutableStateOf(false) }
+    var showResetAllConfirm by remember { mutableStateOf(false) }
+
+    fun backupSettings() = JSONObject()
+        .put("tapTimeoutMs", timeout)
+        .put("actionDelayMs", actionDelay)
+        .put("showTapCount", showTapCount)
+        .put("tapCountX", AppPreferencesRepository.tapCountXSnapshot(context))
+        .put("tapCountY", AppPreferencesRepository.tapCountYSnapshot(context))
+        .put("tapCountPosition", AppPreferencesRepository.tapCountPositionSnapshot(context))
+        .put("mode", AdvancedRuleRepository.currentMode(context).name)
+        .put("themeMode", advanced.themeMode())
+        .put("activeProfileId", AdvancedRuleRepository.activeProfileId(context))
 
     val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -1414,6 +1431,25 @@ private fun BackupScreen(
                     context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
                         ?: error("קובץ ריק")
                 )
+                val version = root.optInt("version", -1)
+                if (version != 2) {
+                    error("גרסת גיבוי לא נתמכת")
+                }
+                val actions = root.optJSONArray("mappings") ?: JSONArray()
+                val profiles = root.optJSONArray("profiles") ?: JSONArray()
+                pendingImport = root
+                pendingImportActions = actions.length()
+                pendingImportProfiles = profiles.length()
+                showImportConfirm = true
+            }.onFailure {
+                message = "הייבוא נכשל: " + (it.message ?: "שגיאה")
+            }
+        }
+    }
+
+    fun applyImport(root: JSONObject) {
+        scope.launch {
+            runCatching {
                 val array = root.optJSONArray("mappings") ?: JSONArray()
                 val imported = buildList {
                     for (i in 0 until array.length()) {
@@ -1421,6 +1457,7 @@ private fun BackupScreen(
                     }
                 }
                 basePrefs.saveMappings(imported)
+
                 root.optJSONObject("settings")?.let {
                     if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 1200L))
                     if (it.has("actionDelayMs")) basePrefs.saveActionDelay(it.optLong("actionDelayMs", 0L))
@@ -1428,6 +1465,17 @@ private fun BackupScreen(
                     if (it.has("tapCountX")) basePrefs.saveTapCountX(it.optInt("tapCountX", 50))
                     if (it.has("tapCountY")) basePrefs.saveTapCountY(it.optInt("tapCountY", 65))
                     else if (it.has("tapCountPosition")) basePrefs.saveTapCountPosition(it.optInt("tapCountPosition", 35))
+                    it.optString("mode", "").takeIf { mode -> mode.isNotBlank() }?.let { mode ->
+                        runCatching {
+                            AdvancedRuleRepository.setMode(context, AppMode.valueOf(mode))
+                        }
+                    }
+                    it.optString("themeMode", "").takeIf { theme -> theme.isNotBlank() }?.let { theme ->
+                        advanced.saveThemeMode(theme)
+                    }
+                    it.optString("activeProfileId", "").takeIf { id -> id.isNotBlank() }?.let { id ->
+                        AdvancedRuleRepository.setActiveProfileId(context, id)
+                    }
                 }
                 advanced.importBundle(root)
                 message = "הגיבוי יובא בהצלחה."
@@ -1441,13 +1489,7 @@ private fun BackupScreen(
         uri ?: return@rememberLauncherForActivityResult
         val json = advanced.exportJson(
             JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
-            JSONObject()
-                .put("tapTimeoutMs", timeout)
-                .put("actionDelayMs", actionDelay)
-                .put("showTapCount", showTapCount)
-                .put("tapCountX", AppPreferencesRepository.tapCountXSnapshot(context))
-                .put("tapCountY", AppPreferencesRepository.tapCountYSnapshot(context))
-                .put("tapCountPosition", AppPreferencesRepository.tapCountPositionSnapshot(context)),
+            backupSettings(),
         )
         runCatching {
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json) }
@@ -1455,32 +1497,65 @@ private fun BackupScreen(
         }.onFailure { message = "הייצוא נכשל: " + (it.message ?: "שגיאה") }
     }
 
-    Scaffold(topBar = { SimpleTopBar("גיבוי והעברה", onBack, "כאן אפשר לייצא, לייבא ולאפס את הפעולות וההגדרות.") }) { padding ->
+    fun resetActions() {
+        scope.launch {
+            basePrefs.saveMappings(emptyList())
+            advanced.clearAllRuleMetadata()
+            advanced.saveProfiles(listOf(ClickPlusProfile("default", "כללי", true)))
+            AdvancedRuleRepository.setActiveProfileId(context, "default")
+            message = "הפעולות אופסו."
+        }
+    }
+
+    fun resetAll() {
+        scope.launch {
+            basePrefs.saveMappings(emptyList())
+            basePrefs.saveShowTapCount(false)
+            basePrefs.saveTapTimeout(1200L)
+            basePrefs.saveActionDelay(0L)
+            basePrefs.saveTapCountX(50)
+            basePrefs.saveTapCountY(65)
+            advanced.clearAllRuleMetadata()
+            advanced.saveProfiles(listOf(ClickPlusProfile("default", "כללי", true)))
+            AdvancedRuleRepository.setActiveProfileId(context, "default")
+            AdvancedRuleRepository.setMode(context, AppMode.FULL)
+            advanced.saveThemeMode("system")
+            AdvancedRuleRepository.clearLogs(context)
+            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                .edit()
+                .remove("permission_intro_completed")
+                .remove("permission_bootstrap_done")
+                .apply()
+            message = "כל נתוני האפליקציה אופסו."
+        }
+    }
+
+    Scaffold(topBar = { SimpleTopBar("גיבוי והעברה", onBack, "כאן אפשר לשמור, לייבא או לאפס את נתוני האפליקציה.") }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                SettingCard("ייצוא ושיתוף", "שמור את הפעולות, הפרופילים וההגדרות.") {
+                SettingCard("ייצוא ושיתוף", "שומר פעולות, פרופילים והגדרות.") {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { exportLauncher.launch("clickplus-backup.json") }, Modifier.weight(1f)) { Text("ייצוא") }
+                        Button(onClick = { exportLauncher.launch("clickplus-backup.json") }, Modifier.weight(1f)) {
+                            Text("ייצוא")
+                        }
                         OutlinedButton(
                             onClick = {
                                 val file = java.io.File(context.cacheDir, "clickplus-backup.json")
                                 file.writeText(
                                     advanced.exportJson(
                                         JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
-                                        JSONObject()
-                                            .put("tapTimeoutMs", timeout)
-                                            .put("actionDelayMs", actionDelay)
-                                            .put("showTapCount", showTapCount)
-                                            .put("tapCountX", AppPreferencesRepository.tapCountXSnapshot(context))
-                                            .put("tapCountY", AppPreferencesRepository.tapCountYSnapshot(context))
-                                            .put("tapCountPosition", AppPreferencesRepository.tapCountPositionSnapshot(context)),
+                                        backupSettings(),
                                     )
                                 )
-                                val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    context.packageName + ".fileprovider",
+                                    file,
+                                )
                                 context.startActivity(
                                     Intent.createChooser(
                                         Intent(Intent.ACTION_SEND).apply {
@@ -1493,34 +1568,93 @@ private fun BackupScreen(
                                 )
                             },
                             Modifier.weight(1f),
-                        ) { Text("שיתוף") }
+                        ) {
+                            Text("שיתוף")
+                        }
                     }
                 }
             }
             item {
-                SettingCard("ייבוא", "החלפת הפעולות הנוכחיות בתוכן מהגיבוי.") {
-                    OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) }, Modifier.fillMaxWidth()) { Text("ייבוא גיבוי") }
+                SettingCard("ייבוא", "לפני ההחלפה תוצג תצוגה מקדימה של מספר הפעולות והפרופילים.") {
+                    OutlinedButton(
+                        onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) },
+                        Modifier.fillMaxWidth(),
+                    ) { Text("ייבוא גיבוי") }
                 }
             }
             item {
-                SettingCard("איפוס", "מחיקת כל הפעולות והמטא־נתונים.") {
+                SettingCard("איפוס פעולות", "מחיקת הפעולות והשיוכים שלהן, בלי לשנות הגדרות כלליות.") {
                     OutlinedButton(
-                        onClick = {
-                            scope.launch {
-                                basePrefs.saveMappings(emptyList())
-                                advanced.clearAllRuleMetadata()
-                                advanced.saveProfiles(listOf(ClickPlusProfile("default", "כללי", true)))
-                                message = "הפעולות אופסו."
-                            }
-                        },
+                        onClick = { showResetActionsConfirm = true },
                         Modifier.fillMaxWidth(),
                     ) { Text("איפוס פעולות") }
                 }
             }
-            if (message.isNotBlank()) item {
-                Text(message, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            item {
+                SettingCard("איפוס כל האפליקציה", "מחיקת הפעולות, ההגדרות, היומן והפרופילים וחזרה לברירת המחדל.") {
+                    OutlinedButton(
+                        onClick = { showResetAllConfirm = true },
+                        Modifier.fillMaxWidth(),
+                    ) { Text("איפוס כל האפליקציה") }
+                }
+            }
+            if (message.isNotBlank()) {
+                item {
+                    Text(message, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                }
             }
         }
+    }
+
+    if (showImportConfirm && pendingImport != null) {
+        AlertDialog(
+            onDismissRequest = { showImportConfirm = false },
+            title = { Text("לאשר ייבוא גיבוי?") },
+            text = {
+                Text(
+                    "הקובץ מכיל $pendingImportActions פעולות ו-$pendingImportProfiles פרופילים. " +
+                        "הנתונים הקיימים יוחלפו בנתוני הגיבוי."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showImportConfirm = false
+                    pendingImport?.let(::applyImport)
+                    pendingImport = null
+                }) { Text("אישור ייבוא") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImportConfirm = false; pendingImport = null }) { Text("ביטול") }
+            },
+        )
+    }
+
+    if (showResetActionsConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetActionsConfirm = false },
+            title = { Text("לאפס את הפעולות?") },
+            text = { Text("כל הפעולות והשיוכים שלהן יימחקו.") },
+            confirmButton = {
+                TextButton(onClick = { showResetActionsConfirm = false; resetActions() }) { Text("איפוס") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetActionsConfirm = false }) { Text("ביטול") }
+            },
+        )
+    }
+
+    if (showResetAllConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetAllConfirm = false },
+            title = { Text("לאפס את כל האפליקציה?") },
+            text = { Text("כל הפעולות, ההגדרות, היומן והפרופילים יוחזרו לברירת המחדל.") },
+            confirmButton = {
+                TextButton(onClick = { showResetAllConfirm = false; resetAll() }) { Text("איפוס מלא") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetAllConfirm = false }) { Text("ביטול") }
+            },
+        )
     }
 }
 
