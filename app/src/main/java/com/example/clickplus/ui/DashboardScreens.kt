@@ -1088,7 +1088,6 @@ internal fun BackupScreen(
     var showResetActionsConfirm by remember { mutableStateOf(false) }
     var showResetAllConfirm by remember { mutableStateOf(false) }
     var showResetRuntimeConfirm by remember { mutableStateOf(false) }
-    var showResetRuntimeConfirm by remember { mutableStateOf(false) }
 
     fun backupSettings() = JSONObject()
         .put("tapTimeoutMs", timeout)
@@ -1185,17 +1184,6 @@ internal fun BackupScreen(
             AdvancedRuleRepository.setActiveProfileId(context, "default")
             message = "הפעולות אופסו."
         }
-    }
-
-    fun resetRuntimeState() {
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean("background_only", false)
-            .remove("pending_activation_launches")
-            .remove("last_target_package")
-            .apply()
-        AdvancedRuleRepository.setLastExternalPackage(context, "")
-        message = "מצב הכניסות והאפליקציות שנפתחו אופס."
     }
 
     fun resetAll() {
