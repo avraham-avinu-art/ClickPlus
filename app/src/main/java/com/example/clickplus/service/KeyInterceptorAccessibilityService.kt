@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Build
 import android.provider.Settings
@@ -244,7 +245,6 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
                             )
                             val bitmap = source?.copy(Bitmap.Config.ARGB_8888, false)
                             screenshot.hardwareBuffer.close()
-                            source?.recycle()
 
                             if (bitmap != null) {
                                 val file = java.io.File(cacheDir, "tap-preview-" + System.currentTimeMillis() + ".png")
