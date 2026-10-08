@@ -106,6 +106,7 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             .setSmallIcon(com.example.clickplus.R.drawable.ic_notification_transparent)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setSilent(true)
             .build()
 
         runCatching {
