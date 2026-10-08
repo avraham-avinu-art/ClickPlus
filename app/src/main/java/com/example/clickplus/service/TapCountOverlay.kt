@@ -30,6 +30,7 @@ class TapCountOverlay(private val context: Context) {
     private var hideRunnable: Runnable? = null
     private var xPercentFromLeft = 50
     private var yPercentFromTop = 65
+    private var sizeDp = 48
 
     fun show(count: Int, durationMs: Long = 900L) {
         textView.text = count.toString()
@@ -38,9 +39,10 @@ class TapCountOverlay(private val context: Context) {
             val density = context.resources.displayMetrics.density
             val height = context.resources.displayMetrics.heightPixels
 
+            val sizePx = (sizeDp * density).toInt().coerceAtLeast(1)
             val params = WindowManager.LayoutParams(
-                (64 * density).toInt(),
-                (48 * density).toInt(),
+                sizePx,
+                sizePx,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -48,9 +50,9 @@ class TapCountOverlay(private val context: Context) {
                 PixelFormat.TRANSLUCENT,
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
-                x = ((context.resources.displayMetrics.widthPixels - (64 * density).toInt())
+                x = ((context.resources.displayMetrics.widthPixels - sizePx)
                     .coerceAtLeast(0) * xPercentFromLeft.coerceIn(0, 100) / 100f).toInt()
-                y = ((height - (48 * density).toInt()).coerceAtLeast(0) * yPercentFromTop.coerceIn(0, 100) / 100f).toInt()
+                y = ((height - sizePx).coerceAtLeast(0) * yPercentFromTop.coerceIn(0, 100) / 100f).toInt()
             }
 
             runCatching {
@@ -75,12 +77,23 @@ class TapCountOverlay(private val context: Context) {
             val params = textView.layoutParams as? WindowManager.LayoutParams ?: return
             val density = context.resources.displayMetrics.density
             params.gravity = Gravity.TOP or Gravity.START
-            params.x = ((context.resources.displayMetrics.widthPixels - (64 * density).toInt())
+            params.x = ((context.resources.displayMetrics.widthPixels - (sizeDp * density).toInt())
                 .coerceAtLeast(0) * xPercentFromLeft / 100f).toInt()
-            params.y = ((context.resources.displayMetrics.heightPixels - (48 * density).toInt())
+            params.y = ((context.resources.displayMetrics.heightPixels - (sizeDp * density).toInt())
                 .coerceAtLeast(0) * yPercentFromTop / 100f).toInt()
             runCatching { windowManager.updateViewLayout(textView, params) }
         }
+    }
+
+    fun setSize(sizeDp: Int) {
+        sizeDp = sizeDp.coerceIn(32, 96)
+        val oldVisible = textView.visibility == View.VISIBLE
+        if (attached) {
+            runCatching { windowManager.removeView(textView) }
+            attached = false
+        }
+        this.sizeDp = sizeDp
+        if (oldVisible) show(textView.text?.toString()?.toIntOrNull() ?: 1)
     }
 
     fun hide() {
