@@ -117,6 +117,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -1833,14 +1834,20 @@ private fun EditorScreen(
     var appDialog by remember { mutableStateOf(false) }
     var screenAppDialog by remember { mutableStateOf(false) }
     var learning by remember { mutableStateOf(false) }
+    val configuration = LocalConfiguration.current
     var orientation by remember {
         mutableStateOf(
-            if (context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+            if (configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
                 "landscape"
             } else {
                 "portrait"
             }
         )
+    }
+    LaunchedEffect(configuration.orientation) {
+        orientation = if (
+            configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        ) "landscape" else "portrait"
     }
     var showDelete by remember { mutableStateOf(false) }
     var validationMessage by remember { mutableStateOf("") }
