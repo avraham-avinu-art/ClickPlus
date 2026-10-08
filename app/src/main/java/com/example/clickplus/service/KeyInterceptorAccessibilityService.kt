@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 class KeyInterceptorAccessibilityService : AccessibilityService() {
     @Volatile private var tapCountOverlayEnabled = false
     @Volatile private var lastExternalPackage = ""
+    @Volatile private var currentForegroundPackage = ""
 
     companion object {
         @Volatile var instance: KeyInterceptorAccessibilityService? = null
@@ -57,6 +58,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
 
     fun onLauncherEntry() {
         tapDetector.processActivationLaunch(lastExternalPackage)
+    }
+
+    fun isPackageInForeground(targetPackage: String): Boolean {
+        if (targetPackage.isBlank()) return false
+        val rootPackage = rootInActiveWindow?.packageName?.toString().orEmpty()
+        return currentForegroundPackage == targetPackage || rootPackage == targetPackage
     }
 
     fun openMainInterface() {
@@ -143,9 +150,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
-                if (shouldTrackExternalPackage(eventPackage)) {
+                currentForegroundPackage = if (shouldTrackExternalPackage(eventPackage)) {
                     lastExternalPackage = eventPackage
                     AdvancedRuleRepository.setLastExternalPackage(applicationContext, eventPackage)
+                    eventPackage
+                } else {
+                    ""
                 }
                 updateLearningOverlay(eventPackage)
             }
