@@ -130,7 +130,7 @@ object StandaloneLauncherEngine {
                     latestPackage = pkg
                 }
             }
-            latestPackage
+            if (latestTimestamp == Long.MIN_VALUE || end - latestTimestamp > 3000L) "" else latestPackage
         }.getOrDefault("")
     }
 
