@@ -72,6 +72,7 @@ class RuleExecutionCoordinator(
                 result.success -> "הפעולה הצליחה"
                 else -> "הפעולה נכשלה"
             }
+            val executionId = result.executionId ?: java.util.UUID.randomUUID().toString()
             AdvancedRuleRepository.addLog(
                 context,
                 ActivityLog(
@@ -82,7 +83,8 @@ class RuleExecutionCoordinator(
                     appPackage = sourcePackage,
                     actionLabel = config.name.ifBlank { config.actionSummary() },
                     success = if (result.pending) null else result.success,
-                    detail = if (test) "בדיקה ידנית" else actualActionDetails(config)
+                    detail = if (test) "בדיקה ידנית" else actualActionDetails(config),
+                    id = executionId,
                 )
             )
             if (!result.success && attempt < attempts) {
@@ -91,7 +93,15 @@ class RuleExecutionCoordinator(
         }
 
         val globalDelay = AppPreferencesRepository.actionDelaySnapshot(context)
-        val delay = if (meta.delayMs > 0L) meta.delayMs.coerceIn(0L, 10_000L) else globalDelay
+        val configuredDelay = if (meta.delayMs > 0L) meta.delayMs.coerceIn(0L, 10_000L) else globalDelay
+        val delay = if (
+            config.actionType == com.example.clickplus.data.ActionType.APP_TAP ||
+            config.actionType == com.example.clickplus.data.ActionType.MULTI_POINT_TAP
+        ) {
+            0L
+        } else {
+            configuredDelay
+        }
         if (delay == 0L) runAttempt(1) else handler.postDelayed({ runAttempt(1) }, delay)
         return true
     }
