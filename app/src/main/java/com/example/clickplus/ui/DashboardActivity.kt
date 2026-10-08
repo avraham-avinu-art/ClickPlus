@@ -1597,6 +1597,7 @@ private fun BackupScreen(
                 .put("tapTimeoutMs", timeout)
                 .put("actionDelayMs", actionDelay)
                 .put("showTapCount", showTapCount)
+                .put("tapCountSizeSp", basePrefs.tapCountSizeSnapshot(context))
                 .put("mode", AdvancedRuleRepository.currentMode(context).name)
                 .put("themeMode", advanced.themeMode()),
         )
@@ -1761,6 +1762,9 @@ private fun BackupScreen(
                                 }
                                 if (settings.has("showTapCount")) {
                                     basePrefs.saveShowTapCount(settings.optBoolean("showTapCount", false))
+                                }
+                                if (settings.has("tapCountSizeSp")) {
+                                    basePrefs.saveTapCountSize(settings.optDouble("tapCountSizeSp", 20.0).toFloat())
                                 }
                             }
                             advanced.importBundle(root)
