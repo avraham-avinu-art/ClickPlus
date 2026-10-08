@@ -268,7 +268,7 @@ private fun ClickPlusDashboard(
 ) {
     val context = LocalContext.current
     if (showPermissionIntro) {
-        PermissionIntroScreen(onBeginPermissionSetup, onLaterPermissionSetup)
+        PermissionIntroScreen(onEnter = onLaterPermissionSetup)
         return
     }
 
@@ -483,30 +483,33 @@ private fun HomeDashboard(
 
             item {
                 Row(
-                    Modifier.fillMaxWidth(),
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     OutlinedButton(
                         onClick = onStatus,
-                        Modifier.weight(1f).height(48.dp),
+                        Modifier.height(40.dp).widthIn(min = 118.dp),
+
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
                     ) {
-                        Icon(Icons.Outlined.Tune, null, Modifier.size(17.dp))
+                        Icon(Icons.Outlined.Tune, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("סטטוס השירות", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                     }
                     OutlinedButton(
                         onClick = onLogs,
-                        Modifier.weight(1f).height(48.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                        Modifier.height(40.dp).widthIn(min = 92.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
                     ) {
-                        Icon(Icons.Outlined.History, null, Modifier.size(17.dp))
+                        Icon(Icons.Outlined.History, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("יומן", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                     }
                     OutlinedButton(
                         onClick = onProfiles,
-                        Modifier.weight(1f).height(48.dp),
+                        Modifier.height(40.dp).widthIn(min = 108.dp),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
                     ) {
                         Icon(Icons.Outlined.Apps, null, Modifier.size(17.dp))
@@ -541,22 +544,14 @@ private fun HomeDashboard(
                 ) {
                     Button(
                         onClick = onAdd,
-                        Modifier.weight(1f).height(54.dp),
+                        Modifier.fillMaxWidth().height(54.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp),
                     ) {
                         Icon(Icons.Outlined.Add, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(5.dp))
                         Text("הוספת פעולה", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    OutlinedButton(
-                        onClick = onLogs,
-                        Modifier.weight(1f).height(54.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp),
-                    ) {
-                        Icon(Icons.Outlined.History, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text("יומן", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+
                 }
             }
         }
@@ -615,56 +610,48 @@ private fun RuleCard(
     OutlinedCard(
         Modifier.fillMaxWidth().clickable(onClick = onEdit),
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant,
+        ),
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+        Row(
+            Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                Column(
-                    Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        item.name.ifBlank { "פעולה" },
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        item.pressSummary() + " · " + item.actionSummary(),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Switch(
-                    checked = item.enabled,
-                    onCheckedChange = onEnabledChange,
+                Text(
+                    item.name.ifBlank { "פעולה" },
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                IconButton(onClick = onEdit, Modifier.size(40.dp)) {
-                    Icon(Icons.Outlined.Edit, "עריכה")
-                }
-                IconButton(onClick = onDelete, Modifier.size(40.dp)) {
-                    Icon(Icons.Outlined.Delete, "מחיקה")
-                }
+                Text(
+                    item.contextSummary(),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    item.actionSummary(),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Box(Modifier.weight(1f)) {
-                    AssistSummaryChip("פרופיל: " + profileName)
-                }
-                Box(Modifier.weight(1f)) {
-                    AssistSummaryChip(if (item.enabled) "מופעלת" else "מושבתת")
-                }
+            Switch(
+                checked = item.enabled,
+                onCheckedChange = onEnabledChange,
+            )
+            IconButton(onClick = onDelete, Modifier.size(40.dp)) {
+                Icon(Icons.Outlined.Delete, "מחיקה")
             }
         }
     }
 }
-
 @Composable
 private fun AssistSummaryChip(text: String) {
     Surface(
@@ -677,15 +664,22 @@ private fun AssistSummaryChip(text: String) {
 
 @Composable
 private fun PermissionIntroScreen(
-    onBegin: () -> Unit,
-    onLater: () -> Unit,
+    onEnter: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val notificationLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+    val phoneLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     Surface(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(20.dp, 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
                 Surface(
@@ -711,37 +705,66 @@ private fun PermissionIntroScreen(
             }
             item {
                 Text(
-                    "אפשר להיכנס ולהגדיר את האפליקציה עכשיו. הרשאה נפתחת רק כאשר תכונה מסוימת באמת זקוקה לה.",
+                    "כאן אפשר לתת כל הרשאה בנפרד. אין חובה לאשר את כולן עכשיו.",
                     textAlign = TextAlign.Center,
                 )
             }
             item {
-                SettingCard(
-                    "הרשאות ומה הן מאפשרות",
-                    "אין צורך לאשר את כולן מראש.",
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Text("שירות נגישות – זיהוי כניסות לאפליקציות וביצוע פעולות מערכת.")
-                        Text("התראות – הצגת הודעת השירות כאשר נדרשת.")
-                        Text("טלפון – רק לפעולות הקשורות לשיחות.")
-                        Text("נתוני שימוש – רק אם משתמשים במצב בסיסי שזקוק לזיהוי אפליקציה פעילה.")
+                SettingCard("הרשאות", "בחר בנפרד אילו הרשאות לתת עכשיו.") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                }
+                            },
+                            Modifier.fillMaxWidth(),
+                        ) { Text("שירות נגישות") }
+
+                        OutlinedButton(
+                            onClick = {
+                                if (Build.VERSION.SDK_INT >= 33) {
+                                    notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            },
+                            Modifier.fillMaxWidth(),
+                        ) {
+                            Text(if (Build.VERSION.SDK_INT >= 33) "הרשאת התראות" else "התראות – אין צורך בהרשאה בגרסה זו")
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                if (ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.READ_PHONE_STATE,
+                                    ) != PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    phoneLauncher.launch(Manifest.permission.READ_PHONE_STATE)
+                                }
+                            },
+                            Modifier.fillMaxWidth(),
+                        ) { Text("הרשאת טלפון") }
+
+                        OutlinedButton(
+                            onClick = {
+                                runCatching {
+                                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                }
+                            },
+                            Modifier.fillMaxWidth(),
+                        ) { Text("גישה לנתוני שימוש") }
                     }
                 }
             }
             item {
-                Button(onClick = onBegin, Modifier.fillMaxWidth().height(52.dp)) {
-                    Text("הענקת הרשאות עכשיו")
-                }
-            }
-            item {
-                OutlinedButton(onClick = onLater, Modifier.fillMaxWidth().height(50.dp)) {
-                    Text("מאוחר יותר – כניסה לאפליקציה")
-                }
+                Button(
+                    onClick = onEnter,
+                    Modifier.fillMaxWidth().height(52.dp),
+                ) { Text("כניסה לאפליקציה") }
             }
         }
     }
 }
-
 @Composable
 private fun StatusScreen(
     mappings: List<KeyActionConfig>,
