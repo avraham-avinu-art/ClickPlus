@@ -239,6 +239,21 @@ class AdvancedRuleRepository(private val context: Context) {
         }
         val metadata = root.optJSONObject("ruleMetadata")
         if (metadata != null) prefs.edit().putString(META, metadata.toString()).apply()
+
+        root.optString("mode", "").takeIf { it.isNotBlank() }?.let { mode ->
+            runCatching { AppMode.valueOf(mode) }.getOrNull()?.let { setMode(context, it) }
+        }
+        root.optString("themeMode", "").takeIf { it.isNotBlank() }?.let { saveThemeMode(it) }
+        root.optJSONObject("settings")?.let { settings ->
+            settings.optString("mode", "").takeIf { it.isNotBlank() }?.let { mode ->
+                runCatching { AppMode.valueOf(mode) }.getOrNull()?.let { setMode(context, it) }
+            }
+            settings.optString("themeMode", "").takeIf { it.isNotBlank() }?.let { saveThemeMode(it) }
+        }
+    }
+
+    fun resetPersistentState() {
+        prefs.edit().clear().apply()
     }
 
     private fun loadMetadata(): JSONObject =
