@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.view.KeyEvent
 import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.AdvancedRuleRepository
+import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.profileIdFromActionId
 import com.example.clickplus.data.SystemActionPreset
