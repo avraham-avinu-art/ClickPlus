@@ -253,6 +253,7 @@ private fun ClickPlusDashboard(
     val showTapCount by prefs.showTapCountFlow.collectAsState(initial = false)
     var route by remember { mutableStateOf<DashboardRoute>(DashboardRoute.Home) }
     var themeMode by remember { mutableStateOf(advanced.themeMode()) }
+    var workMode by remember { mutableStateOf(AdvancedRuleRepository.currentMode(context)) }
 
     val dark = when (themeMode) {
         "dark" -> true
@@ -311,6 +312,7 @@ private fun ClickPlusDashboard(
                 actionDelay = actionDelay,
                 showTapCount = showTapCount,
                 themeMode = themeMode,
+                workMode = workMode,
                 onBack = { route = DashboardRoute.Home },
                 onTimeout = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveTapTimeout(value) } },
                 onActionDelay = { value -> kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch { prefs.saveActionDelay(value) } },
@@ -318,6 +320,21 @@ private fun ClickPlusDashboard(
                 onTheme = {
                     themeMode = it
                     advanced.saveThemeMode(it)
+                },
+                onMode = {
+                    workMode = it
+                    AdvancedRuleRepository.setMode(context, it)
+                },
+                onRequestNotification = {
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        runtimePermissionLauncherFromCompose(context, this@DashboardActivity)
+                    }
+                },
+                onOpenAccessibility = {
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                },
+                onOpenUsage = {
+                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                 },
                 onBackup = { route = DashboardRoute.Backup },
             )
