@@ -113,20 +113,16 @@ class AdvancedRuleRepository(private val context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, array.toString()).apply()
         }
 
-        fun updateLatestPendingActionLog(
+        fun updateActionLog(
             context: Context,
-            ruleId: String,
+            logId: String,
             appPackage: String,
             success: Boolean,
             detail: String,
         ) {
+            if (logId.isBlank()) return
             val current = logs(context).toMutableList()
-            val index = current.indexOfFirst {
-                it.ruleId == ruleId &&
-                    it.type == "ACTION" &&
-                    it.success == null &&
-                    it.message == "הפעולה בביצוע"
-            }
+            val index = current.indexOfFirst { it.id == logId }
             if (index < 0) return
             current[index] = current[index].copy(
                 timestamp = System.currentTimeMillis(),
@@ -137,7 +133,10 @@ class AdvancedRuleRepository(private val context: Context) {
             )
             val array = JSONArray()
             current.take(120).forEach { array.put(it.toJson()) }
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, array.toString()).apply()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(LOGS, array.toString())
+                .apply()
         }
 
         fun clearLogs(context: Context) {
