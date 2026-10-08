@@ -12,6 +12,7 @@ import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.os.Build
@@ -115,6 +116,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -1842,6 +1844,7 @@ private fun EditorScreen(
     }
     var showDelete by remember { mutableStateOf(false) }
     var validationMessage by remember { mutableStateOf("") }
+    var tapPreviewImage by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
 
     LaunchedEffect(draft.triggerType, draft.actionType) {
         if (draft.triggerType == TriggerType.SCREEN_TAP && draft.actionType != ActionType.APP_TAP) {
@@ -1853,8 +1856,17 @@ private fun EditorScreen(
     }
 
     LaunchedEffect(draft.id) {
+        var loadedScreenshotPath = ""
         while (true) {
             val p = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+            val screenshotPath = p.getString("tap_capture_screenshot_path", "").orEmpty()
+            if (screenshotPath.isNotBlank() && screenshotPath != loadedScreenshotPath) {
+                BitmapFactory.decodeFile(screenshotPath)?.let { bitmap ->
+                    tapPreviewImage = bitmap.asImageBitmap()
+                    loadedScreenshotPath = screenshotPath
+                }
+            }
+
             if (p.getBoolean("tap_capture_ready", false)) {
                 val capturedX = p.getFloat("tap_capture_x_ratio", -1f)
                 val capturedY = p.getFloat("tap_capture_y_ratio", -1f)
@@ -2323,7 +2335,9 @@ private fun EditorScreen(
                                         screenAppDialog = true
                                     } else {
                                         val p = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                                        tapPreviewImage = null
                                         p.edit()
+                                            .remove("tap_capture_screenshot_path")
                                             .putBoolean("tap_learning", true)
                                             .putString("tap_learning_package", draft.screenTapPackage)
                                             .apply()
@@ -2400,6 +2414,8 @@ private fun EditorScreen(
                                     x = x,
                                     y = y,
                                     toleranceX = metadata.toleranceXRatio,
+                                    screenshot = tapPreviewImage,
+                                    screenshot = tapPreviewImage,
                                     toleranceY = metadata.toleranceYRatio,
                                     onChange = { nx, ny ->
                                         draft = draft.copy(screenTapXRatio = nx, screenTapYRatio = ny)
@@ -2600,6 +2616,11 @@ private fun EditorScreen(
                     screenTapXRatio = -1f,
                     screenTapYRatio = -1f,
                 )
+                tapPreviewImage = null
+                context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                    .edit()
+                    .remove("tap_capture_screenshot_path")
+                    .apply()
                 screenAppDialog = false
             },
         )
