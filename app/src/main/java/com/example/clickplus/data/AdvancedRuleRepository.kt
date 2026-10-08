@@ -35,6 +35,7 @@ class AdvancedRuleRepository(private val context: Context) {
         private const val PREFS = "clickplus_advanced"
         private const val META = "rule_metadata"
         private const val PROFILES = "profiles"
+        private const val ACTIVE_PROFILE = "active_profile_id"
         private const val MODE = "app_mode"
         private const val THEME = "theme_mode"
         private const val LAST_PACKAGE = "last_external_package"
@@ -60,6 +61,9 @@ class AdvancedRuleRepository(private val context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LAST_PACKAGE, packageName).apply()
         }
 
+        fun activeProfileId(context: Context): String =
+            AdvancedRuleRepository(context).activeProfileId()
+
         fun logs(context: Context): List<ActivityLog> =
             runCatching {
                 val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LOGS, "[]") ?: "[]"
@@ -79,16 +83,16 @@ class AdvancedRuleRepository(private val context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, array.toString()).apply()
         }
 
-        fun updateLatestPendingActionLog(
+        fun updatePendingActionLog(
             context: Context,
-            ruleId: String,
+            logId: String,
             appPackage: String,
             success: Boolean,
             detail: String,
         ) {
             val current = logs(context).toMutableList()
             val index = current.indexOfFirst {
-                it.ruleId == ruleId &&
+                it.id == logId &&
                     it.type == "ACTION" &&
                     it.success == null &&
                     it.message == "הפעולה בביצוע"
@@ -132,29 +136,64 @@ class AdvancedRuleRepository(private val context: Context) {
 
     fun profiles(): List<ClickPlusProfile> {
         val raw = prefs.getString(PROFILES, "[]") ?: "[]"
-        return runCatching {
+        val parsed = runCatching {
             val array = JSONArray(raw)
             buildList {
                 for (i in 0 until array.length()) {
                     val o = array.optJSONObject(i) ?: continue
-                    add(ClickPlusProfile(
-                        id = o.optString("id", UUID.randomUUID().toString()),
-                        name = o.optString("name", "פרופיל"),
-                        enabled = o.optBoolean("enabled", true)
-                    ))
+                    add(
+                        ClickPlusProfile(
+                            id = o.optString("id", UUID.randomUUID().toString()),
+                            name = o.optString("name", "פרופיל"),
+                            enabled = o.optBoolean("enabled", true),
+                        ),
+                    )
                 }
             }
-        }.getOrDefault(emptyList()).ifEmpty {
+        }.getOrDefault(emptyList())
+        return parsed.ifEmpty {
             listOf(ClickPlusProfile("default", "כללי", true)).also { saveProfiles(it) }
         }
     }
 
+    fun activeProfileId(): String {
+        val current = prefs.getString(ACTIVE_PROFILE, "").orEmpty()
+        val list = profiles()
+        if (list.any { it.id == current }) return current
+        val legacyActive = list.firstOrNull { it.enabled }?.id ?: list.first().id
+        saveProfiles(list)
+        prefs.edit().putString(ACTIVE_PROFILE, legacyActive).apply()
+        return legacyActive
+    }
+
+    fun setActiveProfileId(id: String) {
+        val list = profiles()
+        if (list.none { it.id == id }) return
+        prefs.edit().putString(ACTIVE_PROFILE, id).apply()
+        saveProfiles(list)
+    }
+
     fun saveProfiles(items: List<ClickPlusProfile>) {
-        val array = JSONArray()
-        items.forEach {
-            array.put(JSONObject().put("id", it.id).put("name", it.name).put("enabled", it.enabled))
+        val safeList = if (items.isEmpty()) listOf(ClickPlusProfile("default", "כללי", true)) else items
+        val storedActive = prefs.getString(ACTIVE_PROFILE, "").orEmpty()
+        val activeId = when {
+            safeList.any { it.id == storedActive } -> storedActive
+            safeList.any { it.enabled } -> safeList.first { it.enabled }.id
+            else -> safeList.first().id
         }
-        prefs.edit().putString(PROFILES, array.toString()).apply()
+        val array = JSONArray()
+        safeList.forEach {
+            array.put(
+                JSONObject()
+                    .put("id", it.id)
+                    .put("name", it.name)
+                    .put("enabled", it.id == activeId),
+            )
+        }
+        prefs.edit()
+            .putString(PROFILES, array.toString())
+            .putString(ACTIVE_PROFILE, activeId)
+            .apply()
     }
 
     fun themeMode(): String = prefs.getString(THEME, "system").orEmpty()
@@ -166,8 +205,9 @@ class AdvancedRuleRepository(private val context: Context) {
             .put("version", 2)
             .put("mappings", JSONArray(baseMappingsJson))
             .put("profiles", JSONArray().also { a -> profiles().forEach { p ->
-                a.put(JSONObject().put("id", p.id).put("name", p.name).put("enabled", p.enabled))
+                a.put(JSONObject().put("id", p.id).put("name", p.name).put("enabled", p.id == activeProfileId()))
             }})
+            .put("activeProfileId", activeProfileId())
             .put("ruleMetadata", loadMetadata())
             .put("settings", baseSettings)
             .put("exportedAt", System.currentTimeMillis())
@@ -180,14 +220,22 @@ class AdvancedRuleRepository(private val context: Context) {
             val list = buildList {
                 for (i in 0 until profileArray.length()) {
                     val o = profileArray.optJSONObject(i) ?: continue
-                    add(ClickPlusProfile(
-                        o.optString("id", UUID.randomUUID().toString()),
-                        o.optString("name", "פרופיל"),
-                        o.optBoolean("enabled", true)
-                    ))
+                    add(
+                        ClickPlusProfile(
+                            o.optString("id", UUID.randomUUID().toString()),
+                            o.optString("name", "פרופיל"),
+                            o.optBoolean("enabled", false),
+                        ),
+                    )
                 }
             }
-            if (list.isNotEmpty()) saveProfiles(list)
+            if (list.isNotEmpty()) {
+                saveProfiles(list)
+                val importedActive = root.optString("activeProfileId", "").orEmpty()
+                if (importedActive.isNotBlank() && list.any { it.id == importedActive }) {
+                    setActiveProfileId(importedActive)
+                }
+            }
         }
         val metadata = root.optJSONObject("ruleMetadata")
         if (metadata != null) prefs.edit().putString(META, metadata.toString()).apply()
@@ -236,6 +284,7 @@ class AdvancedRuleRepository(private val context: Context) {
 data class ActivityLog(
     val timestamp: Long,
     val type: String,
+    /** Status text kept for backwards compatibility. */
     val message: String,
     val ruleId: String = "",
     val appPackage: String = "",
@@ -244,6 +293,8 @@ data class ActivityLog(
     val success: Boolean? = null,
     val detail: String = "",
     val id: String = UUID.randomUUID().toString(),
+    val triggerDescription: String = "",
+    val actionDescription: String = "",
 ) {
     fun toJson() = JSONObject()
         .put("id", id)
@@ -256,6 +307,8 @@ data class ActivityLog(
         .put("yRatio", yRatio)
         .put("success", success)
         .put("detail", detail)
+        .put("triggerDescription", triggerDescription)
+        .put("actionDescription", actionDescription)
 
     companion object {
         fun fromJson(o: JSONObject): ActivityLog {
@@ -276,6 +329,8 @@ data class ActivityLog(
                 success = if (type == "TRIGGER") null else storedSuccess,
                 detail = o.optString("detail"),
                 id = o.optString("id", UUID.randomUUID().toString()),
+                triggerDescription = o.optString("triggerDescription", ""),
+                actionDescription = o.optString("actionDescription", ""),
             )
         }
     }
