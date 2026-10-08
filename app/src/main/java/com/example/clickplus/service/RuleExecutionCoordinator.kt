@@ -134,8 +134,8 @@ class RuleExecutionCoordinator(
             else -> config.actionSummary()
         }
         ActionType.APP -> "פתיחת " + config.targetAppName.ifBlank { "האפליקציה שנבחרה" }
-        ActionType.APP_TAP -> "פתיחת " + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " וביצוע לחיצה במיקום שנלמד"
-        ActionType.MULTI_POINT_TAP -> "פתיחת " + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " וביצוע שתי לחיצות במיקומים שנלמדו"
+        ActionType.APP_TAP -> "פתיחה + " + config.screenTapCount.coerceIn(1, 10) + " לחיצות ב-" + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " במיקום שנלמד"
+        ActionType.MULTI_POINT_TAP -> "פתיחה + שתי לחיצות ב-" + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } + " במיקומים שנלמדו"
         ActionType.PROFILE -> {
             val targetProfileId = profileIdFromActionId(config.systemActionId)
             val targetProfile = targetProfileId?.let { id ->
