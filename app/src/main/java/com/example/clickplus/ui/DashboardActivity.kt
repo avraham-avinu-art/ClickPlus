@@ -1244,11 +1244,11 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
             text = {
                 Text(
                     if (assignedCount == 0) {
-                        "הפרופיל "" + target.name + "" יימחק."
+                        "הפרופיל \"" + target.name + "\" יימחק."
                     } else {
-                        "יש " + assignedCount + " פעולות שמשויכות לפרופיל "" +
+                        "יש " + assignedCount + " פעולות שמשויכות לפרופיל \"" +
                             target.name +
-                            "". הפעולות יועברו לפרופיל "כללי" לפני המחיקה."
+                            "\". הפעולות יועברו לפרופיל \"כללי\" לפני המחיקה."
                     },
                 )
             },
