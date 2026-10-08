@@ -896,6 +896,7 @@ private fun LogsScreen(
 ) {
     val context = LocalContext.current
     var logs by remember { mutableStateOf(AdvancedRuleRepository.logs(context)) }
+    var showClearConfirm by remember { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
@@ -915,7 +916,7 @@ private fun LogsScreen(
                         "הסבר על יומן הפעילות",
                         "כל רשומה כוללת תאריך, שעה, שם הפעולה, תוצאת הביצוע והסבר במקרה של כישלון.",
                     )
-                    IconButton(onClick = { AdvancedRuleRepository.clearLogs(context); logs = emptyList() }) {
+                    IconButton(onClick = { showClearConfirm = true }) {
                         Icon(Icons.Outlined.Delete, "ניקוי")
                     }
                 },
@@ -982,8 +983,20 @@ private fun LogsScreen(
                             } else {
                                 actualActionDetails
                             }
+                            val triggerText = when {
+                                isManualTest -> "בדיקה ידנית"
+                                rule?.triggerType == TriggerType.APP_ENTRY ->
+                                    "כניסה ל-" + rule.triggerAppName.ifBlank { "האפליקציה שנבחרה" }
+                                rule != null -> "לחיצה על ClickPlus"
+                                else -> "הפעלה"
+                            }
                             Text(
-                                "שם הפעולה: " + (rule?.name?.ifBlank { null } ?: log.actionLabel.ifBlank { "פעולה" }),
+                                "הטריגר המפעיל: " + triggerText +
+                                    if (!isManualTest && (rule?.name ?: log.actionLabel).isNotBlank()) {
+                                        " - " + (rule?.name ?: log.actionLabel)
+                                    } else {
+                                        ""
+                                    },
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
@@ -1005,6 +1018,24 @@ private fun LogsScreen(
         }
     }
 }
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("לנקות את היומן?") },
+            text = { Text("כל רשומות היומן יימחקו.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    AdvancedRuleRepository.clearLogs(context)
+                    logs = emptyList()
+                    showClearConfirm = false
+                }) { Text("ניקוי") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("ביטול") }
+            },
+        )
+    }
 
 @Composable
 private fun ProfilesScreen(
@@ -2472,6 +2503,28 @@ private fun EditorScreen(
                 }
             }
 
+            item {
+                OutlinedButton(
+                    onClick = {
+                        val performer = when (AdvancedRuleRepository.currentMode(context)) {
+                            AppMode.BASIC -> BasicActionPerformer(context)
+                            AppMode.FULL -> KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
+                                ?: UnavailableActionPerformer("מצב מלא נבחר, אבל שירות הנגישות אינו פעיל.")
+                        }
+                        RuleExecutionCoordinator(context, performer).execute(
+                            draft,
+                            test = true,
+                            reason = "בדיקה ידנית",
+                        )
+                    },
+                    Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Outlined.PlayArrow, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("בדיקת הפעולה")
+                }
+            }
+
             if (validationMessage.isNotBlank()) {
                 item {
                     Surface(
@@ -2623,25 +2676,6 @@ private fun EditorScreen(
                         metadata.profileId
                     ) { selected ->
                         metadata = metadata.copy(profileId = selected)
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            val performer = when (AdvancedRuleRepository.currentMode(context)) {
-                                AppMode.BASIC -> BasicActionPerformer(context)
-                                AppMode.FULL -> KeyInterceptorAccessibilityService.instance?.let { ActionExecutor(it) }
-                                    ?: UnavailableActionPerformer("מצב מלא נבחר, אבל שירות הנגישות אינו פעיל.")
-                            }
-                            RuleExecutionCoordinator(context, performer).execute(
-                                draft,
-                                test = true,
-                                reason = "בדיקה ידנית",
-                            )
-                        },
-                        Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Outlined.PlayArrow, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("בדיקת הפעולה")
                     }
                 }
             }
