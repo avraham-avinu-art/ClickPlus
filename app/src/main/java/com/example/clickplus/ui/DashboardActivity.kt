@@ -581,7 +581,7 @@ private fun HomeShortcutCard(
 ) {
     Card(
         modifier = Modifier
-            .width(132.dp)
+            .widthIn(min = 116.dp)
             .height(58.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
@@ -663,20 +663,30 @@ private fun RuleCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    "טריגר: " + item.triggerSummary(),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    "פעולה: " + item.actionSummary(),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                ) {
+                    Text(
+                        "טריגר: " + item.triggerSummary(),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                ) {
+                    Text(
+                        "פעולה: " + item.actionSummary(),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
             }
             Switch(
                 checked = item.enabled,
@@ -878,6 +888,7 @@ private fun StatusScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var refreshKey by remember { mutableIntStateOf(0) }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) refreshKey++
@@ -885,10 +896,34 @@ private fun StatusScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+
     var mode by remember(refreshKey) { mutableStateOf(AdvancedRuleRepository.currentMode(context)) }
     val service = remember(refreshKey) { isAccessibilityEnabled(context) }
     val usage = remember(refreshKey) { hasUsageAccess(context) }
-    val screenRules = mappings.count { it.triggerType == TriggerType.SCREEN_TAP && it.enabled }
+    val phone = remember(refreshKey) {
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_PHONE_STATE,
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    val activeRules = mappings.filter { it.enabled }
+    val usageRequired = mode == AppMode.BASIC && activeRules.any {
+        it.triggerType == TriggerType.APP_ENTRY &&
+            it.contextConditionType in setOf(
+                ContextConditionType.APP,
+                ContextConditionType.RADIO,
+            )
+    }
+    val phoneRequired = activeRules.any {
+        it.triggerType == TriggerType.APP_ENTRY &&
+            it.contextConditionType == ContextConditionType.RINGING
+    }
+    val activeProfileName = runCatching {
+        val repo = AdvancedRuleRepository(context)
+        repo.profiles().firstOrNull { it.id == repo.activeProfileId() }?.name ?: "כללי"
+    }.getOrDefault("כללי")
+
     Scaffold(topBar = { SimpleTopBar("מצב השירות", onBack) }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
@@ -896,66 +931,149 @@ private fun StatusScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                StatusCard(
-                    title = "שירות נגישות",
-                    ok = service,
-                    detail = if (service) "השירות פעיל וזמין לפעולות הדורשות נגישות." else "השירות אינו פעיל. במצב מלא הוא נדרש לזיהוי לחיצות ולפעולות מערכת.",
-                    actionText = "פתיחת הגדרות נגישות",
-                    settingsHint = "פתח את שירותי הנגישות, מצא את קליק פלוס והפעל אותו.",
-                    onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
-                )
-            }
-            item {
-                StatusCard(
-                    title = "שימוש בנתוני שימוש",
-                    ok = usage,
-                    detail = if (usage) "הגישה פעילה וניתן לזהות איזו אפליקציה הייתה פתוחה לפני ההפעלה." else "הגישה אינה פעילה. היא נדרשת לזיהוי האפליקציה שהייתה פתוחה לפני ההפעלה.",
-                    actionText = "פתיחת גישת נתוני שימוש",
-                    settingsHint = "פתח את גישת נתוני השימוש, מצא את קליק פלוס ואפשר לה גישה.",
-                    onClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
-                )
-            }
-            item {
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("מצב עבודה", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Column(
-                                Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                ChoiceChip(
-                                    selected = mode == AppMode.FULL,
-                                    onClick = { mode = AppMode.FULL; onMode(AppMode.FULL) },
-                                    label = "מלא",
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                ChoiceChip(
-                                    selected = mode == AppMode.BASIC,
-                                    onClick = { mode = AppMode.BASIC; onMode(AppMode.BASIC) },
-                                    label = "בסיסי ללא נגישות",
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            "מצב עבודה",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ChoiceChip(
+                                selected = mode == AppMode.FULL,
+                                onClick = {
+                                    mode = AppMode.FULL
+                                    onMode(AppMode.FULL)
+                                },
+                                label = "מלא",
+                                modifier = Modifier.weight(1f),
+                            )
+                            ChoiceChip(
+                                selected = mode == AppMode.BASIC,
+                                onClick = {
+                                    mode = AppMode.BASIC
+                                    onMode(AppMode.BASIC)
+                                },
+                                label = "בסיסי ללא נגישות",
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                         Text(
                             if (mode == AppMode.FULL) {
-                                "כל היכולות זמינות, כולל זיהוי מיקום לחיצה ופעולות מערכת."
+                                "מצב מלא מאפשר גם לחיצות במיקום ופעולות מערכת שדורשות נגישות."
                             } else {
-                                "במצב זה אפשר לזהות כניסות, לפתוח אפליקציות ולהפעיל פעולות מדיה, ווליום, הגדרות וחייגן. אי אפשר לזהות מיקום לחיצה במסך או לבצע פעולות מערכת גלובליות כמו בית, חזרה, התראות ויישומים אחרונים."
+                                "מצב בסיסי עובד ללא שירות נגישות, אך חלק מהפעולות אינן זמינות."
                             },
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
             }
+
+            if (mode == AppMode.FULL) {
+                item {
+                    StatusCard(
+                        title = "שירות נגישות",
+                        ok = service,
+                        detail = if (service) {
+                            "השירות פעיל וזמין."
+                        } else {
+                            "השירות חסר ולכן פעולות מסוימות לא יוכלו לפעול."
+                        },
+                        actionText = "הפעלת שירות נגישות",
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        },
+                    )
+                }
+            }
+
+            if (usageRequired) {
+                item {
+                    StatusCard(
+                        title = "נתוני שימוש",
+                        ok = usage,
+                        detail = if (usage) {
+                            "הגישה פעילה."
+                        } else {
+                            "הפעולות הפעילות שלך דורשות את ההרשאה הזאת."
+                        },
+                        actionText = "מתן הרשאת נתוני שימוש",
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                        },
+                    )
+                }
+            }
+
+            if (phoneRequired) {
+                item {
+                    StatusCard(
+                        title = "מצב טלפון",
+                        ok = phone,
+                        detail = if (phone) {
+                            "ההרשאה פעילה."
+                        } else {
+                            "פעולה פעילה דורשת את ההרשאה הזאת."
+                        },
+                        actionText = "מתן הרשאת מצב טלפון",
+                        onClick = {
+                            requestRuntimePermission(context, Manifest.permission.READ_PHONE_STATE)
+                        },
+                    )
+                }
+            }
+
             item {
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                    Column(Modifier.padding(18.dp)) {
-                        Text("בריאות המערכת", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("פעולות פעילות: " + mappings.count { it.enabled })
-                        Text("כללי מיקום: " + screenRules)
-                        Text("מצב השירות: " + if (mode == AppMode.FULL && service || mode == AppMode.BASIC) "תקין" else "דורש הרשאה")
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            "מצב נוכחי",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text("פרופיל פעיל: " + activeProfileName)
+                        Text("פעולות פעילות: " + activeRules.size)
+                        Text(
+                            if (mode == AppMode.FULL && !service) {
+                                "חסר: שירות נגישות"
+                            } else if (usageRequired && !usage) {
+                                "חסר: הרשאת נתוני שימוש"
+                            } else if (phoneRequired && !phone) {
+                                "חסר: הרשאת מצב טלפון"
+                            } else {
+                                "אין הרשאות חסרות שנדרשות כרגע"
+                            },
+                            color = if (
+                                (mode == AppMode.FULL && !service) ||
+                                (usageRequired && !usage) ||
+                                (phoneRequired && !phone)
+                            ) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
+                            fontWeight = FontWeight.Medium,
+                        )
                     }
                 }
             }
@@ -2908,8 +3026,9 @@ private fun AppPickerDialog(
                 label = { Text("חיפוש אפליקציה") },
                 leadingIcon = { Icon(Icons.Outlined.Search, null) },
             )
+            val pickerHeight = (LocalConfiguration.current.screenHeightDp * 0.58f).dp.coerceIn(260.dp, 480.dp)
             LazyColumn(
-                Modifier.fillMaxWidth().height(460.dp),
+                Modifier.fillMaxWidth().height(pickerHeight),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
                 items(filtered, key = { it.packageName }) { app ->
@@ -2988,12 +3107,13 @@ private fun PointEditor(
     val primaryColor = MaterialTheme.colorScheme.primary
     val outlineColor = MaterialTheme.colorScheme.outline
     val surfaceColor = MaterialTheme.colorScheme.surfaceVariant
+    val previewHeight = (LocalConfiguration.current.screenWidthDp * 0.53f).dp.coerceIn(170.dp, 260.dp)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("תצוגה מקדימה · גרור את הנקודה למיקום המדויק")
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(210.dp)
+                .height(previewHeight)
                 .background(
                     surfaceColor,
                     RoundedCornerShape(18.dp),
