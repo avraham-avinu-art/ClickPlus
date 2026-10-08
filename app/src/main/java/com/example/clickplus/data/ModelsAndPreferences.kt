@@ -137,6 +137,7 @@ class AppPreferencesRepository(private val context: Context) {
         val TAP_TIMEOUT_MS = longPreferencesKey("tap_timeout_ms")
         val ACTION_DELAY_MS = longPreferencesKey("action_delay_ms")
         val SHOW_TAP_COUNT = booleanPreferencesKey("show_tap_count")
+        val TAP_COUNT_SIZE_SP = longPreferencesKey("tap_count_size_sp")
         val MAPPINGS_JSON = stringPreferencesKey("mappings_json")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
 
@@ -145,6 +146,14 @@ class AppPreferencesRepository(private val context: Context) {
                 context.dataStore.data.first()[TAP_TIMEOUT_MS]
                     ?.coerceIn(300L, 1500L)
                     ?: 1200L
+            }
+
+        fun tapCountSizeSnapshot(context: Context): Float =
+            runBlocking {
+                context.dataStore.data.first()[TAP_COUNT_SIZE_SP]
+                    ?.toFloat()
+                    ?.coerceIn(14f, 32f)
+                    ?: 20f
             }
 
         fun actionDelaySnapshot(context: Context): Long =
@@ -172,6 +181,7 @@ class AppPreferencesRepository(private val context: Context) {
     val tapTimeoutFlow: Flow<Long> = context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 1200L }
     val actionDelayFlow: Flow<Long> = context.dataStore.data.map { it[ACTION_DELAY_MS] ?: 0L }
     val showTapCountFlow: Flow<Boolean> = context.dataStore.data.map { it[SHOW_TAP_COUNT] ?: false }
+    val tapCountSizeFlow: Flow<Float> = context.dataStore.data.map { (it[TAP_COUNT_SIZE_SP] ?: 20L).toFloat().coerceIn(14f, 32f) }
     val mappingsFlow: Flow<List<KeyActionConfig>> = context.dataStore.data.map { prefs ->
         val array = runCatching { JSONArray(prefs[MAPPINGS_JSON] ?: "[]") }.getOrDefault(JSONArray())
         buildList {
@@ -194,6 +204,9 @@ class AppPreferencesRepository(private val context: Context) {
         context.dataStore.edit { it[ACTION_DELAY_MS] = safe }
     }
     suspend fun saveShowTapCount(enabled: Boolean) { context.dataStore.edit { it[SHOW_TAP_COUNT] = enabled } }
+    suspend fun saveTapCountSize(sizeSp: Float) {
+        context.dataStore.edit { it[TAP_COUNT_SIZE_SP] = sizeSp.coerceIn(14f, 32f).toLong() }
+    }
     suspend fun setOnboardingCompleted(completed: Boolean) { context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed } }
     suspend fun resetAll() {
         context.dataStore.edit { it.clear() }
