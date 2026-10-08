@@ -1087,12 +1087,13 @@ private fun StatusCard(
     ok: Boolean,
     detail: String,
     actionText: String,
-    settingsHint: String,
     onClick: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(
-            Modifier.fillMaxWidth().padding(18.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
@@ -1102,28 +1103,26 @@ private fun StatusCard(
                 Icon(
                     if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
                     contentDescription = null,
-                    tint = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(30.dp),
+                    tint = if (ok) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    modifier = Modifier.size(28.dp),
                 )
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(title, fontWeight = FontWeight.Bold)
                     Text(detail, style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (!ok) {
-                Button(
+                OutlinedButton(
                     onClick = onClick,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(actionText)
                 }
-                Text(
-                    settingsHint,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                )
             }
         }
     }
