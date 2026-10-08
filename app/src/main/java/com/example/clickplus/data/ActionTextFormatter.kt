@@ -25,7 +25,7 @@ object ActionTextFormatter {
                 "פתיחת " + config.screenTapAppName.ifBlank { "האפליקציה שנבחרה" } +
                     " וביצוע שתי לחיצות במיקומים שנלמדו"
             ActionType.PROFILE ->
-                "מעבר לפרופיל " + (profileName?.ifBlank { null } ?: "שנבחר")
+                "מעבר לפרופיל שנבחר"
         }
 
     fun actionLabel(config: KeyActionConfig, profileName: String? = null): String =
