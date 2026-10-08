@@ -141,14 +141,18 @@ class AppPreferencesRepository(private val context: Context) {
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
 
         fun tapTimeoutSnapshot(context: Context): Long =
-            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                .getLong("tap_timeout_ms", 1200L)
-                .coerceIn(300L, 1500L)
+            runBlocking {
+                context.dataStore.data.first()[TAP_TIMEOUT_MS]
+                    ?.coerceIn(300L, 1500L)
+                    ?: 1200L
+            }
 
         fun actionDelaySnapshot(context: Context): Long =
-            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                .getLong("action_delay_ms", 0L)
-                .coerceIn(0L, 5000L)
+            runBlocking {
+                context.dataStore.data.first()[ACTION_DELAY_MS]
+                    ?.coerceIn(0L, 5000L)
+                    ?: 0L
+            }
 
         fun mappingsSnapshot(context: Context): List<KeyActionConfig> =
             runBlocking {
