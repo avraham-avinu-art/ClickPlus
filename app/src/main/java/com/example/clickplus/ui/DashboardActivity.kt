@@ -1887,27 +1887,44 @@ private fun EditorScreen(
 
             item {
                 EditorSectionCard("3", "תנאי הפעלה", "התנאי נבדק ברגע שבו הטריגר מופעל.") {
+                    val basicSupported = setOf(
+                        ContextConditionType.ANY,
+                        ContextConditionType.APP,
+                        ContextConditionType.BRIGHTNESS_LOW,
+                        ContextConditionType.VOLUME_LEVEL,
+                    )
                     FlowRow(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(7.dp),
                         verticalArrangement = Arrangement.spacedBy(7.dp),
                     ) {
                         ContextConditionType.entries.forEach { condition ->
+                            val supported = AdvancedRuleRepository.currentMode(context) != AppMode.BASIC ||
+                                condition in basicSupported
                             ChoiceChip(
                                 selected = draft.contextConditionType == condition,
+                                enabled = supported,
                                 onClick = {
-                                    draft = draft.copy(
-                                        contextConditionType = condition,
-                                        contextConditionValue = if (
-                                            condition == ContextConditionType.VOLUME_LEVEL &&
-                                            draft.contextConditionValue.isBlank()
-                                        ) "15" else draft.contextConditionValue,
-                                    )
+                                    if (supported) {
+                                        draft = draft.copy(
+                                            contextConditionType = condition,
+                                            contextConditionValue = if (
+                                                condition == ContextConditionType.VOLUME_LEVEL &&
+                                                draft.contextConditionValue.isBlank()
+                                            ) "15" else draft.contextConditionValue,
+                                        )
+                                    }
                                 },
                                 label = condition.titleHebrew,
                                 modifier = Modifier.widthIn(min = 125.dp),
                             )
                         }
+                    }
+                    if (AdvancedRuleRepository.currentMode(context) == AppMode.BASIC) {
+                        Text(
+                            "במצב בסיסי האפשרויות שאינן זמינות מוצגות באפור. הן דורשות שירותים שאינם פעילים במצב זה.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                     if (draft.contextConditionType == ContextConditionType.APP ||
                         draft.contextConditionType == ContextConditionType.RADIO
@@ -1980,33 +1997,17 @@ private fun EditorScreen(
                                 compactText = true,
                             )
                         }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(7.dp),
-                        ) {
-                            ChoiceChip(
-                                selected = actionTypeChosen && draft.actionType == ActionType.APP_TAP,
-                                onClick = {
-                                    actionTypeChosen = true
-                                    selectedSystemCategory = null
-                                    draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "")
-                                },
-                                label = "פתיחה + לחיצה",
-                                modifier = Modifier.weight(1f).height(54.dp),
-                                compactText = true,
-                            )
-                            ChoiceChip(
-                                selected = actionTypeChosen && draft.actionType == ActionType.MULTI_POINT_TAP,
-                                onClick = {
-                                    actionTypeChosen = true
-                                    selectedSystemCategory = null
-                                    draft = draft.copy(actionType = ActionType.MULTI_POINT_TAP, systemActionId = "")
-                                },
-                                label = "שתי לחיצות",
-                                modifier = Modifier.weight(1f).height(54.dp),
-                                compactText = true,
-                            )
-                        }
+                        ChoiceChip(
+                            selected = actionTypeChosen && draft.actionType == ActionType.APP_TAP,
+                            onClick = {
+                                actionTypeChosen = true
+                                selectedSystemCategory = null
+                                draft = draft.copy(actionType = ActionType.APP_TAP, systemActionId = "")
+                            },
+                            label = "פתיחה+לחיצות",
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            compactText = true,
+                        )
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -2508,7 +2509,7 @@ private fun PositionPreview(xPercent: Int, yPercent: Int) {
     androidx.compose.foundation.Canvas(
         Modifier
             .fillMaxWidth()
-            .height(120.dp)
+            .heightIn(min = 90.dp, max = 180.dp)
             .background(surfaceVariant, RoundedCornerShape(16.dp))
     ) {
         val x = size.width * xPercent.coerceIn(0, 100) / 100f
@@ -2761,7 +2762,9 @@ private fun AppPickerDialog(
                 leadingIcon = { Icon(Icons.Outlined.Search, null) },
             )
             LazyColumn(
-                Modifier.fillMaxWidth().height(450.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 220.dp, max = 520.dp),
                 contentPadding = PaddingValues(bottom = 20.dp),
             ) {
                 items(filtered, key = { it.packageName }) { app ->
@@ -2782,7 +2785,6 @@ private fun AppPickerDialog(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(app.label, fontWeight = FontWeight.Bold)
-                            Text(app.packageName, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -2844,7 +2846,7 @@ private fun PointEditor(
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(210.dp)
+                .heightIn(min = 170.dp, max = 320.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(18.dp))
         ) {
             androidx.compose.foundation.Canvas(
