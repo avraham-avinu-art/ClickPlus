@@ -121,7 +121,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         val check = object : Runnable {
             override fun run() {
                 if (System.currentTimeMillis() - startedAt >= 6000L) {
-                    logAppTapResult(config, targetPackage, false, "האפליקציה לא הופיעה בחזית בתוך 6 שניות")
+                    logAppTapResult(config, targetPackage, false, "האפליקציה לא הופיעה בחזית בתוך 6 שניות", executionId)
                     return
                 }
                 if (service.rootInActiveWindow?.packageName?.toString().orEmpty() == targetPackage) {
@@ -166,10 +166,10 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                             gesture2,
                             object : AccessibilityService.GestureResultCallback() {
                                 override fun onCompleted(gestureDescription: GestureDescription?) {
-                                    logAppTapResult(config, targetPackage, true, "שתי הלחיצות בוצעו בהצלחה")
+                                    logAppTapResult(config, targetPackage, true, "שתי הלחיצות בוצעו בהצלחה", executionId)
                                 }
                                 override fun onCancelled(gestureDescription: GestureDescription?) {
-                                    logAppTapResult(config, targetPackage, false, "הלחיצה השנייה בוטלה על ידי Android")
+                                    logAppTapResult(config, targetPackage, false, "הלחיצה השנייה בוטלה על ידי Android", executionId)
                                 }
                             },
                             handler,
@@ -177,7 +177,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                     }, delay)
                 }
                 override fun onCancelled(gestureDescription: GestureDescription?) {
-                    logAppTapResult(config, targetPackage, false, "הלחיצה הראשונה בוטלה על ידי Android")
+                    logAppTapResult(config, targetPackage, false, "הלחיצה הראשונה בוטלה על ידי Android", executionId)
                 }
             },
             handler,
@@ -197,7 +197,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         val check = object : Runnable {
             override fun run() {
                 if (System.currentTimeMillis() - startedAt >= timeoutMs) {
-                    logAppTapResult(config, targetPackage, false, "האפליקציה נפתחה, אך לא זוהתה בחזית בתוך 6 שניות")
+                    logAppTapResult(config, targetPackage, false, "האפליקציה נפתחה, אך לא זוהתה בחזית בתוך 6 שניות", executionId)
                     return
                 }
 
@@ -241,12 +241,13 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                             targetPackage,
                             true,
                             "הלחיצה בוצעה ב-X ${(xRatio * 100f).toInt()}% · Y ${(yRatio * 100f).toInt()}%",
+                            executionId,
                         )
                     }
 
                     override fun onCancelled(gestureDescription: GestureDescription?) {
                         super.onCancelled(gestureDescription)
-                        logAppTapResult(config, targetPackage, false, "Android ביטל את הלחיצה באפליקציית היעד")
+                        logAppTapResult(config, targetPackage, false, "Android ביטל את הלחיצה באפליקציית היעד", executionId)
                     }
                 },
                 handler,
@@ -257,6 +258,7 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                 targetPackage,
                 false,
                 "לא ניתן לשלוח את הלחיצה: " + (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName),
+                executionId,
             )
         }
     }
