@@ -1904,7 +1904,9 @@ internal fun EditorScreen(
                                             .heightIn(min = 48.dp),
                                     )
                                 }
-                        }                        if (draft.contextConditionType == ContextConditionType.APP ||
+                            }
+                        }
+                        if (draft.contextConditionType == ContextConditionType.APP ||
                             draft.contextConditionType == ContextConditionType.RADIO
                         ) {
                             Spacer(Modifier.height(8.dp))
