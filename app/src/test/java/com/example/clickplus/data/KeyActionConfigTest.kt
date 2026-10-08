@@ -10,7 +10,8 @@ class KeyActionConfigTest {
         val original = KeyActionConfig(
             name = "בדיקה",
             pressCount = 3,
-            actionType = ActionType.APP,
+            actionTapCount = 4,
+            actionType = ActionType.APP_TAP,
             targetPackage = "com.example.target",
             targetAppName = "Target",
             triggerType = TriggerType.SCREEN_TAP,
@@ -26,6 +27,7 @@ class KeyActionConfigTest {
         assertEquals(original.name, restored.name)
         assertEquals(original.pressCount, restored.pressCount)
         assertEquals(original.actionType, restored.actionType)
+        assertEquals(original.actionTapCount, restored.actionTapCount)
         assertEquals(original.triggerType, restored.triggerType)
         assertEquals(original.screenTapPackage, restored.screenTapPackage)
         assertEquals(original.screenTapAppName, restored.screenTapAppName)
@@ -33,5 +35,7 @@ class KeyActionConfigTest {
         assertEquals(original.screenTapYRatio, restored.screenTapYRatio, 0.0001f)
         assertEquals(original.screenTapToleranceRatio, restored.screenTapToleranceRatio, 0.0001f)
         assertTrue(restored.enabled)
+        assertEquals("כניסה לאפליקציה · לחיצה ב-Source · X 42% · Y 61% · 3 כניסות", original.triggerSummary())
+        assertEquals("פתיחה+4 לחיצות · Source", original.actionSummary())
     }
 }
