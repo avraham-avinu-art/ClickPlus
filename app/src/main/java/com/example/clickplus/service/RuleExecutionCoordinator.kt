@@ -96,7 +96,13 @@ class RuleExecutionCoordinator(
         }
 
         val delay = AppPreferencesRepository.actionDelaySnapshot(context)
-        if (delay == 0L) runAttempt(1) else handler.postDelayed({ runAttempt(1) }, delay)
+        // For "open app + tap", the delay belongs after the target app is visible,
+        // not before opening it. ActionExecutor applies it at the correct point.
+        if (config.actionType == com.example.clickplus.data.ActionType.APP_TAP || delay == 0L) {
+            runAttempt(1)
+        } else {
+            handler.postDelayed({ runAttempt(1) }, delay)
+        }
         return true
     }
 
