@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.ContactsContract
+import android.graphics.BitmapFactory
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
@@ -1730,6 +1731,12 @@ private fun EditorScreen(
     var learning by remember { mutableStateOf(false) }
     var learningStage by remember { mutableIntStateOf(1) }
     var showDelete by remember { mutableStateOf(false) }
+    var learningScreenshot1 by remember(existing?.id) {
+        mutableStateOf(runtimePrefs.getString("tap_learning_screenshot_1", null))
+    }
+    var learningScreenshot2 by remember(existing?.id) {
+        mutableStateOf(runtimePrefs.getString("tap_learning_screenshot_2", null))
+    }
 
     val contactPicker = androidx.activity.compose.rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -1812,6 +1819,10 @@ private fun EditorScreen(
 
     LaunchedEffect(draft.id) {
         while (true) {
+            val latestShot1 = runtimePrefs.getString("tap_learning_screenshot_1", null)
+            val latestShot2 = runtimePrefs.getString("tap_learning_screenshot_2", null)
+            if (latestShot1 != learningScreenshot1) learningScreenshot1 = latestShot1
+            if (latestShot2 != learningScreenshot2) learningScreenshot2 = latestShot2
             if (runtimePrefs.getBoolean("tap_capture_ready", false)) {
                 val capturedX = runtimePrefs.getFloat("tap_capture_x_ratio", -1f)
                 val capturedY = runtimePrefs.getFloat("tap_capture_y_ratio", -1f)
@@ -2454,6 +2465,13 @@ private fun EditorScreen(
                                                 "נקודה ראשונה: X " + (x * 100).toInt() + "% · Y " + (y * 100).toInt() + "%",
                                                 style = MaterialTheme.typography.bodySmall,
                                             )
+                                            if (!learningScreenshot1.isNullOrBlank()) {
+                                                LearningScreenshotPreview(
+                                                    path = learningScreenshot1,
+                                                    x = x,
+                                                    y = y,
+                                                )
+                                            }
                                             PointEditor(
                                                 x,
                                                 y,
@@ -2487,6 +2505,13 @@ private fun EditorScreen(
                                                     fontWeight = FontWeight.Medium,
                                                 )
                                                 if (draft.screenTapSecondXRatio >= 0f) {
+                                                    if (!learningScreenshot2.isNullOrBlank()) {
+                                                        LearningScreenshotPreview(
+                                                            path = learningScreenshot2,
+                                                            x = x2,
+                                                            y = y2,
+                                                        )
+                                                    }
                                                     PointEditor(
                                                         x2,
                                                         y2,
@@ -2783,6 +2808,57 @@ private fun EditorScreen(
                 TextButton(onClick = { showDelete = false }) { Text("ביטול") }
             },
         )
+    }
+}
+
+@Composable
+private fun LearningScreenshotPreview(
+    path: String?,
+    x: Float,
+    y: Float,
+) {
+    val filePath = path?.takeIf { java.io.File(it).exists() } ?: return
+    val image = remember(filePath) {
+        runCatching { BitmapFactory.decodeFile(filePath)?.asImageBitmap() }.getOrNull()
+    } ?: return
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 170.dp, max = 320.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp)),
+    ) {
+        Image(
+            bitmap = image,
+            contentDescription = "צילום מסך של אפליקציית היעד",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+        )
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val px = size.width * x.coerceIn(0f, 1f)
+            val py = size.height * y.coerceIn(0f, 1f)
+            drawCircle(
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                radius = 30f,
+                center = Offset(px, py),
+            )
+            drawCircle(
+                MaterialTheme.colorScheme.primary,
+                radius = 10f,
+                center = Offset(px, py),
+            )
+        }
+        Surface(
+            Modifier.align(Alignment.TopEnd).padding(8.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        ) {
+            Text(
+                "צילום מסך · המיקום שנלמד",
+                Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
     }
 }
 
