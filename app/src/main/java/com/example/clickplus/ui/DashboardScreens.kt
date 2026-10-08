@@ -1366,12 +1366,19 @@ internal fun BackupScreen(
             title = { Text("לאפס את כל האפליקציה?") },
             text = { Text("כל הפעולות, ההגדרות, היומן והפרופילים יוחזרו לברירת המחדל.") },
             confirmButton = {
-                TextButton(onClick = { showResetAllConfirm = false; resetAll() }) { Text("איפוס מלא") }
+                TextButton(
+                    onClick = {
+                        showResetAllConfirm = false
+                        resetAll()
+                    },
+                ) { Text("איפוס מלא") }
             },
             dismissButton = {
                 TextButton(onClick = { showResetAllConfirm = false }) { Text("ביטול") }
             },
         )
+    }
+
     if (showResetRuntimeConfirm) {
         AlertDialog(
             onDismissRequest = { showResetRuntimeConfirm = false },
@@ -1390,29 +1397,7 @@ internal fun BackupScreen(
             },
         )
     }
-
-    }
-    if (showResetRuntimeConfirm) {
-        AlertDialog(
-            onDismissRequest = { showResetRuntimeConfirm = false },
-            title = { Text("לאפס את מצב הכניסות?") },
-            text = { Text("ClickPlus ישכח אילו אפליקציות היו פתוחות ויתחיל לזהות כניסות מחדש.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showResetRuntimeConfirm = false
-                        resetRuntimeState()
-                    },
-                ) { Text("איפוס") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetRuntimeConfirm = false }) { Text("ביטול") }
-            },
-        )
-    }
-
 }
-
 
 @Composable
 internal fun EditorScreen(
