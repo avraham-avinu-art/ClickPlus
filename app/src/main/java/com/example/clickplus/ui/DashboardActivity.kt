@@ -1075,15 +1075,28 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
     val context = LocalContext.current
     val repo = remember { AdvancedRuleRepository(context) }
     var profiles by remember { mutableStateOf(repo.profiles()) }
-    var dialog by remember { mutableStateOf(false) }
+    var activeProfileId by remember { mutableStateOf(repo.activeProfileId()) }
+    var createDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<ClickPlusProfile?>(null) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("פרופילים ומצבים") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowForward, "חזרה") } },
-                actions = { IconButton(onClick = { newName = ""; dialog = true }) { Icon(Icons.Outlined.Add, "פרופיל חדש") } },
+                title = { Text("פרופילים") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Outlined.ArrowForward, "חזרה")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        newName = ""
+                        createDialog = true
+                    }) {
+                        Icon(Icons.Outlined.Add, "פרופיל חדש")
+                    }
+                },
             )
         },
     ) { padding ->
@@ -1094,26 +1107,57 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
         ) {
             items(profiles, key = { it.id }) { profile ->
                 val count = mappings.count {
-                    AdvancedRuleRepository(context).getRuleMetadata(it.id).profileId == profile.id
+                    repo.getRuleMetadata(it.id).profileId == profile.id
                 }
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(profile.name, fontWeight = FontWeight.Bold)
-                            Text(count.toString() + " כללים", style = MaterialTheme.typography.bodySmall)
+                val isActive = profile.id == activeProfileId
+
+                Card(
+                    Modifier.fillMaxWidth().clickable {
+                        if (!isActive) {
+                            activeProfileId = profile.id
+                            repo.setActiveProfileId(profile.id)
+                            profiles = repo.profiles()
                         }
-                        Switch(
-                            checked = profile.enabled,
-                            onCheckedChange = {
-                                profiles = profiles.map { p -> if (p.id == profile.id) p.copy(enabled = it) else p }
-                                repo.saveProfiles(profiles)
-                            },
-                        )
-                        if (profile.id != "default") {
-                            IconButton(onClick = {
-                                profiles = profiles.filterNot { it.id == profile.id }
-                                repo.saveProfiles(profiles)
-                            }) { Icon(Icons.Outlined.Delete, "מחיקה") }
+                    },
+                    shape = RoundedCornerShape(18.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Text(profile.name, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (count == 1) "פעולה אחת" else count.toString() + " פעולות",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+
+                        Box(
+                            Modifier.size(40.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (isActive) {
+                                Icon(
+                                    Icons.Outlined.CheckCircle,
+                                    contentDescription = "פרופיל פעיל",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+
+                        Box(
+                            Modifier.size(40.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (profile.id != "default") {
+                                IconButton(onClick = { deleteTarget = profile }) {
+                                    Icon(Icons.Outlined.Delete, "מחיקה")
+                                }
+                            }
                         }
                     }
                 }
@@ -1121,9 +1165,9 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
         }
     }
 
-    if (dialog) {
+    if (createDialog) {
         AlertDialog(
-            onDismissRequest = { dialog = false },
+            onDismissRequest = { createDialog = false },
             title = { Text("פרופיל חדש") },
             text = {
                 OutlinedTextField(
@@ -1137,13 +1181,69 @@ private fun ProfilesScreen(mappings: List<KeyActionConfig>, onBack: () -> Unit) 
                 TextButton(onClick = {
                     val name = newName.trim()
                     if (name.isNotBlank()) {
-                        profiles = profiles + ClickPlusProfile(name = name)
-                        repo.saveProfiles(profiles)
+                        val created = profiles + ClickPlusProfile(name = name, enabled = false)
+                        repo.saveProfiles(created)
+                        profiles = repo.profiles()
                     }
-                    dialog = false
-                }) { Text("הוספה") }
+                    createDialog = false
+                }) {
+                    Text("הוספה")
+                }
             },
-            dismissButton = { TextButton(onClick = { dialog = false }) { Text("ביטול") } },
+            dismissButton = {
+                TextButton(onClick = { createDialog = false }) {
+                    Text("ביטול")
+                }
+            },
+        )
+    }
+
+    deleteTarget?.let { target ->
+        val assignedCount = mappings.count {
+            repo.getRuleMetadata(it.id).profileId == target.id
+        }
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("למחוק את הפרופיל?") },
+            text = {
+                Text(
+                    if (assignedCount == 0) {
+                        "הפרופיל "" + target.name + "" יימחק."
+                    } else {
+                        "יש " + assignedCount + " פעולות שמשויכות לפרופיל "" +
+                            target.name +
+                            "". הפעולות יועברו לפרופיל "כללי" לפני המחיקה."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val defaultProfileId = "default"
+                    mappings.filter {
+                        repo.getRuleMetadata(it.id).profileId == target.id
+                    }.forEach { rule ->
+                        val metadata = repo.getRuleMetadata(rule.id)
+                        repo.saveRuleMetadata(rule.id, metadata.copy(profileId = defaultProfileId))
+                    }
+
+                    val remaining = profiles.filterNot { it.id == target.id }
+                    repo.saveProfiles(remaining)
+                    if (activeProfileId == target.id) {
+                        activeProfileId = defaultProfileId
+                        repo.setActiveProfileId(defaultProfileId)
+                    }
+                    profiles = repo.profiles()
+                    activeProfileId = repo.activeProfileId()
+                    deleteTarget = null
+                }) {
+                    Text(if (assignedCount == 0) "מחיקה" else "העברה לכללי ומחיקה")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) {
+                    Text("ביטול")
+                }
+            },
         )
     }
 }
