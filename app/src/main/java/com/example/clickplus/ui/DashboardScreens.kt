@@ -1086,6 +1086,7 @@ internal fun BackupScreen(
     var showResetActionsConfirm by remember { mutableStateOf(false) }
     var showResetAllConfirm by remember { mutableStateOf(false) }
     var showResetRuntimeConfirm by remember { mutableStateOf(false) }
+    var showResetRuntimeConfirm by remember { mutableStateOf(false) }
 
     fun backupSettings() = JSONObject()
         .put("tapTimeoutMs", timeout)
@@ -1218,6 +1219,18 @@ internal fun BackupScreen(
         }
     }
 
+    fun resetRuntimeState() {
+        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("background_only", false)
+            .remove("pending_activation_launches")
+            .remove("last_target_package")
+            .apply()
+        AdvancedRuleRepository.setLastExternalPackage(context, "")
+        KeyInterceptorAccessibilityService.instance?.resetOpenAppTracking()
+        message = "מצב הכניסות והאפליקציות שנפתחו אופס."
+    }
+
     Scaffold(topBar = { SimpleTopBar("גיבוי והעברה", onBack, "כאן אפשר לשמור, לייבא או לאפס את נתוני האפליקציה.") }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
@@ -1268,6 +1281,14 @@ internal fun BackupScreen(
                         onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) },
                         Modifier.fillMaxWidth(),
                     ) { Text("ייבוא גיבוי") }
+                }
+            }
+            item {
+                SettingCard("איפוס מצב כניסות", "מאפס את זיהוי הכניסה ואת רשימת האפליקציות שנפתחו, בלי למחוק פעולות.") {
+                    OutlinedButton(
+                        onClick = { showResetRuntimeConfirm = true },
+                        Modifier.fillMaxWidth(),
+                    ) { Text("איפוס מצב כניסות ואפליקציות שנפתחו") }
                 }
             }
             item {
@@ -1371,6 +1392,25 @@ internal fun BackupScreen(
     }
 
     }
+    if (showResetRuntimeConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetRuntimeConfirm = false },
+            title = { Text("לאפס את מצב הכניסות?") },
+            text = { Text("ClickPlus ישכח אילו אפליקציות היו פתוחות ויתחיל לזהות כניסות מחדש.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showResetRuntimeConfirm = false
+                        resetRuntimeState()
+                    },
+                ) { Text("איפוס") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetRuntimeConfirm = false }) { Text("ביטול") }
+            },
+        )
+    }
+
 }
 
 
