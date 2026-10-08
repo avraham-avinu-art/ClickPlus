@@ -2458,9 +2458,8 @@ private fun EditorScreen(
                                     x = x,
                                     y = y,
                                     toleranceX = metadata.toleranceXRatio,
-                                    screenshot = tapPreviewImage,
-                                    screenshot = tapPreviewImage,
                                     toleranceY = metadata.toleranceYRatio,
+                                    screenshot = tapPreviewImage,
                                     onChange = { nx, ny ->
                                         draft = draft.copy(screenTapXRatio = nx, screenTapYRatio = ny)
                                         metadata = if (orientation == "landscape") {
