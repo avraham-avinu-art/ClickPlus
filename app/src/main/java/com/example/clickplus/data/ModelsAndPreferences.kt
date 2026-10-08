@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -242,137 +243,135 @@ class AppPreferencesRepository(private val context: Context) {
         val MAPPINGS_JSON = stringPreferencesKey("mappings_json")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
 
+        @Volatile private var cachedTapTimeoutMs = 1200L
+        @Volatile private var cachedActionDelayMs = 0L
+        @Volatile private var cachedTapCountX = 50
+        @Volatile private var cachedTapCountY = 65
+        @Volatile private var cachedTapCountSize = 48
+        @Volatile private var cachedMappings: List<KeyActionConfig> = emptyList()
+
         fun tapTimeoutSnapshot(context: Context): Long =
-            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                .getLong("tap_timeout_ms", 1200L)
-                .coerceIn(300L, 1500L)
+            cachedTapTimeoutMs.coerceIn(300L, 1500L)
 
         fun actionDelaySnapshot(context: Context): Long =
-            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                .getLong("action_delay_ms", 0L)
-                .coerceIn(0L, 5000L)
+            cachedActionDelayMs.coerceIn(0L, 5000L)
 
         fun tapCountXSnapshot(context: Context): Int =
-            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                .getLong("tap_count_x", 50L)
-                .toInt()
-                .coerceIn(0, 100)
+            cachedTapCountX.coerceIn(0, 100)
 
         fun tapCountYSnapshot(context: Context): Int =
-            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                .getLong("tap_count_y", 65L)
-                .toInt()
-                .coerceIn(0, 100)
+            cachedTapCountY.coerceIn(0, 100)
 
         fun tapCountPositionSnapshot(context: Context): Int =
-            (100 - tapCountYSnapshot(context)).coerceIn(0, 100)
+            (100 - cachedTapCountY).coerceIn(0, 100)
 
         fun tapCountSizeSnapshot(context: Context): Int =
-            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                .getLong("tap_count_size", 48L)
-                .toInt()
-                .coerceIn(32, 96)
+            cachedTapCountSize.coerceIn(32, 96)
 
-        fun mappingsSnapshot(context: Context): List<KeyActionConfig> {
-            val raw = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-                .getString("mappings_json", "[]") ?: "[]"
-            return runCatching {
-                val array = JSONArray(raw)
-                buildList {
-                    for (i in 0 until array.length()) {
-                        array.optJSONObject(i)?.let { add(KeyActionConfig.fromJson(it)) }
-                    }
+        fun mappingsSnapshot(context: Context): List<KeyActionConfig> = cachedMappings
+    }
+
+    val backgroundOnlyFlow: Flow<Boolean> =
+        context.dataStore.data.map { it[BACKGROUND_ONLY] ?: true }
+
+    val tapTimeoutFlow: Flow<Long> =
+        context.dataStore.data.map {
+            (it[TAP_TIMEOUT_MS] ?: 1200L).coerceIn(300L, 1500L)
+        }.onEach { cachedTapTimeoutMs = it }
+
+    val actionDelayFlow: Flow<Long> =
+        context.dataStore.data.map {
+            (it[ACTION_DELAY_MS] ?: 0L).coerceIn(0L, 5000L)
+        }.onEach { cachedActionDelayMs = it }
+
+    val showTapCountFlow: Flow<Boolean> =
+        context.dataStore.data.map { it[SHOW_TAP_COUNT] ?: false }
+
+    val tapCountXFlow: Flow<Int> =
+        context.dataStore.data.map {
+            (it[TAP_COUNT_X] ?: 50L).toInt().coerceIn(0, 100)
+        }.onEach { cachedTapCountX = it }
+
+    val tapCountYFlow: Flow<Int> =
+        context.dataStore.data.map {
+            (it[TAP_COUNT_Y] ?: (100 - (it[TAP_COUNT_POSITION]?.toInt()?.coerceIn(5, 90) ?: 35))).toInt()
+                .coerceIn(0, 100)
+        }.onEach { cachedTapCountY = it }
+
+    val tapCountPositionFlow: Flow<Int> =
+        tapCountYFlow.map { (100 - it).coerceIn(0, 100) }
+
+    val tapCountSizeFlow: Flow<Int> =
+        context.dataStore.data.map {
+            (it[TAP_COUNT_SIZE] ?: 48L).toInt().coerceIn(32, 96)
+        }.onEach { cachedTapCountSize = it }
+
+    val mappingsFlow: Flow<List<KeyActionConfig>> =
+        context.dataStore.data.map { prefs ->
+            val array = runCatching { JSONArray(prefs[MAPPINGS_JSON] ?: "[]") }.getOrDefault(JSONArray())
+            buildList {
+                for (i in 0 until array.length()) {
+                    runCatching { array.getJSONObject(i) }.getOrNull()
+                        ?.let { add(KeyActionConfig.fromJson(it)) }
                 }
-            }.getOrDefault(emptyList())
-        }
-    }
-
-    val backgroundOnlyFlow: Flow<Boolean> = context.dataStore.data.map { it[BACKGROUND_ONLY] ?: true }
-    val tapTimeoutFlow: Flow<Long> = context.dataStore.data.map { it[TAP_TIMEOUT_MS] ?: 1200L }
-    val actionDelayFlow: Flow<Long> = context.dataStore.data.map { it[ACTION_DELAY_MS] ?: 0L }
-    val showTapCountFlow: Flow<Boolean> = context.dataStore.data.map { it[SHOW_TAP_COUNT] ?: false }
-    val tapCountXFlow: Flow<Int> = context.dataStore.data.map { it[TAP_COUNT_X]?.toInt()?.coerceIn(0, 100) ?: 50 }
-    val tapCountYFlow: Flow<Int> = context.dataStore.data.map {
-        it[TAP_COUNT_Y]?.toInt()?.coerceIn(0, 100)
-            ?: (100 - (it[TAP_COUNT_POSITION]?.toInt()?.coerceIn(5, 90) ?: 35))
-    }
-    val tapCountPositionFlow: Flow<Int> = tapCountYFlow.map { (100 - it).coerceIn(0, 100) }
-    val tapCountSizeFlow: Flow<Int> = context.dataStore.data.map {
-        it[TAP_COUNT_SIZE]?.toInt()?.coerceIn(32, 96) ?: 48
-    }
-    val mappingsFlow: Flow<List<KeyActionConfig>> = context.dataStore.data.map { prefs ->
-        val array = runCatching { JSONArray(prefs[MAPPINGS_JSON] ?: "[]") }.getOrDefault(JSONArray())
-        buildList {
-            for (i in 0 until array.length()) {
-                runCatching { array.getJSONObject(i) }.getOrNull()?.let { add(KeyActionConfig.fromJson(it)) }
             }
-        }
-    }
-    val onboardingCompletedFlow: Flow<Boolean> = context.dataStore.data.map { it[ONBOARDING_COMPLETED] ?: false }
+        }.onEach { cachedMappings = it }
+
+    val onboardingCompletedFlow: Flow<Boolean> =
+        context.dataStore.data.map { it[ONBOARDING_COMPLETED] ?: false }
 
     suspend fun saveBackgroundOnly(enabled: Boolean) {
         context.dataStore.edit { it[BACKGROUND_ONLY] = enabled }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean("background_only", enabled)
-            .apply()
     }
+
     suspend fun saveTapTimeout(ms: Long) {
         val safe = ms.coerceIn(300L, 1500L)
         context.dataStore.edit { it[TAP_TIMEOUT_MS] = safe }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit().putLong("tap_timeout_ms", safe).apply()
+        cachedTapTimeoutMs = safe
     }
+
     suspend fun saveActionDelay(ms: Long) {
         val safe = ms.coerceIn(0L, 5000L)
         context.dataStore.edit { it[ACTION_DELAY_MS] = safe }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit().putLong("action_delay_ms", safe).apply()
+        cachedActionDelayMs = safe
     }
+
     suspend fun saveShowTapCount(enabled: Boolean) {
         context.dataStore.edit { it[SHOW_TAP_COUNT] = enabled }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit().putBoolean("show_tap_count", enabled).apply()
     }
+
     suspend fun saveTapCountSize(sizeDp: Int) {
         val safe = sizeDp.coerceIn(32, 96)
         context.dataStore.edit { it[TAP_COUNT_SIZE] = safe.toLong() }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit()
-            .putLong("tap_count_size", safe.toLong())
-            .apply()
+        cachedTapCountSize = safe
     }
 
     suspend fun saveTapCountPosition(percentFromBottom: Int) {
-        val safe = percentFromBottom.coerceIn(0, 100)
-        saveTapCountY(100 - safe)
+        saveTapCountY(100 - percentFromBottom.coerceIn(0, 100))
     }
 
     suspend fun saveTapCountX(percentFromLeft: Int) {
         val safe = percentFromLeft.coerceIn(0, 100)
         context.dataStore.edit { it[TAP_COUNT_X] = safe.toLong() }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit().putLong("tap_count_x", safe.toLong()).apply()
+        cachedTapCountX = safe
     }
 
     suspend fun saveTapCountY(percentFromTop: Int) {
         val safe = percentFromTop.coerceIn(0, 100)
-        context.dataStore.edit {
-            it[TAP_COUNT_Y] = safe.toLong()
-            it[TAP_COUNT_POSITION] = (100 - safe).toLong()
-        }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
-            .edit()
-            .putLong("tap_count_y", safe.toLong())
-            .putLong("tap_count_position", (100 - safe).toLong())
-            .apply()
+        context.dataStore.edit { it[TAP_COUNT_Y] = safe.toLong() }
+        cachedTapCountY = safe
     }
-    suspend fun setOnboardingCompleted(completed: Boolean) { context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed } }
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed }
+    }
+
     suspend fun saveMappings(mappings: List<KeyActionConfig>) {
         val array = JSONArray()
         mappings.forEach { array.put(it.toJson()) }
         val raw = array.toString()
         context.dataStore.edit { it[MAPPINGS_JSON] = raw }
-        context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE).edit().putString("mappings_json", raw).apply()
+        cachedMappings = mappings
     }
 }
+
