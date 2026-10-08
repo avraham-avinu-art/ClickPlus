@@ -365,26 +365,21 @@ private fun HomeDashboard(
     onLogs: () -> Unit,
     onProfiles: () -> Unit,
     onSettings: () -> Unit,
-    onTest: () -> Unit,
 ) {
     val context = LocalContext.current
     val mode = AdvancedRuleRepository.currentMode(context)
     val accessibilityEnabled = isAccessibilityEnabled(context)
     var query by remember { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<KeyActionConfig?>(null) }
-    val active = mappings.count { it.enabled }
-    val apps = mappings.mapNotNull {
-        when {
-            it.triggerType == TriggerType.SCREEN_TAP -> it.screenTapPackage
-            it.actionType == ActionType.APP -> it.targetPackage
-            it.contextConditionType == ContextConditionType.APP -> it.contextConditionValue
-            else -> null
-        }
-    }.filter { it.isNotBlank() }.distinct().size
     val filtered = mappings.filter {
         val q = query.trim()
         q.isBlank() || listOf(
-            it.name, it.actionSummary(), it.contextSummary(), it.targetAppName, it.screenTapAppName
+            it.name,
+            it.triggerSummary(),
+            it.actionSummary(),
+            it.contextSummary(),
+            it.targetAppName,
+            it.screenTapAppName,
         ).any { value -> value.contains(q, true) }
     }
 
@@ -393,104 +388,92 @@ private fun HomeDashboard(
             TopAppBar(
                 title = { Text("קליק פלוס", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, "הגדרות") }
+                    IconButton(onClick = onAdd) {
+                        Icon(Icons.Outlined.Add, "הוספת פעולה")
+                    }
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Outlined.Settings, "הגדרות")
+                    }
                 },
             )
-        },
-        bottomBar = {
-            Surface(shadowElevation = 8.dp) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Button(
-                        onClick = onAdd,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(60.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "הוספת פעולה",
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = onTest,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(60.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Icon(Icons.Outlined.History, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "יומן",
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
         },
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(12.dp, 8.dp, 12.dp, 18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
                 Card(
                     Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
                 ) {
                     Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onStatus)
-                            .padding(20.dp),
+                        Modifier.fillMaxWidth().padding(18.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Surface(Modifier.size(52.dp), CircleShape, color = MaterialTheme.colorScheme.primary) {
-                            Icon(Icons.Outlined.CheckCircle, "פעיל", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(12.dp))
+                        Surface(
+                            Modifier.size(48.dp),
+                            CircleShape,
+                            color = MaterialTheme.colorScheme.primary,
+                        ) {
+                            Icon(
+                                Icons.Outlined.CheckCircle,
+                                "מצב",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(11.dp),
+                            )
                         }
-                        Spacer(Modifier.width(14.dp))
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("ClickPlus פעילה", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text(
+                                "קליק פלוס פעיל",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
                             Text(
                                 when {
                                     mode == AppMode.BASIC -> "מצב בסיסי · ללא נגישות"
                                     accessibilityEnabled -> "מצב מלא · נגישות פעילה"
                                     else -> "מצב מלא · נגישות לא פעילה"
                                 },
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
-                            if (mode == AppMode.FULL && !accessibilityEnabled) {
-                                Text(
-                                    "יש להפעיל את שירות הנגישות כדי שפעולות שדורשות אותו יעבדו.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
                         }
                     }
                 }
             }
+
             item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatCard("פעולות פעילות", active.toString(), Modifier.weight(1f))
-                    StatCard("אפליקציות", apps.toString(), Modifier.weight(1f))
-                    StatCard("סה״כ כללים", mappings.size.toString(), Modifier.weight(1f))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    HomeShortcutCard(
+                        title = "מצב השירות",
+                        icon = Icons.Outlined.Tune,
+                        onClick = onStatus,
+                    )
+                    HomeShortcutCard(
+                        title = "יומן",
+                        icon = Icons.Outlined.History,
+                        onClick = onLogs,
+                    )
+                    HomeShortcutCard(
+                        title = "פרופילים",
+                        icon = Icons.Outlined.Apps,
+                        onClick = onProfiles,
+                    )
                 }
             }
+
             item {
                 OutlinedTextField(
                     value = query,
@@ -498,30 +481,19 @@ private fun HomeDashboard(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                    label = { Text("חיפוש וסינון") },
+                    label = { Text("חיפוש פעולות") },
                 )
             }
-            item {
-                Row(
-                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    AssistChip(onClick = onProfiles, label = { Text("פרופילים") }, leadingIcon = { Icon(Icons.Outlined.Apps, null) })
-                    AssistChip(onClick = onStatus, label = { Text("מצב השירות") }, leadingIcon = { Icon(Icons.Outlined.Tune, null) })
-                    AssistChip(onClick = onLogs, label = { Text("יומן פעילות") }, leadingIcon = { Icon(Icons.Outlined.History, null) })
-                    AssistChip(onClick = onSettings, label = { Text("הגדרות") }, leadingIcon = { Icon(Icons.Outlined.Settings, null) })
-                }
-            }
+
             if (filtered.isEmpty()) {
-                item {
-                    EmptyState(onAdd)
-                }
+                item { EmptyState(onAdd) }
             } else {
                 items(filtered, key = { it.id }) { item ->
                     RuleCard(
                         item = item,
                         onEdit = { onEdit(item.id) },
                         onDelete = { deleteTarget = item },
+                        onToggle = { onToggle(item) },
                     )
                 }
             }
@@ -543,6 +515,36 @@ private fun HomeDashboard(
                 TextButton(onClick = { deleteTarget = null }) { Text("ביטול") }
             },
         )
+    }
+}
+
+@Composable
+private fun HomeShortcutCard(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .width(132.dp)
+            .height(58.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Row(
+            Modifier.fillMaxSize().padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                title,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -664,57 +666,163 @@ private fun EmptyState(onAdd: () -> Unit) {
 }
 
 @Composable
-private fun PermissionIntroScreen(onBeginPermissionSetup: () -> Unit) {
+private fun PermissionIntroScreen(
+    refreshKey: Int,
+    onRequestNotification: () -> Unit,
+    onRequestPhone: () -> Unit,
+    onOpenAccessibility: () -> Unit,
+    onOpenUsage: () -> Unit,
+    onEnterApp: () -> Unit,
+) {
+    // The key forces a fresh permission-state read after returning from Android settings.
+    val context = LocalContext.current
+    refreshKey.hashCode()
+
+    val notificationGranted = Build.VERSION.SDK_INT < 33 ||
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+    val phoneGranted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.READ_PHONE_STATE,
+    ) == PackageManager.PERMISSION_GRANTED
+    val accessibilityGranted = isAccessibilityEnabled(context)
+    val usageGranted = hasUsageAccess(context)
+
     Surface(Modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 32.dp),
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
         ) {
-            Surface(
-                Modifier.size(72.dp),
-                CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Icon(
-                    Icons.Outlined.Settings,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(18.dp),
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-            Text("הגדרה ראשונית", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "כדי שקליק פלוס תוכל לזהות כניסות ולחיצות ולבצע את הפעולות שהגדרת, Android יבקש ממך כמה הרשאות.",
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(18.dp))
-            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                Column(
-                    Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+            item {
+                Surface(
+                    Modifier.size(68.dp),
+                    CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
-                    Text("מה יופיע עכשיו?", fontWeight = FontWeight.Bold)
-                    Text("• הרשאת התראות – להפעלת שירות הרקע והצגת מצב השירות.")
-                    Text("• הרשאת מצב טלפון – עבור תנאים הקשורים למצב השיחה.")
-                    Text("• שירות נגישות – לזיהוי לחיצות ולפעולות מערכת הדורשות נגישות.")
-                    Text("• גישה לנתוני שימוש – לזיהוי האפליקציה שהייתה פתוחה, כשנדרש.")
-                    Text(
-                        "בכל מסך Android שיופיע, הפעל את קליק פלוס וחזור לאפליקציה. לאחר כל שלב נמשיך אוטומטית לשלב הבא.",
-                        style = MaterialTheme.typography.bodySmall,
+                    Icon(
+                        Icons.Outlined.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(16.dp),
                     )
                 }
             }
-            Spacer(Modifier.height(20.dp))
-            Button(
-                onClick = onBeginPermissionSetup,
-                Modifier.fillMaxWidth().height(54.dp),
+            item {
+                Text(
+                    "הגדרה ראשונית",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            item {
+                Text(
+                    "אפשר לתת את ההרשאות אחת־אחת לפי הצורך. אפשר גם להיכנס לאפליקציה בלי לאשר אותן עכשיו.",
+                    textAlign = TextAlign.Center,
+                )
+            }
+
+            item {
+                PermissionRow(
+                    title = "התראות",
+                    detail = "נדרשות להפעלת שירות הרקע.",
+                    granted = notificationGranted,
+                    available = Build.VERSION.SDK_INT >= 33,
+                    buttonText = if (Build.VERSION.SDK_INT < 33) "לא נדרש" else if (notificationGranted) "מאושר" else "מתן הרשאה",
+                    onClick = onRequestNotification,
+                )
+            }
+            item {
+                PermissionRow(
+                    title = "מצב טלפון",
+                    detail = "נדרש רק לפעולות או מצבים שקשורים לשיחות.",
+                    granted = phoneGranted,
+                    available = true,
+                    buttonText = if (phoneGranted) "מאושר" else "מתן הרשאה",
+                    onClick = onRequestPhone,
+                )
+            }
+            item {
+                PermissionRow(
+                    title = "שירות נגישות",
+                    detail = "נדרש ללחיצות במסך ולפעולות מערכת שדורשות נגישות.",
+                    granted = accessibilityGranted,
+                    available = true,
+                    buttonText = if (accessibilityGranted) "פעיל" else "פתיחת הגדרות",
+                    onClick = onOpenAccessibility,
+                )
+            }
+            item {
+                PermissionRow(
+                    title = "נתוני שימוש",
+                    detail = "נדרשים כאשר רוצים לזהות איזו אפליקציה נמצאת בחזית במצב בסיסי.",
+                    granted = usageGranted,
+                    available = true,
+                    buttonText = if (usageGranted) "מאושר" else "פתיחת הגדרות",
+                    onClick = onOpenUsage,
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = onEnterApp,
+                    Modifier.fillMaxWidth().height(52.dp),
+                ) {
+                    Text("כניסה לאפליקציה", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionRow(
+    title: String,
+    detail: String,
+    granted: Boolean,
+    available: Boolean,
+    buttonText: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("התחלת ההגדרה")
+                Icon(
+                    if (granted) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
+                    contentDescription = null,
+                    tint = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(26.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title, fontWeight = FontWeight.Bold)
+                    Text(
+                        detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            OutlinedButton(
+                onClick = onClick,
+                enabled = available && !granted,
+                Modifier.fillMaxWidth(),
+            ) {
+                Text(buttonText)
             }
         }
     }
