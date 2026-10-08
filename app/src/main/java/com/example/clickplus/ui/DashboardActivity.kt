@@ -220,14 +220,27 @@ class DashboardActivity : ComponentActivity() {
         super.onResume()
         permissionRefreshKey++
     }
+}
 
 @Composable
 private fun ClickPlusDashboard(
     showPermissionIntro: Boolean,
-    onBeginPermissionSetup: () -> Unit,
+    permissionRefreshKey: Int,
+    onRequestNotification: () -> Unit,
+    onRequestPhone: () -> Unit,
+    onOpenAccessibility: () -> Unit,
+    onOpenUsage: () -> Unit,
+    onEnterApp: () -> Unit,
 ) {
     if (showPermissionIntro) {
-        PermissionIntroScreen(onBeginPermissionSetup)
+        PermissionIntroScreen(
+            refreshKey = permissionRefreshKey,
+            onRequestNotification = onRequestNotification,
+            onRequestPhone = onRequestPhone,
+            onOpenAccessibility = onOpenAccessibility,
+            onOpenUsage = onOpenUsage,
+            onEnterApp = onEnterApp,
+        )
         return
     }
 
@@ -269,11 +282,19 @@ private fun ClickPlusDashboard(
                         advanced.removeRuleMetadata(item.id)
                     }
                 },
+                onToggle = { item ->
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                        prefs.saveMappings(
+                            mappings.map { current ->
+                                if (current.id == item.id) current.copy(enabled = !current.enabled) else current
+                            },
+                        )
+                    }
+                },
                 onStatus = { route = DashboardRoute.Status },
                 onLogs = { route = DashboardRoute.Logs },
                 onProfiles = { route = DashboardRoute.Profiles },
                 onSettings = { route = DashboardRoute.Settings },
-                onTest = { route = DashboardRoute.Logs },
             )
             DashboardRoute.Status -> StatusScreen(
                 mappings = mappings,
@@ -339,6 +360,7 @@ private fun HomeDashboard(
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
     onDelete: (KeyActionConfig) -> Unit,
+    onToggle: (KeyActionConfig) -> Unit,
     onStatus: () -> Unit,
     onLogs: () -> Unit,
     onProfiles: () -> Unit,
