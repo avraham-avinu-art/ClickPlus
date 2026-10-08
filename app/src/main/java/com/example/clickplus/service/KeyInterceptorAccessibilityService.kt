@@ -133,6 +133,11 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
             }
         }
         serviceScope.launch {
+            prefsRepository.tapCountSizeFlow.collectLatest { sizeSp ->
+                tapCountOverlay.setSizeSp(sizeSp)
+            }
+        }
+        serviceScope.launch {
             prefsRepository.mappingsFlow.collectLatest { tapDetector.updateProfiles(it) }
         }
     }
