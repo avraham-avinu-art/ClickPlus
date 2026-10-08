@@ -868,7 +868,6 @@ private fun StatusScreen(
     }
 }
 
-private fun Boolean?.orDefaultTrue(): Boolean = this ?: true
 
 @Composable
 private fun StatusCard(title: String, ok: Boolean, detail: String) {
