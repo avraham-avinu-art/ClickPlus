@@ -52,7 +52,7 @@ class RuleExecutionCoordinator(
                     config,
                     sourcePackage,
                     reason,
-                    "הפרופיל "" + selectedProfile.name + "" אינו הפרופיל הפעיל",
+                    "הפרופיל \"" + selectedProfile.name + "\" אינו הפרופיל הפעיל",
                 )
                 return false
             }
