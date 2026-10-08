@@ -2773,6 +2773,112 @@ private fun formatDurationMs(value: Long): String {
     return if (rounded == 1f) "שנייה אחת" else rounded.toString() + " שניות"
 }
 
+private fun isContextConditionAvailable(
+    mode: AppMode,
+    type: ContextConditionType,
+): Boolean = when (mode) {
+    AppMode.FULL -> true
+    AppMode.BASIC -> type == ContextConditionType.ANY || type == ContextConditionType.APP
+}
+
+private fun isSystemActionAvailable(
+    mode: AppMode,
+    action: SystemActionPreset,
+): Boolean {
+    if (mode == AppMode.FULL) return true
+    return action.id in setOf(
+        SystemActionPreset.MEDIA_PLAY_PAUSE.id,
+        SystemActionPreset.MEDIA_NEXT.id,
+        SystemActionPreset.MEDIA_PREVIOUS.id,
+        SystemActionPreset.VOLUME_UP.id,
+        SystemActionPreset.VOLUME_DOWN.id,
+        SystemActionPreset.SETTINGS.id,
+        SystemActionPreset.DIALER.id,
+    )
+}
+
+private fun permissionRequirementFor(
+    context: Context,
+    config: KeyActionConfig,
+): Pair<String, () -> Unit>? {
+    if (config.triggerType == TriggerType.SCREEN_TAP ||
+        config.actionType == ActionType.APP_TAP ||
+        (
+            config.actionType == ActionType.SYSTEM &&
+                config.systemActionId in setOf(
+                    SystemActionPreset.HOME.id,
+                    SystemActionPreset.BACK.id,
+                    SystemActionPreset.RECENTS.id,
+                    SystemActionPreset.NOTIFICATIONS.id,
+                )
+        )
+    ) {
+        if (!isAccessibilityEnabled(context)) {
+            return "הפעולה הזאת דורשת שירות נגישות." to {
+                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        }
+    }
+
+    if (config.triggerType == TriggerType.APP_ENTRY &&
+        config.contextConditionType in setOf(
+            ContextConditionType.APP,
+            ContextConditionType.RADIO,
+        ) &&
+        AdvancedRuleRepository.currentMode(context) == AppMode.BASIC &&
+        !hasUsageAccess(context)
+    ) {
+        return "המצב שבחרת דורש הרשאת נתוני שימוש." to {
+            context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        }
+    }
+
+    if (config.triggerType == TriggerType.APP_ENTRY &&
+        config.contextConditionType == ContextConditionType.RINGING &&
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_PHONE_STATE,
+        ) != PackageManager.PERMISSION_GRANTED
+    ) {
+        return "המצב שבחרת דורש הרשאת מצב טלפון." to {
+            requestRuntimePermission(context, Manifest.permission.READ_PHONE_STATE)
+        }
+    }
+
+    return null
+}
+
+@Composable
+private fun PermissionRequirementCard(
+    message: String,
+    onClick: () -> Unit,
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                message,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(
+                onClick = onClick,
+                Modifier.fillMaxWidth(),
+            ) {
+                Text("מתן הרשאה")
+            }
+        }
+    }
+}
+
 private fun validateRuleBeforeSave(
     context: Context,
     config: KeyActionConfig,
