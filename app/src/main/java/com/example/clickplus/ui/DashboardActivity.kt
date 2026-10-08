@@ -580,72 +580,58 @@ private fun StatCard(title: String, value: String, modifier: Modifier) {
 }
 
 @Composable
-private fun RuleCard(item: KeyActionConfig, onEdit: () -> Unit, onDelete: () -> Unit) {
-    val meta = AdvancedRuleRepository(LocalContext.current).getRuleMetadata(item.id)
+private fun RuleCard(
+    item: KeyActionConfig,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onToggle: () -> Unit,
+) {
     OutlinedCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onEdit),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
     ) {
-        Column(
-            Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                Column(
-                    Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        item.name.ifBlank { item.triggerType.titleHebrew },
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        item.pressSummary() + " · " + item.contextSummary(),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Outlined.Edit, "עריכה")
-                }
-                IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Outlined.Delete, "מחיקה")
-                }
+                Text(
+                    item.name.ifBlank { "פעולה" },
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "טריגר: " + item.triggerSummary(),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "פעולה: " + item.actionSummary(),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(38.dp)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Switch(
+                checked = item.enabled,
+                onCheckedChange = { onToggle() },
+            )
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(40.dp),
             ) {
-                AssistChip(
-                    onClick = {},
-                    label = {
-                        Text(
-                            item.actionSummary(),
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    modifier = Modifier.height(34.dp),
-                )
-                AssistChip(
-                    onClick = {},
-                    label = { Text(if (item.enabled) "פעיל" else "מושהה", maxLines = 1) },
-                    leadingIcon = if (item.enabled) ({ Icon(Icons.Outlined.CheckCircle, null) }) else null,
-                    modifier = Modifier.height(34.dp),
-                )
+                Icon(Icons.Outlined.Delete, "מחיקה")
             }
         }
     }
