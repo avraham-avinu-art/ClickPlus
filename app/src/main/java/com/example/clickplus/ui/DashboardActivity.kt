@@ -1565,46 +1565,54 @@ private fun BackupScreen(
     val advanced = remember { AdvancedRuleRepository(context) }
     val basePrefs = remember { AppPreferencesRepository(context) }
     var message by remember { mutableStateOf("") }
+    var pendingImport by remember { mutableStateOf<JSONObject?>(null) }
+    var resetMode by remember { mutableStateOf<String?>(null) }
+
+    val makeBackup = {
+        advanced.exportJson(
+            JSONArray().apply {
+                mappings.forEach { put(it.toJson()) }
+            }.toString(),
+            JSONObject()
+                .put("tapTimeoutMs", timeout)
+                .put("actionDelayMs", actionDelay)
+                .put("showTapCount", showTapCount)
+                .put("mode", AdvancedRuleRepository.currentMode(context).name)
+                .put("themeMode", advanced.themeMode()),
+        )
+    }
+
     val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        ActivityResultContracts.OpenDocument(),
     ) { uri ->
         uri?.let { selected ->
             scope.launch {
                 runCatching {
-                    val json = context.contentResolver.openInputStream(selected)?.bufferedReader()?.use { it.readText() }
+                    val json = context.contentResolver.openInputStream(selected)
+                        ?.bufferedReader()
+                        ?.use { it.readText() }
                         ?: error("קובץ ריק")
-                    val root = JSONObject(json)
-                    val array = root.optJSONArray("mappings") ?: JSONArray()
-                    val imported = buildList {
-                        for (i in 0 until array.length()) {
-                            array.optJSONObject(i)?.let { add(KeyActionConfig.fromJson(it)) }
-                        }
-                    }
-                    basePrefs.saveMappings(imported)
-                    root.optJSONObject("settings")?.let {
-                        if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 1200L))
-                        if (it.has("actionDelayMs")) basePrefs.saveActionDelay(it.optLong("actionDelayMs", 0L))
-                        if (it.has("showTapCount")) basePrefs.saveShowTapCount(it.optBoolean("showTapCount", false))
-                    }
-                    advanced.importBundle(root)
-                    message = "הגיבוי יובא בהצלחה."
-                }.onFailure { message = "הייבוא נכשל: " + (it.message ?: "שגיאה") }
+                    pendingImport = JSONObject(json)
+                }.onFailure {
+                    message = "הייבוא נכשל: " + (it.message ?: "שגיאה")
+                }
             }
         }
     }
 
     val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.CreateDocument("application/json"),
     ) { uri ->
         uri?.let { selected ->
-            val json = advanced.exportJson(
-                JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
-                JSONObject().put("tapTimeoutMs", timeout).put("actionDelayMs", actionDelay).put("showTapCount", showTapCount)
-            )
             runCatching {
-                context.contentResolver.openOutputStream(selected)?.bufferedWriter()?.use { it.write(json) }
+                context.contentResolver.openOutputStream(selected)
+                    ?.bufferedWriter()
+                    ?.use { it.write(makeBackup()) }
+                    ?: error("לא ניתן לכתוב לקובץ")
                 message = "הגיבוי נשמר בהצלחה."
-            }.onFailure { message = "שמירת הגיבוי נכשלה." }
+            }.onFailure {
+                message = "שמירת הגיבוי נכשלה: " + (it.message ?: "שגיאה")
+            }
         }
     }
 
@@ -1615,21 +1623,22 @@ private fun BackupScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                SettingCard("ייצוא ושיתוף", "שמור או שתף את כל הפעולות, הפרופילים וההגדרות.") {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingCard("ייצוא ושיתוף", "שמור את כל הפעולות, הפרופילים וההגדרות.") {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         Button(
                             onClick = { exportLauncher.launch("clickplus-backup.json") },
                             Modifier.weight(1f),
-                        ) { Text("ייצוא") }
+                        ) {
+                            Text("ייצוא")
+                        }
                         OutlinedButton(
                             onClick = {
-                                val json = advanced.exportJson(
-                                    JSONArray().apply { mappings.forEach { put(it.toJson()) } }.toString(),
-                                    JSONObject().put("tapTimeoutMs", timeout).put("actionDelayMs", actionDelay).put("showTapCount", showTapCount)
-                                )
                                 runCatching {
                                     val file = java.io.File(context.cacheDir, "clickplus-backup.json")
-                                    file.writeText(json)
+                                    file.writeText(makeBackup())
                                     val uri = FileProvider.getUriForFile(
                                         context,
                                         context.packageName + ".fileprovider",
@@ -1640,7 +1649,7 @@ private fun BackupScreen(
                                             type = "application/json"
                                             putExtra(Intent.EXTRA_STREAM, uri)
                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }.let { Intent.createChooser(it, "שיתוף גיבוי ClickPlus") }
+                                        }.let { Intent.createChooser(it, "שיתוף גיבוי ClickPlus") },
                                     )
                                     message = "נפתח מסך השיתוף."
                                 }.onFailure {
@@ -1648,37 +1657,155 @@ private fun BackupScreen(
                                 }
                             },
                             Modifier.weight(1f),
-                        ) { Text("שיתוף") }
+                        ) {
+                            Text("שיתוף")
+                        }
                     }
                 }
             }
+
             item {
-                SettingCard("ייבוא", "החלפת ההגדרות הנוכחיות בתוכן מקובץ גיבוי.") {
-                    OutlinedButton(
-                        onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) },
-                        Modifier.fillMaxWidth(),
-                    ) { Text("ייבוא גיבוי") }
-                }
-            }
-            item {
-                SettingCard("איפוס", "מחיקת כל הפעולות והמטא־נתונים של ClickPlus.") {
+                SettingCard("ייבוא", "בדוק את תוכן הגיבוי לפני שהוא מחליף את הנתונים הנוכחיים.") {
                     OutlinedButton(
                         onClick = {
-                            scope.launch {
-                                basePrefs.saveMappings(emptyList())
-                                advanced.clearAllRuleMetadata()
-                                advanced.saveProfiles(listOf(ClickPlusProfile("default", "כללי", true)))
-                                message = "ההגדרות אופסו."
-                            }
+                            importLauncher.launch(arrayOf("application/json", "text/plain"))
                         },
                         Modifier.fillMaxWidth(),
-                    ) { Text("איפוס פעולות") }
+                    ) {
+                        Text("בחירת גיבוי לייבוא")
+                    }
                 }
             }
+
+            item {
+                SettingCard("איפוס פעולות", "מוחק את כל הפעולות וההגדרות המתקדמות שלהן, בלי למחוק את הפרופילים.") {
+                    OutlinedButton(
+                        onClick = { resetMode = "actions" },
+                        Modifier.fillMaxWidth(),
+                    ) {
+                        Text("איפוס פעולות")
+                    }
+                }
+            }
+
+            item {
+                SettingCard("איפוס כל האפליקציה", "מחזיר את האפליקציה למצב התחלתי ומוחק פעולות, פרופילים, יומן והגדרות.") {
+                    OutlinedButton(
+                        onClick = { resetMode = "all" },
+                        Modifier.fillMaxWidth(),
+                    ) {
+                        Text("איפוס כל האפליקציה")
+                    }
+                }
+            }
+
             if (message.isNotBlank()) {
-                item { AssistChip(onClick = {}, label = { Text(message) }, leadingIcon = { Icon(Icons.Outlined.CheckCircle, null) }) }
+                item {
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
+    }
+
+    pendingImport?.let { root ->
+        val array = root.optJSONArray("mappings") ?: JSONArray()
+        val profileArray = root.optJSONArray("profiles") ?: JSONArray()
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            title = { Text("ייבוא גיבוי") },
+            text = {
+                Text(
+                    "הקובץ מכיל " + array.length() + " פעולות ו-" +
+                        profileArray.length() + " פרופילים. הייבוא יחליף את הנתונים הקיימים.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        runCatching {
+                            val imported = buildList {
+                                for (i in 0 until array.length()) {
+                                    array.optJSONObject(i)?.let { add(KeyActionConfig.fromJson(it)) }
+                                }
+                            }
+                            basePrefs.saveMappings(imported)
+                            root.optJSONObject("settings")?.let { settings ->
+                                if (settings.has("tapTimeoutMs")) {
+                                    basePrefs.saveTapTimeout(settings.optLong("tapTimeoutMs", 1200L))
+                                }
+                                if (settings.has("actionDelayMs")) {
+                                    basePrefs.saveActionDelay(settings.optLong("actionDelayMs", 0L))
+                                }
+                                if (settings.has("showTapCount")) {
+                                    basePrefs.saveShowTapCount(settings.optBoolean("showTapCount", false))
+                                }
+                            }
+                            advanced.importBundle(root)
+                            message = "הגיבוי יובא בהצלחה."
+                            pendingImport = null
+                        }.onFailure {
+                            message = "הייבוא נכשל: " + (it.message ?: "שגיאה")
+                        }
+                    }
+                }) {
+                    Text("ייבוא")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingImport = null }) {
+                    Text("ביטול")
+                }
+            },
+        )
+    }
+
+    resetMode?.let { mode ->
+        val fullReset = mode == "all"
+        AlertDialog(
+            onDismissRequest = { resetMode = null },
+            title = { Text(if (fullReset) "לאפס את כל האפליקציה?" else "לאפס את הפעולות?") },
+            text = {
+                Text(
+                    if (fullReset) {
+                        "כל הפעולות, הפרופילים, היומן וההגדרות יימחקו."
+                    } else {
+                        "כל הפעולות וההגדרות המתקדמות שלהן יימחקו."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        if (fullReset) {
+                            basePrefs.resetAll()
+                            advanced.resetPersistentState()
+                            advanced.saveProfiles(listOf(ClickPlusProfile("default", "כללי", true)))
+                            AdvancedRuleRepository.setMode(context, AppMode.FULL)
+                            advanced.saveThemeMode("system")
+                            context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+                                .edit()
+                                .clear()
+                                .apply()
+                        } else {
+                            basePrefs.saveMappings(emptyList())
+                            advanced.clearAllRuleMetadata()
+                        }
+                        message = "האיפוס הושלם."
+                        resetMode = null
+                    }
+                }) {
+                    Text("איפוס")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { resetMode = null }) {
+                    Text("ביטול")
+                }
+            },
+        )
     }
 }
 
