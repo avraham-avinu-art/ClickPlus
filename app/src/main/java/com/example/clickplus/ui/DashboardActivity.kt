@@ -828,7 +828,7 @@ private fun PermissionRow(
             OutlinedButton(
                 onClick = onClick,
                 enabled = available && !granted,
-                Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(buttonText)
             }
