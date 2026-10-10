@@ -13,7 +13,6 @@ class LauncherActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
         val accessibilityEnabled = isAccessibilityEnabled()
 
 
