@@ -489,8 +489,35 @@ internal fun BackupScreen(
                 if (version != 2) {
                     error("גרסת גיבוי לא נתמכת")
                 }
-                val actions = root.optJSONArray("mappings") ?: JSONArray()
-                val profiles = root.optJSONArray("profiles") ?: JSONArray()
+                val actions = root.optJSONArray("mappings") ?: error("בקובץ חסרה רשימת הפעולות.")
+                val profiles = root.optJSONArray("profiles") ?: error("בקובץ חסרה רשימת הפרופילים.")
+                if (actions.length() > 500) error("הגיבוי מכיל יותר מדי פעולות.")
+                if (profiles.length() !in 1..100) error("רשימת הפרופילים אינה תקינה.")
+
+                val actionIds = mutableSetOf<String>()
+                for (i in 0 until actions.length()) {
+                    val action = actions.optJSONObject(i) ?: error("פעולה מספר ${i + 1} אינה תקינה.")
+                    val id = action.optString("id", "").trim()
+                    if (id.isBlank()) error("לפעולה מספר ${i + 1} חסר מזהה.")
+                    if (!actionIds.add(id)) error("נמצא מזהה פעולה כפול: $id")
+                    val storedType = action.optString("actionType", "")
+                    if (storedType.isNotBlank() && runCatching { ActionType.valueOf(storedType) }.isFailure) {
+                        error("סוג פעולה לא מוכר ברשומה מספר ${i + 1}.")
+                    }
+                }
+
+                val profileIds = mutableSetOf<String>()
+                var hasEnabledProfile = false
+                for (i in 0 until profiles.length()) {
+                    val profile = profiles.optJSONObject(i) ?: error("פרופיל מספר ${i + 1} אינו תקין.")
+                    val id = profile.optString("id", "").trim()
+                    val name = profile.optString("name", "").trim()
+                    if (id.isBlank() || name.isBlank()) error("לפרופיל מספר ${i + 1} חסרים פרטים.")
+                    if (!profileIds.add(id)) error("נמצא מזהה פרופיל כפול: $id")
+                    if (profile.optBoolean("enabled", true)) hasEnabledProfile = true
+                }
+                if (!hasEnabledProfile) error("הגיבוי אינו מכיל פרופיל פעיל אחד לפחות.")
+
                 pendingImport = root
                 pendingImportActions = actions.length()
                 pendingImportProfiles = profiles.length()
