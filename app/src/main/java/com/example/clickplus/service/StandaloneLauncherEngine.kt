@@ -12,6 +12,8 @@ import android.provider.Settings
 import android.telephony.TelephonyManager
 import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.AdvancedRuleRepository
+import com.example.clickplus.data.ActivityLog
+import com.example.clickplus.data.ActionTextFormatter
 import com.example.clickplus.data.AppMode
 import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.ContextConditionType
@@ -31,6 +33,7 @@ object StandaloneLauncherEngine {
     private var pendingForegroundPackage = ""
     private var pendingEnteredPackage = ""
     private var pendingTriggerType = TriggerType.CLICKPLUS_ENTRY
+    private var pendingFailureReason = ""
 
     fun process(context: Context) {
         val previousForeground = lastForegroundPackage(context)
@@ -39,6 +42,22 @@ object StandaloneLauncherEngine {
             triggerType = TriggerType.CLICKPLUS_ENTRY,
             enteredPackage = "",
             previousForegroundPackage = previousForeground,
+        )
+    }
+
+    /**
+     * When Full mode is selected but Accessibility is unavailable, still resolve
+     * ClickPlus-entry sequences and write an explicit failure instead of silently
+     * running the reduced Basic executor by accident.
+     */
+    fun recordAccessibilityUnavailable(context: Context) {
+        if (AdvancedRuleRepository.currentMode(context) != AppMode.FULL) return
+        registerTrigger(
+            context = context.applicationContext,
+            triggerType = TriggerType.CLICKPLUS_ENTRY,
+            enteredPackage = "",
+            previousForegroundPackage = lastForegroundPackage(context),
+            failureReason = "שירות הנגישות אינו פעיל או שאינו מגיב; הפעולה לא בוצעה.",
         )
     }
 
@@ -82,6 +101,7 @@ object StandaloneLauncherEngine {
         triggerType: TriggerType,
         enteredPackage: String,
         previousForegroundPackage: String,
+        failureReason: String = "",
     ) {
         val mappings = AppPreferencesRepository.mappingsSnapshot(context).filter { item ->
             item.enabled &&
@@ -99,6 +119,7 @@ object StandaloneLauncherEngine {
         if (tapCount == 0) {
             pendingEnteredPackage = enteredPackage
             pendingTriggerType = triggerType
+            pendingFailureReason = failureReason
         } else if (
             pendingTriggerType != triggerType ||
             (triggerType == TriggerType.APP_ENTRY && pendingEnteredPackage != enteredPackage)
@@ -106,6 +127,9 @@ object StandaloneLauncherEngine {
             tapCount = 0
             pendingEnteredPackage = enteredPackage
             pendingTriggerType = triggerType
+            pendingFailureReason = failureReason
+        } else if (failureReason.isNotBlank()) {
+            pendingFailureReason = failureReason
         }
 
         tapCount = (tapCount + 1).coerceAtMost(10)
@@ -123,9 +147,11 @@ object StandaloneLauncherEngine {
         val foreground = pendingForegroundPackage
         val enteredPackage = pendingEnteredPackage
         val triggerType = pendingTriggerType
+        val failureReason = pendingFailureReason
         tapCount = 0
         pendingForegroundPackage = ""
         pendingEnteredPackage = ""
+        pendingFailureReason = ""
 
         val advanced = AdvancedRuleRepository(context)
         val matching = AppPreferencesRepository.mappingsSnapshot(context).filter { item ->
@@ -151,9 +177,33 @@ object StandaloneLauncherEngine {
                 TriggerType.CLICKPLUS_ENTRY -> "כניסה ל-ClickPlus במצב בסיסי"
                 TriggerType.APP_ENTRY -> "כניסה חוזרת ל-" + chosen.triggerAppName.ifBlank { "האפליקציה שנבחרה" } + " במצב בסיסי"
             }
-            val performer = BasicActionPerformer(context.applicationContext)
-            RuleExecutionCoordinator(context.applicationContext, performer, advanced)
-                .execute(chosen, foreground, reason)
+            if (failureReason.isNotBlank()) {
+                val profileName = advanced.profiles().firstOrNull {
+                    it.id == advanced.getRuleMetadata(chosen.id).profileId
+                }?.name
+                val details = ActionTextFormatter.actionDetails(chosen, profileName)
+                AdvancedRuleRepository.addLog(
+                    context,
+                    ActivityLog(
+                        timestamp = System.currentTimeMillis(),
+                        type = "ACTION",
+                        message = "הפעולה נכשלה",
+                        ruleId = chosen.id,
+                        appPackage = foreground,
+                        success = false,
+                        detail = details,
+                        actionLabel = ActionTextFormatter.actionLabel(chosen, profileName),
+                        triggerLabel = "לחיצות כניסה לקליק פלוס",
+                        actionDetails = details,
+                        actualAction = "הפעולה לא בוצעה",
+                        failureReason = failureReason,
+                    ),
+                )
+            } else {
+                val performer = BasicActionPerformer(context.applicationContext)
+                RuleExecutionCoordinator(context.applicationContext, performer, advanced)
+                    .execute(chosen, foreground, reason)
+            }
         }
     }
 
