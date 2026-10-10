@@ -6,9 +6,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -234,6 +237,7 @@ class AppPreferencesRepository(private val context: Context) {
         @Volatile private var cachedTapCountY = 65
         @Volatile private var cachedTapCountSize = 48
         @Volatile private var cachedMappings: List<KeyActionConfig> = emptyList()
+        @Volatile private var cachedMappingsInitialized = false
 
         fun tapTimeoutSnapshot(context: Context): Long =
             cachedTapTimeoutMs.coerceIn(300L, 1500L)
@@ -253,7 +257,40 @@ class AppPreferencesRepository(private val context: Context) {
         fun tapCountSizeSnapshot(context: Context): Int =
             cachedTapCountSize.coerceIn(32, 96)
 
-        fun mappingsSnapshot(context: Context): List<KeyActionConfig> = cachedMappings
+        /**
+         * A synchronous snapshot is needed by the launcher path, which must decide
+         * immediately whether the press should be counted. Prefer the mirrored
+         * SharedPreferences snapshot; on an older installation, load DataStore once.
+         */
+        fun mappingsSnapshot(context: Context): List<KeyActionConfig> {
+            if (cachedMappingsInitialized) return cachedMappings
+
+            val runtime = context.getSharedPreferences(RUNTIME_PREFS, Context.MODE_PRIVATE)
+            val stored = runtime.getString(MAPPINGS_SNAPSHOT, null)
+            val raw = stored ?: runCatching {
+                runBlocking(Dispatchers.IO) {
+                    context.dataStore.data.first()[MAPPINGS_JSON]
+                }
+            }.getOrNull()
+
+            val decoded = decodeMappings(raw)
+            cachedMappings = decoded
+            cachedMappingsInitialized = true
+            if (stored == null && raw != null) {
+                runtime.edit().putString(MAPPINGS_SNAPSHOT, raw).apply()
+            }
+            return decoded
+        }
+
+        private fun decodeMappings(raw: String?): List<KeyActionConfig> {
+            val array = runCatching { JSONArray(raw ?: "[]") }.getOrDefault(JSONArray())
+            return buildList {
+                for (i in 0 until array.length()) {
+                    runCatching { array.getJSONObject(i) }.getOrNull()
+                        ?.let { add(KeyActionConfig.fromJson(it)) }
+                }
+            }
+        }
     }
 
     val backgroundOnlyFlow: Flow<Boolean> =
@@ -300,7 +337,7 @@ class AppPreferencesRepository(private val context: Context) {
                         ?.let { add(KeyActionConfig.fromJson(it)) }
                 }
             }
-        }.onEach { cachedMappings = it }
+        }.onEach { cachedMappings = it; cachedMappingsInitialized = true }
 
     val onboardingCompletedFlow: Flow<Boolean> =
         context.dataStore.data.map { it[ONBOARDING_COMPLETED] ?: false }
@@ -357,6 +394,9 @@ class AppPreferencesRepository(private val context: Context) {
         val raw = array.toString()
         context.dataStore.edit { it[MAPPINGS_JSON] = raw }
         cachedMappings = mappings
+        cachedMappingsInitialized = true
+        context.getSharedPreferences(RUNTIME_PREFS, Context.MODE_PRIVATE)
+            .edit().putString(MAPPINGS_SNAPSHOT, raw).apply()
     }
 }
 
