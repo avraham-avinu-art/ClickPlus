@@ -2073,6 +2073,11 @@ internal fun EditorScreen(
                                         context,
                                         Manifest.permission.ANSWER_PHONE_CALLS,
                                     ) != PackageManager.PERMISSION_GRANTED -> true
+                                draft.contextConditionType == ContextConditionType.RINGING &&
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.READ_PHONE_STATE,
+                                    ) != PackageManager.PERMISSION_GRANTED -> true
                                 else -> false
                             }
                         if (permissionNeeded) {
