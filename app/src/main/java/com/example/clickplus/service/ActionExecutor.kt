@@ -86,19 +86,4 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         }
     }
 
- catch (error: Throwable) {
-        ActionExecutionResult.failure("Android לא הצליח לפתוח את היעד: " + (error.message ?: "שגיאה"))
-    }
-
-.getOrElse { ActionExecutionResult.failure("לא ניתן לענות לשיחה: " + (it.message ?: "שגיאה")) }
-
-.getOrElse { ActionExecutionResult.failure("לא ניתן לדחות שיחה: " + (it.message ?: "שגיאה")) }
-
- catch (error: Throwable) {
-        ActionExecutionResult.failure(
-            "Android לא הצליח לפתוח את המסך: " +
-                (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName)
-        )
-    }
-
 }
