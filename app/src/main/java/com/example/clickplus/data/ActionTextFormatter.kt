@@ -35,7 +35,8 @@ object ActionTextFormatter {
         val safe = ms.coerceAtLeast(0L)
         if (safe == 0L) return "ללא השהיה"
         return if (safe % 1000L == 0L) {
-            (safe / 1000L).toString() + " שניות"
+            val seconds = safe / 1000L
+            if (seconds == 1L) "שנייה" else seconds.toString() + " שניות"
         } else {
             String.format(Locale.getDefault(), "%.1f שניות", safe / 1000f)
         }
