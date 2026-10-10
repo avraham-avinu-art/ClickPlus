@@ -185,26 +185,7 @@ class DashboardActivity : ComponentActivity() {
         private const val UI_PROCESS_PID = "clickplus_ui_process_pid"
     }
 
-    private var runtimeRequestActive = false
     private var showPermissionIntro by mutableStateOf(false)
-    private var notificationRequestAttempted = false
-    private var openAccessibilityAfterNotification = false
-
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) {
-        runtimeRequestActive = false
-        if (openAccessibilityAfterNotification && !isAccessibilityEnabled(this)) {
-            openAccessibilityAfterNotification = false
-            openAccessibilitySettings()
-        }
-    }
-
-    private fun openAccessibilitySettings() {
-        runCatching {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -220,31 +201,6 @@ class DashboardActivity : ComponentActivity() {
         setContent {
             ClickPlusDashboard(
                 showPermissionIntro = showPermissionIntro,
-                onBeginPermissionSetup = {
-                    prefs.edit()
-                        .putBoolean("permission_intro_completed", true)
-                        .putBoolean("permission_bootstrap_done", true)
-                        .apply()
-                    showPermissionIntro = false
-
-                    if (!isAccessibilityEnabled(this@DashboardActivity)) {
-                        val notificationNeeded = Build.VERSION.SDK_INT >= 33 &&
-                            ContextCompat.checkSelfPermission(
-                                this@DashboardActivity,
-                                Manifest.permission.POST_NOTIFICATIONS,
-                            ) != PackageManager.PERMISSION_GRANTED &&
-                            !notificationRequestAttempted
-
-                        if (notificationNeeded) {
-                            openAccessibilityAfterNotification = true
-                            notificationRequestAttempted = true
-                            runtimeRequestActive = true
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            openAccessibilitySettings()
-                        }
-                    }
-                },
                 onLaterPermissionSetup = {
                     prefs.edit()
                         .putBoolean("permission_intro_completed", true)
@@ -278,7 +234,6 @@ class DashboardActivity : ComponentActivity() {
 @Composable
 private fun ClickPlusDashboard(
     showPermissionIntro: Boolean,
-    onBeginPermissionSetup: () -> Unit,
     onLaterPermissionSetup: () -> Unit,
 ) {
     val context = LocalContext.current
