@@ -33,49 +33,49 @@ class AccessibilitySystemActionExecutor(
         SystemActionPreset.MEDIA_STOP.id ->
             deviceActions.media(KeyEvent.KEYCODE_MEDIA_STOP, "עצירת השמעה")
         SystemActionPreset.MEDIA_PLAY.id ->
-            dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PLAY, "הפעלת השמעה")
+            deviceActions.media(KeyEvent.KEYCODE_MEDIA_PLAY, "הפעלת השמעה")
         SystemActionPreset.MEDIA_RESUME.id ->
-            dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PLAY, "המשך השמעה")
+            deviceActions.media(KeyEvent.KEYCODE_MEDIA_PLAY, "המשך השמעה")
         SystemActionPreset.MEDIA_PLAY_PAUSE.id ->
-            dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, "נגן / השהה")
+            deviceActions.media(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, "נגן / השהה")
         SystemActionPreset.MEDIA_NEXT.id ->
-            dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_NEXT, "השיר הבא")
+            deviceActions.media(KeyEvent.KEYCODE_MEDIA_NEXT, "השיר הבא")
         SystemActionPreset.MEDIA_PREVIOUS.id ->
-            dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PREVIOUS, "השיר הקודם")
+            deviceActions.media(KeyEvent.KEYCODE_MEDIA_PREVIOUS, "השיר הקודם")
         SystemActionPreset.MEDIA_FAST_FORWARD.id ->
-            dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, "הרצה קדימה")
+            deviceActions.media(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, "הרצה קדימה")
         SystemActionPreset.MEDIA_REWIND.id ->
-            dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_REWIND, "הרצה לאחור")
+            deviceActions.media(KeyEvent.KEYCODE_MEDIA_REWIND, "הרצה לאחור")
         SystemActionPreset.VOLUME_UP.id ->
-            deviceActions.adjustVolume(AudioManager.ADJUST_RAISE, "עוצמת השמע הוגברה")
+            deviceActions.deviceActions.adjustVolume(AudioManager.ADJUST_RAISE, "עוצמת השמע הוגברה")
         SystemActionPreset.VOLUME_DOWN.id ->
-            adjustVolume(AudioManager.ADJUST_LOWER, "עוצמת השמע הונמכה")
+            deviceActions.adjustVolume(AudioManager.ADJUST_LOWER, "עוצמת השמע הונמכה")
         SystemActionPreset.VOLUME_MUTE.id ->
             deviceActions.muteVolume(true, "השמע הושתק")
         SystemActionPreset.VOLUME_STATUS.id ->
             ActionExecutionResult.success("עוצמת השמע הנוכחית: " + deviceActions.currentVolumeText())
         SystemActionPreset.BRIGHTNESS_UP.id ->
-            deviceActions.changeBrightness(0.10f, "הבהירות הוגברה")
+            deviceActions.deviceActions.changeBrightness(0.10f, "הבהירות הוגברה")
         SystemActionPreset.BRIGHTNESS_DOWN.id ->
-            deviceActions.changeBrightness(-0.10f, "הבהירות הוחלשה")
+            deviceActions.deviceActions.changeBrightness(-0.10f, "הבהירות הוחלשה")
         SystemActionPreset.BRIGHTNESS_SET.id ->
-            deviceActions.setBrightness(actionParameter, "הבהירות שונתה")
+            deviceActions.deviceActions.setBrightness(actionParameter, "הבהירות שונתה")
         SystemActionPreset.WIFI_SETTINGS.id ->
-            deviceActions.openSettings(Settings.ACTION_WIFI_SETTINGS, "הגדרות Wi‑Fi נפתחו")
+            deviceActions.deviceActions.openSettings(Settings.ACTION_WIFI_SETTINGS, "הגדרות Wi‑Fi נפתחו")
         SystemActionPreset.BLUETOOTH_SETTINGS.id ->
-            openSettings(Settings.ACTION_BLUETOOTH_SETTINGS, "הגדרות Bluetooth נפתחו")
+            deviceActions.openSettings(Settings.ACTION_BLUETOOTH_SETTINGS, "הגדרות Bluetooth נפתחו")
         SystemActionPreset.DISPLAY_SETTINGS.id ->
-            openSettings(Settings.ACTION_DISPLAY_SETTINGS, "הגדרות תצוגה נפתחו")
+            deviceActions.openSettings(Settings.ACTION_DISPLAY_SETTINGS, "הגדרות תצוגה נפתחו")
         SystemActionPreset.SOUND_SETTINGS.id ->
-            openSettings(Settings.ACTION_SOUND_SETTINGS, "הגדרות שמע נפתחו")
+            deviceActions.openSettings(Settings.ACTION_SOUND_SETTINGS, "הגדרות שמע נפתחו")
         SystemActionPreset.BATTERY_SETTINGS.id ->
-            openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS, "הגדרות סוללה נפתחו")
+            deviceActions.openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS, "הגדרות סוללה נפתחו")
         SystemActionPreset.APP_SETTINGS.id ->
-            openSettings(Settings.ACTION_APPLICATION_SETTINGS, "הגדרות אפליקציות נפתחו")
+            deviceActions.openSettings(Settings.ACTION_APPLICATION_SETTINGS, "הגדרות אפליקציות נפתחו")
         SystemActionPreset.SETTINGS.id ->
-            openSettings(Settings.ACTION_SETTINGS, "מסך ההגדרות נפתח")
+            deviceActions.openSettings(Settings.ACTION_SETTINGS, "מסך ההגדרות נפתח")
         SystemActionPreset.DIALER.id ->
-            openSettings(Intent.ACTION_DIAL, "החייגן נפתח")
+            deviceActions.openSettings(Intent.ACTION_DIAL, "החייגן נפתח")
         SystemActionPreset.DIAL_NUMBER.id -> {
             val number = actionParameter.trim()
             if (number.isBlank()) ActionExecutionResult.failure("לא הוגדר מספר לחיוג")
@@ -92,7 +92,7 @@ class AccessibilitySystemActionExecutor(
             if (number.isBlank()) {
                 ActionExecutionResult.failure("לא נבחר איש קשר")
             } else {
-                openSettingsIntent(
+                deviceActions.openIntent(
                     Intent(
                         Intent.ACTION_DIAL,
                         android.net.Uri.parse("tel:" + android.net.Uri.encode(number)),
