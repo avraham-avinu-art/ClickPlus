@@ -100,12 +100,16 @@ internal fun HomeDashboard(
     val mode = AdvancedRuleRepository.currentMode(context)
     val accessibility = isAccessibilityEnabled(context)
     var accessibilityHealthy by remember { mutableStateOf(isAccessibilityServiceResponsive(context)) }
-    LaunchedEffect(accessibility) {
+    var basicMonitorHealthy by remember { mutableStateOf(isBasicForegroundMonitorResponsive(context)) }
+    LaunchedEffect(accessibility, mode) {
         while (true) {
             accessibilityHealthy = isAccessibilityServiceResponsive(context)
+            basicMonitorHealthy = isBasicForegroundMonitorResponsive(context)
             delay(2000)
         }
     }
+    val needsBasicAppEntryMonitor = mode == AppMode.BASIC && hasUsageAccess(context) &&
+        mappings.any { it.enabled && it.triggerType == TriggerType.APP_ENTRY }
     val repo = remember { AdvancedRuleRepository(context) }
     var deleteTarget by remember { mutableStateOf<KeyActionConfig?>(null) }
 
@@ -234,6 +238,21 @@ internal fun HomeDashboard(
                 }
             }
 
+            if (needsBasicAppEntryMonitor && !basicMonitorHealthy) {
+                item {
+                    StatusCard(
+                        "זיהוי כניסות לאפליקציות לא מגיב",
+                        false,
+                        "מצב בסיסי דורש שירות מעקב שקט וגישת נתוני שימוש. ייתכן שהשירות נעצר.",
+                        onAction = {
+                            val intent = Intent(context, com.example.clickplus.service.BasicForegroundMonitorService::class.java)
+                            runCatching { ContextCompat.startForegroundService(context, intent) }
+                        },
+                        actionLabel = "הפעלת שירות הזיהוי",
+                    )
+                }
+            }
+
             if (mappings.isEmpty()) {
                 item { EmptyState(onAdd) }
             } else {
@@ -308,6 +327,13 @@ internal fun StatusScreen(
         }
     }
     val usage = hasUsageAccess(context)
+    var basicMonitorHealthy by remember { mutableStateOf(isBasicForegroundMonitorResponsive(context)) }
+    LaunchedEffect(mode, usage, mappings) {
+        while (true) {
+            basicMonitorHealthy = isBasicForegroundMonitorResponsive(context)
+            delay(2000)
+        }
+    }
     val notification = Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     val phoneStatePermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
@@ -397,6 +423,26 @@ internal fun StatusScreen(
                         "נדרשת גישה זו כאשר פעולה במצב בסיסי צריכה לזהות את האפליקציה שמוצגת על המסך.",
                         onAction = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
                         actionLabel = "פתיחת גישת נתוני שימוש",
+                    )
+                }
+            }
+
+            if (
+                mode == AppMode.BASIC &&
+                usage &&
+                mappings.any { it.enabled && it.triggerType == TriggerType.APP_ENTRY } &&
+                !basicMonitorHealthy
+            ) {
+                item {
+                    StatusCard(
+                        "שירות זיהוי האפליקציות לא מגיב",
+                        false,
+                        "גישת נתוני שימוש קיימת, אבל שירות המעקב לא מדווח פעילות. ייתכן שהוא קרס או נעצר.",
+                        onAction = {
+                            val intent = Intent(context, com.example.clickplus.service.BasicForegroundMonitorService::class.java)
+                            runCatching { ContextCompat.startForegroundService(context, intent) }
+                        },
+                        actionLabel = "הפעלת שירות הזיהוי",
                     )
                 }
             }
