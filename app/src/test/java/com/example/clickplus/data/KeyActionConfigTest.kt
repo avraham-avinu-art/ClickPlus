@@ -2,7 +2,6 @@ package com.example.clickplus.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.json.JSONObject
 import org.junit.Test
@@ -156,7 +155,7 @@ class KeyActionConfigTest {
         assertEquals("", restored.actionDetails)
         assertEquals("", restored.actualAction)
         assertEquals("", restored.failureReason)
-        assertNull(restored.ruleId.takeIf { it.isNotBlank() })
+        assertEquals("", restored.ruleId)
     }
 
     @Test
