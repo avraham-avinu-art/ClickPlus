@@ -234,6 +234,10 @@ private fun ClickPlusDashboard(
                     tapCountSize = tapCountSize,
                     actionDelay = actionDelay,
                     onBack = { route = DashboardRoute.Settings },
+                    onResetAll = {
+                        mode = AppMode.FULL
+                        themeMode = "system"
+                    },
                 )
                 is DashboardRoute.Editor -> EditorScreen(
                     existing = mappings.firstOrNull { it.id == current.id },
