@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import com.example.clickplus.service.KeyInterceptorAccessibilityService
+import com.example.clickplus.data.AdvancedRuleRepository
+import com.example.clickplus.data.AppMode
 import android.provider.Settings
 
 class LauncherActivity : Activity() {
@@ -17,11 +19,12 @@ class LauncherActivity : Activity() {
 
         // Every launcher tap is the dedicated "ClickPlus entry" trigger.
         // The app UI remains usable normally even without Accessibility.
-        if (accessibilityEnabled) {
-            KeyInterceptorAccessibilityService.instance?.onClickPlusEntry()
-                ?: com.example.clickplus.service.StandaloneLauncherEngine.process(this)
-        } else {
-            com.example.clickplus.service.StandaloneLauncherEngine.process(this)
+        val mode = AdvancedRuleRepository.currentMode(this)
+        when {
+            mode == AppMode.BASIC -> com.example.clickplus.service.StandaloneLauncherEngine.process(this)
+            accessibilityEnabled && KeyInterceptorAccessibilityService.instance != null ->
+                KeyInterceptorAccessibilityService.instance?.onClickPlusEntry()
+            else -> com.example.clickplus.service.StandaloneLauncherEngine.recordAccessibilityUnavailable(this)
         }
 
         // Always open the interface normally. First-run setup must remain open.
