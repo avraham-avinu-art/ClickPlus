@@ -449,6 +449,7 @@ internal fun BackupScreen(
     tapCountSize: Int,
     actionDelay: Long,
     onBack: () -> Unit,
+    onResetAll: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -598,6 +599,7 @@ internal fun BackupScreen(
             basePrefs.saveTapCountX(50)
             basePrefs.saveTapCountY(65)
             basePrefs.saveTapCountSize(48)
+            basePrefs.setOnboardingCompleted(false)
             advanced.clearAllRuleMetadata()
             advanced.saveProfiles(listOf(ClickPlusProfile("default", "כללי", true)))
             AdvancedRuleRepository.setActiveProfileId(context, "default")
@@ -606,17 +608,14 @@ internal fun BackupScreen(
             AdvancedRuleRepository.clearLogs(context)
             context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
                 .edit()
-                .remove("permission_intro_completed")
-                .remove("permission_bootstrap_done")
-                .remove("tap_learning")
-                .remove("tap_capture_ready")
-                .remove("pending_activation_launches")
-                .remove("last_target_package")
+                .clear()
                 .putBoolean("background_only", false)
                 .apply()
             AdvancedRuleRepository.setLastExternalPackage(context, "")
             AdvancedRuleRepository.clearOpenedAppPackages(context)
             KeyInterceptorAccessibilityService.instance?.resetOpenAppTracking()
+            context.stopService(Intent(context, com.example.clickplus.service.BasicForegroundMonitorService::class.java))
+            onResetAll()
             message = "כל נתוני האפליקציה אופסו."
         }
     }
