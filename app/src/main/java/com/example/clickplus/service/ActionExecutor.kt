@@ -1,25 +1,19 @@
 package com.example.clickplus.service
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.GestureDescription
-import android.content.Context
 import android.content.Intent
-import android.graphics.Path
-import android.media.AudioManager
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
-import android.view.KeyEvent
 import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.KeyActionConfig
+import com.example.clickplus.data.profileIdFromActionId
 import com.example.clickplus.data.SystemActionPreset
 
 class ActionExecutor(private val service: AccessibilityService) : ClickActionPerformer {
-    private val handler = Handler(Looper.getMainLooper())
     override fun supports(config: KeyActionConfig): Boolean {
         return config.actionType == ActionType.APP_TAP ||
+            config.actionType == ActionType.MULTI_POINT_TAP ||
             config.actionType == ActionType.APP ||
+            config.actionType == ActionType.PROFILE ||
             SystemActionPreset.entries.any { it.id == config.systemActionId }
     }
 
@@ -29,7 +23,8 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
 
         return try {
             when (config.actionType) {
-                ActionType.APP_TAP -> executeAppTap(config)
+                ActionType.APP_TAP -> LearnedTapExecutor(service).executeAppTap(config)
+                ActionType.MULTI_POINT_TAP -> LearnedTapExecutor(service).executeMultiPointTap(config)
                 ActionType.APP -> {
                     if (config.targetPackage.isBlank()) {
                         return ActionExecutionResult.failure("לא נבחרה אפליקציית יעד")
@@ -40,7 +35,13 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
                     service.startActivity(intent)
                     ActionExecutionResult.success("אפליקציית היעד נפתחה")
                 }
-                ActionType.SYSTEM -> executeSystem(config.systemActionId)
+                ActionType.PROFILE -> executeProfile(config.systemActionId)
+                ActionType.SYSTEM -> AccessibilitySystemActionExecutor(service).execute(
+                    config.systemActionId,
+                    if (config.systemActionId == SystemActionPreset.DIAL_CONTACT.id) {
+                        config.contactNumber.ifBlank { config.actionParameter }
+                    } else config.actionParameter,
+                )
             }
         } catch (error: Throwable) {
             ActionExecutionResult.failure(
@@ -50,177 +51,30 @@ class ActionExecutor(private val service: AccessibilityService) : ClickActionPer
         }
     }
 
-    private fun executeAppTap(config: KeyActionConfig): ActionExecutionResult {
-        val targetPackage = config.screenTapPackage.trim()
-        if (targetPackage.isBlank()) {
-            return ActionExecutionResult.failure("לא נבחרה אפליקציה לביצוע הלחיצה")
-        }
-
-        val xRatio = config.screenTapXRatio.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
-        val yRatio = config.screenTapYRatio.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
-        if (xRatio == null || yRatio == null || config.screenTapXRatio < 0f || config.screenTapYRatio < 0f) {
-            return ActionExecutionResult.failure("לא נלמד מיקום לחיצה תקין באפליקציה")
-        }
-
-        val intent = service.packageManager.getLaunchIntentForPackage(targetPackage)
-            ?: return ActionExecutionResult.failure("אפליקציית היעד אינה מותקנת או שאין לה מסך פתיחה")
-
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-        service.startActivity(intent)
-
-        scheduleTapWhenAppIsVisible(config, targetPackage, xRatio, yRatio)
-        return ActionExecutionResult.pending("האפליקציה נפתחה; ממתינים להופעתה על המסך ואז תתבצע הלחיצה")
-    }
-
-    private fun scheduleTapWhenAppIsVisible(
-        config: KeyActionConfig,
-        targetPackage: String,
-        xRatio: Float,
-        yRatio: Float,
-    ) {
-        val startedAt = System.currentTimeMillis()
-        val timeoutMs = 6000L
-
-        val check = object : Runnable {
-            override fun run() {
-                if (System.currentTimeMillis() - startedAt >= timeoutMs) {
-                    logAppTapResult(config, targetPackage, false, "האפליקציה נפתחה, אך לא זוהתה בחזית בתוך 6 שניות")
-                    return
-                }
-
-                val foregroundPackage = service.rootInActiveWindow?.packageName?.toString().orEmpty()
-                if (foregroundPackage == targetPackage) {
-                    dispatchLearnedTap(config, targetPackage, xRatio, yRatio)
-                } else {
-                    handler.postDelayed(this, 150L)
-                }
+    private fun executeProfile(profileActionId: String): ActionExecutionResult {
+        val selectedProfileId = profileIdFromActionId(profileActionId)
+        if (selectedProfileId != null) {
+            val profile = AdvancedRuleRepository(service).profiles().firstOrNull { it.id == selectedProfileId }
+                ?: return ActionExecutionResult.failure("הפרופיל שנבחר אינו קיים")
+            if (!profile.enabled) {
+                return ActionExecutionResult.failure("הפרופיל שנבחר מושבת")
             }
+            AdvancedRuleRepository.setActiveProfileId(service, profile.id)
+            return ActionExecutionResult.success("עבר לפרופיל: " + profile.name)
         }
-        handler.post(check)
-    }
 
-    private fun dispatchLearnedTap(
-        config: KeyActionConfig,
-        targetPackage: String,
-        xRatio: Float,
-        yRatio: Float,
-    ) {
-        val metrics = service.resources.displayMetrics
-        val width = metrics.widthPixels.coerceAtLeast(1).toFloat()
-        val height = metrics.heightPixels.coerceAtLeast(1).toFloat()
-        val x = (xRatio * width).coerceIn(0f, width - 1f)
-        val y = (yRatio * height).coerceIn(0f, height - 1f)
-
-        val path = Path().apply { moveTo(x, y) }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0L, 60L))
-            .build()
-
-        runCatching {
-            service.dispatchGesture(
-                gesture,
-                object : AccessibilityService.GestureResultCallback() {
-                    override fun onCompleted(gestureDescription: GestureDescription?) {
-                        super.onCompleted(gestureDescription)
-                        logAppTapResult(
-                            config,
-                            targetPackage,
-                            true,
-                            "הלחיצה בוצעה ב-X ${(xRatio * 100f).toInt()}% · Y ${(yRatio * 100f).toInt()}%",
-                        )
-                    }
-
-                    override fun onCancelled(gestureDescription: GestureDescription?) {
-                        super.onCancelled(gestureDescription)
-                        logAppTapResult(config, targetPackage, false, "Android ביטל את הלחיצה באפליקציית היעד")
-                    }
-                },
-                handler,
-            )
-        }.onFailure { error ->
-            logAppTapResult(
-                config,
-                targetPackage,
-                false,
-                "לא ניתן לשלוח את הלחיצה: " + (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName),
-            )
-        }
-    }
-    private fun logAppTapResult(
-        config: KeyActionConfig,
-        targetPackage: String,
-        success: Boolean,
-        detail: String,
-    ) {
-        AdvancedRuleRepository.updateLatestPendingActionLog(
-            context = service,
-            ruleId = config.id,
-            appPackage = targetPackage,
-            success = success,
-            detail = detail,
-        )
-    }
-
-    private fun executeSystem(actionId: String): ActionExecutionResult = when (actionId) {
-        SystemActionPreset.HOME.id ->
-            globalAction(AccessibilityService.GLOBAL_ACTION_HOME, "מסך הבית נפתח")
-        SystemActionPreset.BACK.id ->
-            globalAction(AccessibilityService.GLOBAL_ACTION_BACK, "בוצעה חזרה")
-        SystemActionPreset.RECENTS.id ->
-            globalAction(AccessibilityService.GLOBAL_ACTION_RECENTS, "מסך היישומים האחרונים נפתח")
-        SystemActionPreset.NOTIFICATIONS.id ->
-            globalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS, "חלונית ההתראות נפתחה")
-        SystemActionPreset.MEDIA_PLAY_PAUSE.id ->
-            dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, "נשלחה פקודת נגן / השהה")
-        SystemActionPreset.MEDIA_NEXT.id ->
-            dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_NEXT, "נשלחה פקודת השיר הבא")
-        SystemActionPreset.MEDIA_PREVIOUS.id ->
-            dispatchMediaKey(KeyEvent.KEYCODE_MEDIA_PREVIOUS, "נשלחה פקודת השיר הקודם")
-        SystemActionPreset.VOLUME_UP.id ->
-            adjustVolume(AudioManager.ADJUST_RAISE, "עוצמת השמע הוגברה")
-        SystemActionPreset.VOLUME_DOWN.id ->
-            adjustVolume(AudioManager.ADJUST_LOWER, "עוצמת השמע הונמכה")
-        SystemActionPreset.SETTINGS.id ->
-            openSettings(Settings.ACTION_SETTINGS, "מסך ההגדרות נפתח")
-        SystemActionPreset.DIALER.id ->
-            openSettings(Intent.ACTION_DIAL, "החייגן נפתח")
-        else -> ActionExecutionResult.failure("פעולת המערכת אינה מוכרת")
-    }
-
-    private fun globalAction(action: Int, reason: String): ActionExecutionResult {
-        return if (service.performGlobalAction(action)) {
-            ActionExecutionResult.success(reason)
-        } else {
-            ActionExecutionResult.failure("Android לא אישר את פעולת המערכת")
+        // Backward compatibility for rules saved by older versions.
+        return when (profileActionId) {
+            "profile_next" ->
+                ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(service, 1))
+            "profile_previous" ->
+                ActionExecutionResult.success("עבר לפרופיל: " + AdvancedRuleRepository.cycleProfile(service, -1))
+            "profile_default" -> {
+                AdvancedRuleRepository.setActiveProfileId(service, "default")
+                ActionExecutionResult.success("חזר לפרופיל ברירת המחדל")
+            }
+            else -> ActionExecutionResult.failure("פעולת פרופיל ClickPlus אינה מוכרת")
         }
     }
 
-    private fun openSettings(action: String, reason: String): ActionExecutionResult = try {
-        service.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        ActionExecutionResult.success(reason)
-    } catch (error: Throwable) {
-        ActionExecutionResult.failure(
-            "Android לא הצליח לפתוח את המסך: " +
-                (error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName)
-        )
-    }
-
-    private fun dispatchMediaKey(keyCode: Int, reason: String): ActionExecutionResult {
-        val audio = service.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            ?: return ActionExecutionResult.failure("שירות השמע של Android אינו זמין")
-        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
-        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
-        return ActionExecutionResult.success(reason)
-    }
-
-    private fun adjustVolume(direction: Int, reason: String): ActionExecutionResult {
-        val audio = service.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            ?: return ActionExecutionResult.failure("שירות השמע של Android אינו זמין")
-        audio.adjustSuggestedStreamVolume(
-            direction,
-            AudioManager.USE_DEFAULT_STREAM_TYPE,
-            AudioManager.FLAG_SHOW_UI
-        )
-        return ActionExecutionResult.success(reason)
-    }
 }
