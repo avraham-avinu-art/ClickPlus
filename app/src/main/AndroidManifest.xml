@@ -59,6 +59,17 @@
             android:launchMode="singleTop" />
 
         <service
+            android:name=".service.BasicForegroundMonitorService"
+            android:exported="false"
+            android:label="קליק פלוס"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Usage Access based foreground app entry detection" />
+        </service>
+
+        <service
             android:name=".service.KeyInterceptorAccessibilityService"
             android:exported="true"
             android:label="קליק פלוס"
