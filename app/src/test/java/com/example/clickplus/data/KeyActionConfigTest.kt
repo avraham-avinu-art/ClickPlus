@@ -2,8 +2,11 @@ package com.example.clickplus.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.json.JSONObject
 import org.junit.Test
+import com.example.clickplus.service.BasicActionCapabilities
 
 class KeyActionConfigTest {
 
@@ -103,8 +106,57 @@ class KeyActionConfigTest {
     @Test
     fun durationUsesHumanReadableUnits() {
         assertEquals("ללא השהיה", ActionTextFormatter.durationMs(0L))
-        assertEquals("1 שניות", ActionTextFormatter.durationMs(1000L))
+        assertEquals("שנייה", ActionTextFormatter.durationMs(1000L))
         assertEquals("1.5 שניות", ActionTextFormatter.durationMs(1500L))
+    }
+
+
+    @Test
+    fun basicModeExcludesAccessibilityAndCallControlActions() {
+        assertTrue(BasicActionCapabilities.supports(KeyActionConfig(actionType = ActionType.APP)))
+        assertTrue(BasicActionCapabilities.supports(KeyActionConfig(actionType = ActionType.PROFILE)))
+        assertFalse(BasicActionCapabilities.supports(KeyActionConfig(actionType = ActionType.APP_TAP)))
+        assertFalse(BasicActionCapabilities.supports(KeyActionConfig(actionType = ActionType.MULTI_POINT_TAP)))
+        assertFalse(BasicActionCapabilities.supports(KeyActionConfig(
+            actionType = ActionType.SYSTEM,
+            systemActionId = SystemActionPreset.ANSWER_CALL.id,
+        )))
+        assertFalse(BasicActionCapabilities.supports(KeyActionConfig(
+            actionType = ActionType.SYSTEM,
+            systemActionId = SystemActionPreset.DECLINE_CALL.id,
+        )))
+    }
+
+    @Test
+    fun invalidLegacyCoordinatesAreClampedOrRejectedSafely() {
+        val restored = KeyActionConfig.fromJson(
+            JSONObject()
+                .put("actionType", ActionType.APP_TAP.name)
+                .put("screenTapXRatio", 1.8)
+                .put("screenTapYRatio", -0.4)
+                .put("screenTapSecondXRatio", "bad")
+                .put("screenTapSecondYRatio", Double.NaN)
+        )
+        assertEquals(1f, restored.screenTapXRatio, 0.0001f)
+        assertEquals(-0.4f, restored.screenTapYRatio, 0.0001f)
+        assertEquals(-1f, restored.screenTapSecondXRatio, 0.0001f)
+        assertEquals(-1f, restored.screenTapSecondYRatio, 0.0001f)
+    }
+
+    @Test
+    fun oldActivityLogsLoadWithSafeDefaults() {
+        val restored = ActivityLog.fromJson(
+            JSONObject()
+                .put("timestamp", 123L)
+                .put("type", "ACTION")
+                .put("message", "הפעולה נכשלה")
+                .put("success", false)
+        )
+        assertEquals("", restored.triggerLabel)
+        assertEquals("", restored.actionDetails)
+        assertEquals("", restored.actualAction)
+        assertEquals("", restored.failureReason)
+        assertNull(restored.ruleId.takeIf { it.isNotBlank() })
     }
 
     @Test
