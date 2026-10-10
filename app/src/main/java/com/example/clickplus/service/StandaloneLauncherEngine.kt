@@ -73,7 +73,25 @@ object StandaloneLauncherEngine {
     ) {
         if (enteredPackage.isBlank() || enteredPackage == context.packageName) return
 
+        val mappings = AppPreferencesRepository.mappingsSnapshot(context).filter { item ->
+            item.enabled &&
+                item.triggerType == TriggerType.APP_ENTRY &&
+                item.triggerPackage == enteredPackage &&
+                AdvancedRuleRepository.isRuleInActiveProfile(context, item.id)
+        }
+        if (mappings.isEmpty()) return
+
         val opened = AdvancedRuleRepository.openedAppPackages(context).toMutableSet()
+        val targetPackages = AppPreferencesRepository.mappingsSnapshot(context)
+            .filter {
+                it.enabled &&
+                    it.triggerType == TriggerType.APP_ENTRY &&
+                    AdvancedRuleRepository.isRuleInActiveProfile(context, it.id)
+            }
+            .map { it.triggerPackage }
+            .filter { it.isNotBlank() }
+            .toSet()
+        opened.retainAll(targetPackages)
         val alreadyOpened = opened.contains(enteredPackage)
         if (opened.add(enteredPackage)) {
             AdvancedRuleRepository.setOpenedAppPackages(context, opened)
