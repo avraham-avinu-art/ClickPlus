@@ -229,6 +229,8 @@ class AppPreferencesRepository(private val context: Context) {
         val TAP_COUNT_POSITION = longPreferencesKey("tap_count_position")
         val TAP_COUNT_SIZE = longPreferencesKey("tap_count_size")
         val MAPPINGS_JSON = stringPreferencesKey("mappings_json")
+        private const val RUNTIME_PREFS = "clickplus_runtime"
+        private const val MAPPINGS_SNAPSHOT = "mappings_snapshot"
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
 
         @Volatile private var cachedTapTimeoutMs = 1200L
