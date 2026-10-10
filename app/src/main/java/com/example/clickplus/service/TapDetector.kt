@@ -58,6 +58,12 @@ class TapDetector(
     }
 
     fun resetOpenAppState() {
+        handler.removeCallbacks(resetRunnable)
+        tapCount = 0
+        lastLaunchTime = 0L
+        pendingForegroundPackage = ""
+        pendingEnteredPackage = ""
+        pendingTriggerType = TriggerType.CLICKPLUS_ENTRY
         enteredAppPackages.clear()
         AdvancedRuleRepository.clearOpenedAppPackages(context)
     }
