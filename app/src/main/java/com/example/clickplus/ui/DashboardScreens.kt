@@ -402,7 +402,8 @@ internal fun StatusScreen(
     val usage = hasUsageAccess(context)
     val notification = Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-    val phone = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+    val phoneStatePermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+    val answerCallPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED
     val activeProfileId = AdvancedRuleRepository.activeProfileId(context)
     val repo = remember { AdvancedRuleRepository(context) }
     val activeProfile = repo.profiles().firstOrNull { it.id == activeProfileId }
@@ -496,13 +497,23 @@ internal fun StatusScreen(
                     it.actionType == ActionType.SYSTEM &&
                         (it.systemActionId == SystemActionPreset.ANSWER_CALL.id ||
                             it.systemActionId == SystemActionPreset.DECLINE_CALL.id)
-                } && !phone
+                } && !answerCallPermission
             ) {
                 item {
                     StatusCard(
-                        "הרשאת טלפון",
+                        "הרשאת מענה/דחיית שיחה",
                         false,
-                        "אחת הפעולות שבחרת דורשת הרשאת טלפון.",
+                        "אחת הפעולות שבחרת דורשת את הרשאת מענה לשיחות של Android.",
+                    )
+                }
+            }
+
+            if (mappings.any { it.contextConditionType == ContextConditionType.RINGING } && !phoneStatePermission) {
+                item {
+                    StatusCard(
+                        "זיהוי צלצול",
+                        false,
+                        "אחת הפעולות תלויה בזיהוי צלצול ודורשת הרשאת מצב טלפון.",
                     )
                 }
             }
@@ -1471,6 +1482,10 @@ internal fun EditorScreen(
         ActivityResultContracts.RequestPermission()
     ) { }
 
+    val phoneStatePermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     val contactPermission = androidx.activity.compose.rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -2038,7 +2053,7 @@ internal fun EditorScreen(
                             when {
                                 (draft.actionType == ActionType.APP_TAP || draft.actionType == ActionType.MULTI_POINT_TAP) &&
                                     AdvancedRuleRepository.currentMode(context) == AppMode.FULL &&
-                                    !isAccessibilityEnabled(context) -> true
+                                    (!isAccessibilityEnabled(context) || !isAccessibilityServiceResponsive(context)) -> true
                                 draft.triggerType == TriggerType.APP_ENTRY &&
                                     AdvancedRuleRepository.currentMode(context) == AppMode.BASIC &&
                                     !hasUsageAccess(context) -> true
@@ -2063,7 +2078,7 @@ internal fun EditorScreen(
                         if (permissionNeeded) {
                             val accessibilityMissing =
                                 (draft.actionType == ActionType.APP_TAP || draft.actionType == ActionType.MULTI_POINT_TAP) &&
-                                    !isAccessibilityEnabled(context)
+                                    (!isAccessibilityEnabled(context) || !isAccessibilityServiceResponsive(context))
                             val usageMissing =
                                 draft.triggerType == TriggerType.APP_ENTRY &&
                                     AdvancedRuleRepository.currentMode(context) == AppMode.BASIC &&
@@ -2086,6 +2101,13 @@ internal fun EditorScreen(
                                         context,
                                         Manifest.permission.ANSWER_PHONE_CALLS,
                                     ) != PackageManager.PERMISSION_GRANTED
+
+                            val phoneStateMissing =
+                                draft.contextConditionType == ContextConditionType.RINGING &&
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.READ_PHONE_STATE,
+                                    ) != PackageManager.PERMISSION_GRANTED
                             Surface(
                                 Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(11.dp),
@@ -2097,7 +2119,8 @@ internal fun EditorScreen(
                                             accessibilityMissing -> "הפעולה הזאת דורשת את שירות הנגישות כדי לבצע לחיצה בתוך האפליקציה."
                                             usageMissing -> "הטריגר הזה במצב בסיסי דורש גישה לנתוני שימוש כדי לזהות איזו אפליקציה נמצאת על המסך."
                                             brightnessMissing -> "הפעולה הזאת דורשת הרשאה לשינוי בהירות המסך."
-                                            phoneMissing -> "פעולת השיחה הזאת דורשת הרשאת טלפון כדי לפעול."
+                                            phoneMissing -> "פעולת השיחה הזאת דורשת את הרשאת מענה לשיחות."
+                                            phoneStateMissing -> "התנאי 'כשהטלפון מצלצל' דורש הרשאת מצב טלפון."
                                             else -> ""
                                         },
                                         color = MaterialTheme.colorScheme.onErrorContainer,
@@ -2114,6 +2137,7 @@ internal fun EditorScreen(
                                                     )
                                                 )
                                                 phoneMissing -> phoneCallPermission.launch(Manifest.permission.ANSWER_PHONE_CALLS)
+                                                phoneStateMissing -> phoneStatePermission.launch(Manifest.permission.READ_PHONE_STATE)
                                             }
                                         },
                                     ) {
