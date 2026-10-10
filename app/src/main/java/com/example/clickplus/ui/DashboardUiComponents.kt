@@ -268,6 +268,10 @@ internal fun PermissionIntroScreen(
         ActivityResultContracts.RequestPermission()
     ) { }
 
+    val answerCallLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     Surface(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.fillMaxSize(),
@@ -346,10 +350,7 @@ internal fun PermissionIntroScreen(
                                         Manifest.permission.ANSWER_PHONE_CALLS,
                                     ) != PackageManager.PERMISSION_GRANTED
                                 ) {
-                                    val callLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-                                        ActivityResultContracts.RequestPermission()
-                                    ) { }
-                                    callLauncher.launch(Manifest.permission.ANSWER_PHONE_CALLS)
+                                    answerCallLauncher.launch(Manifest.permission.ANSWER_PHONE_CALLS)
                                 }
                             },
                             Modifier.fillMaxWidth(),
