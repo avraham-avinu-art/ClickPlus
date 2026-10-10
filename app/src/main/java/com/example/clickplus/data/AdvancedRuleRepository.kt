@@ -43,6 +43,7 @@ class AdvancedRuleRepository(private val context: Context) {
         private const val MODE = "app_mode"
         private const val THEME = "theme_mode"
         private const val LAST_PACKAGE = "last_external_package"
+        private const val OPENED_PACKAGES = "opened_app_packages"
         private const val LOGS = "activity_logs"
         private const val ACTIVE_PROFILE = "active_profile"
 
@@ -104,6 +105,34 @@ class AdvancedRuleRepository(private val context: Context) {
                 .apply()
         }
 
+        /**
+         * App-entry triggers must survive an accessibility service recreation.
+         * This stores package identifiers only, not any screen content.
+         */
+        fun openedAppPackages(context: Context): Set<String> = runCatching {
+            val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(OPENED_PACKAGES, "[]") ?: "[]"
+            val array = JSONArray(raw)
+            buildSet {
+                for (i in 0 until array.length()) {
+                    array.optString(i).takeIf { it.isNotBlank() }?.let(::add)
+                }
+            }
+        }.getOrDefault(emptySet())
+
+        fun setOpenedAppPackages(context: Context, packages: Set<String>) {
+            val json = JSONArray()
+            packages.filter { it.isNotBlank() }.sorted().forEach(json::put)
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putString(OPENED_PACKAGES, json.toString()).apply()
+        }
+
+        fun clearOpenedAppPackages(context: Context) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().remove(OPENED_PACKAGES).apply()
+        }
+
+        @Synchronized
         fun logs(context: Context): List<ActivityLog> =
             runCatching {
                 val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LOGS, "[]") ?: "[]"
@@ -115,6 +144,7 @@ class AdvancedRuleRepository(private val context: Context) {
                 }.sortedByDescending { it.timestamp }
             }.getOrDefault(emptyList())
 
+        @Synchronized
         fun addLog(context: Context, log: ActivityLog) {
             val current = logs(context).take(119).toMutableList()
             current.add(0, log)
@@ -123,6 +153,7 @@ class AdvancedRuleRepository(private val context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, array.toString()).apply()
         }
 
+        @Synchronized
         fun updateActionLog(
             context: Context,
             logId: String,
@@ -151,6 +182,7 @@ class AdvancedRuleRepository(private val context: Context) {
                 .apply()
         }
 
+        @Synchronized
         fun clearLogs(context: Context) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LOGS, "[]").apply()
         }
