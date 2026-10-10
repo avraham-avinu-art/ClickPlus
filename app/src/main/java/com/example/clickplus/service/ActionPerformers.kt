@@ -30,41 +30,43 @@ interface ClickActionPerformer {
     fun supports(config: KeyActionConfig): Boolean
 }
 
-class BasicActionPerformer(private val context: Context) : ClickActionPerformer {
-    private val supportedSystemActions = setOf(
-        SystemActionPreset.MEDIA_STOP.id,
-        SystemActionPreset.MEDIA_PLAY.id,
-        SystemActionPreset.MEDIA_RESUME.id,
-        SystemActionPreset.MEDIA_PLAY_PAUSE.id,
-        SystemActionPreset.MEDIA_NEXT.id,
-        SystemActionPreset.MEDIA_PREVIOUS.id,
-        SystemActionPreset.MEDIA_FAST_FORWARD.id,
-        SystemActionPreset.MEDIA_REWIND.id,
-        SystemActionPreset.VOLUME_UP.id,
-        SystemActionPreset.VOLUME_DOWN.id,
-        SystemActionPreset.VOLUME_MUTE.id,
-        SystemActionPreset.VOLUME_STATUS.id,
-        SystemActionPreset.BRIGHTNESS_UP.id,
-        SystemActionPreset.BRIGHTNESS_DOWN.id,
-        SystemActionPreset.BRIGHTNESS_SET.id,
-        SystemActionPreset.SETTINGS.id,
-        SystemActionPreset.WIFI_SETTINGS.id,
-        SystemActionPreset.BLUETOOTH_SETTINGS.id,
-        SystemActionPreset.DISPLAY_SETTINGS.id,
-        SystemActionPreset.SOUND_SETTINGS.id,
-        SystemActionPreset.BATTERY_SETTINGS.id,
-        SystemActionPreset.APP_SETTINGS.id,
-        SystemActionPreset.DIALER.id,
-        SystemActionPreset.DIAL_NUMBER.id,
-        SystemActionPreset.DIAL_CONTACT.id,
-    )
-
-    override fun supports(config: KeyActionConfig): Boolean {
-        return config.actionType == ActionType.APP ||
-            config.actionType == ActionType.APP_TAP ||
+object BasicActionCapabilities {
+    setOf(
+            SystemActionPreset.MEDIA_STOP.id,
+            SystemActionPreset.MEDIA_PLAY.id,
+            SystemActionPreset.MEDIA_RESUME.id,
+            SystemActionPreset.MEDIA_PLAY_PAUSE.id,
+            SystemActionPreset.MEDIA_NEXT.id,
+            SystemActionPreset.MEDIA_PREVIOUS.id,
+            SystemActionPreset.MEDIA_FAST_FORWARD.id,
+            SystemActionPreset.MEDIA_REWIND.id,
+            SystemActionPreset.VOLUME_UP.id,
+            SystemActionPreset.VOLUME_DOWN.id,
+            SystemActionPreset.VOLUME_MUTE.id,
+            SystemActionPreset.VOLUME_STATUS.id,
+            SystemActionPreset.BRIGHTNESS_UP.id,
+            SystemActionPreset.BRIGHTNESS_DOWN.id,
+            SystemActionPreset.BRIGHTNESS_SET.id,
+            SystemActionPreset.SETTINGS.id,
+            SystemActionPreset.WIFI_SETTINGS.id,
+            SystemActionPreset.BLUETOOTH_SETTINGS.id,
+            SystemActionPreset.DISPLAY_SETTINGS.id,
+            SystemActionPreset.SOUND_SETTINGS.id,
+            SystemActionPreset.BATTERY_SETTINGS.id,
+            SystemActionPreset.APP_SETTINGS.id,
+            SystemActionPreset.DIALER.id,
+            SystemActionPreset.DIAL_NUMBER.id,
+            SystemActionPreset.DIAL_CONTACT.id,
+        )
+    fun supports(config: KeyActionConfig): Boolean =
+        config.actionType == ActionType.APP ||
             config.actionType == ActionType.PROFILE ||
-            config.systemActionId in supportedSystemActions
-    }
+            (config.actionType == ActionType.SYSTEM && config.systemActionId in supportedSystemActions)
+}
+
+class BasicActionPerformer(private val context: Context) : ClickActionPerformer {
+    override fun supports(config: KeyActionConfig): Boolean =
+        BasicActionCapabilities.supports(config)
 
     override fun execute(config: KeyActionConfig): ActionExecutionResult {
         if (!config.enabled) return ActionExecutionResult.failure("הכלל מושבת")
