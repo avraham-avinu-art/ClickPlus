@@ -72,6 +72,7 @@ class DashboardActivity : ComponentActivity() {
         setContent {
             ClickPlusDashboard(
                 showPermissionIntro = showPermissionIntro,
+                onResetAll = { showPermissionIntro = true },
                 onLaterPermissionSetup = {
                     prefs.edit()
                         .putBoolean("permission_intro_completed", true)
@@ -105,6 +106,7 @@ class DashboardActivity : ComponentActivity() {
 @Composable
 private fun ClickPlusDashboard(
     showPermissionIntro: Boolean,
+    onResetAll: () -> Unit,
     onLaterPermissionSetup: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -237,6 +239,7 @@ private fun ClickPlusDashboard(
                     onResetAll = {
                         mode = AppMode.FULL
                         themeMode = "system"
+                        onResetAll()
                     },
                 )
                 is DashboardRoute.Editor -> EditorScreen(
