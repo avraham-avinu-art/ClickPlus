@@ -113,7 +113,7 @@ class AccessibilitySystemActionExecutor(
         }
         telecom.acceptRingingCall()
         ActionExecutionResult.success("השיחה נענתה")
-    }
+    }.getOrElse { ActionExecutionResult.failure("לא ניתן לענות לשיחה: " + (it.message ?: "שגיאה")) }
 
     private fun declineCall(): ActionExecutionResult = runCatching {
         val telecom = service.getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
@@ -123,7 +123,7 @@ class AccessibilitySystemActionExecutor(
         @Suppress("DEPRECATION")
         telecom.endCall()
         ActionExecutionResult.success("השיחה נדחתה")
-    }
+    }.getOrElse { ActionExecutionResult.failure("לא ניתן לדחות שיחה: " + (it.message ?: "שגיאה")) }
 
     private fun globalAction(action: Int, reason: String): ActionExecutionResult {
         return if (service.performGlobalAction(action)) {
