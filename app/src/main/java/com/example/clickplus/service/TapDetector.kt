@@ -41,6 +41,20 @@ class TapDetector(
 
     fun updateProfiles(newProfiles: List<KeyActionConfig>) {
         profiles = newProfiles.filter { it.enabled }
+        reconcileOpenedPackages()
+    }
+
+    private fun reconcileOpenedPackages() {
+        val activeTargetPackages = profiles
+            .filter {
+                it.triggerType == TriggerType.APP_ENTRY &&
+                    it.triggerPackage.isNotBlank() &&
+                    AdvancedRuleRepository.isRuleInActiveProfile(context, it.id)
+            }
+            .map { it.triggerPackage }
+            .toSet()
+        enteredAppPackages.retainAll(activeTargetPackages)
+        AdvancedRuleRepository.setOpenedAppPackages(context, enteredAppPackages)
     }
 
     fun resetOpenAppState() {
@@ -58,6 +72,14 @@ class TapDetector(
 
     fun processAppEntry(enteredPackage: String, previousForegroundPackage: String) {
         if (enteredPackage.isBlank()) return
+        reconcileOpenedPackages()
+
+        val isActiveTarget = profiles.any {
+            it.triggerType == TriggerType.APP_ENTRY &&
+                it.triggerPackage == enteredPackage &&
+                AdvancedRuleRepository.isRuleInActiveProfile(context, it.id)
+        }
+        if (!isActiveTarget) return
 
         val wasAlreadyOpened = enteredAppPackages.contains(enteredPackage)
         if (enteredAppPackages.add(enteredPackage)) {
