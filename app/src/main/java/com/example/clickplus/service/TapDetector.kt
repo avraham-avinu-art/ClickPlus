@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import com.example.clickplus.data.AdvancedRuleRepository
+import com.example.clickplus.data.AppMode
 import com.example.clickplus.data.ContextConditionType
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.TriggerType
@@ -41,10 +42,17 @@ class TapDetector(
 
     fun updateProfiles(newProfiles: List<KeyActionConfig>) {
         profiles = newProfiles.filter { it.enabled }
-        reconcileOpenedPackages()
+        // In Basic mode, the Usage Access monitor owns app-entry history.
+        // Accessibility may remain enabled in Android, but must not overwrite
+        // the Basic engine's persistent tracking state.
+        if (AdvancedRuleRepository.currentMode(context) == AppMode.FULL) {
+            reconcileOpenedPackages()
+        }
     }
 
     private fun reconcileOpenedPackages() {
+        enteredAppPackages.clear()
+        enteredAppPackages.addAll(AdvancedRuleRepository.openedAppPackages(context))
         val activeTargetPackages = profiles
             .filter {
                 it.triggerType == TriggerType.APP_ENTRY &&
