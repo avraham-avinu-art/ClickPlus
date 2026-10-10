@@ -612,8 +612,7 @@ internal fun BackupScreen(
                 .clear()
                 .putBoolean("background_only", false)
                 .apply()
-            AdvancedRuleRepository.setLastExternalPackage(context, "")
-            AdvancedRuleRepository.clearOpenedAppPackages(context)
+            com.example.clickplus.service.StandaloneLauncherEngine.resetOpenAppTracking(context)
             KeyInterceptorAccessibilityService.instance?.resetOpenAppTracking()
             context.stopService(Intent(context, com.example.clickplus.service.BasicForegroundMonitorService::class.java))
             onResetAll()
@@ -628,7 +627,7 @@ internal fun BackupScreen(
             .remove("pending_activation_launches")
             .remove("last_target_package")
             .apply()
-        AdvancedRuleRepository.setLastExternalPackage(context, "")
+        com.example.clickplus.service.StandaloneLauncherEngine.resetOpenAppTracking(context)
         KeyInterceptorAccessibilityService.instance?.resetOpenAppTracking()
         message = "מצב הכניסות והאפליקציות שנפתחו אופס."
     }
