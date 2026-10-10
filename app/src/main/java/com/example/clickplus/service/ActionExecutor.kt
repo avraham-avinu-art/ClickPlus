@@ -1,18 +1,9 @@
 package com.example.clickplus.service
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.GestureDescription
-import android.content.Context
 import android.content.Intent
-import android.graphics.Path
-import android.media.AudioManager
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
-import android.view.KeyEvent
 import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.AdvancedRuleRepository
-import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.data.KeyActionConfig
 import com.example.clickplus.data.profileIdFromActionId
 import com.example.clickplus.data.SystemActionPreset
