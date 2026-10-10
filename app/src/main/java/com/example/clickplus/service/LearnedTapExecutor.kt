@@ -46,7 +46,7 @@ class LearnedTapExecutor(private val service: AccessibilityService) {
         val point = pointForCurrentOrientation(config, second = false)
         val xRatio = point.first.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
         val yRatio = point.second.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
-        if (xRatio == null || yRatio == null || config.screenTapXRatio < 0f || config.screenTapYRatio < 0f) {
+        if (xRatio == null || yRatio == null || point.first < 0f || point.second < 0f) {
             return ActionExecutionResult.failure("לא נלמד מיקום לחיצה תקין באפליקציה")
         }
 
@@ -140,8 +140,9 @@ class LearnedTapExecutor(private val service: AccessibilityService) {
         val gesture1 = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0L, 60L))
             .build()
-        service.dispatchGesture(
-            gesture1,
+        runCatching {
+            service.dispatchGesture(
+                gesture1,
             object : AccessibilityService.GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
                     val delay = config.screenTapIntervalMs.coerceIn(500L, 10_000L)
@@ -180,8 +181,17 @@ class LearnedTapExecutor(private val service: AccessibilityService) {
                     logAppTapResult(config, targetPackage, false, "הלחיצה הראשונה בוטלה על ידי Android", executionId)
                 }
             },
-            handler,
-        )
+                handler,
+            )
+        }.onFailure { error ->
+            logAppTapResult(
+                config,
+                targetPackage,
+                false,
+                "לא ניתן לשלוח את הלחיצה הראשונה: " + (error.message ?: error.javaClass.simpleName),
+                executionId,
+            )
+        }
     }
 
     private fun scheduleTapWhenAppIsVisible(
