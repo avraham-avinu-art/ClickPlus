@@ -1,6 +1,14 @@
 package com.example.clickplus.service
 
-
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.content.Intent
+import android.graphics.Path
+import android.os.Handler
+import android.os.Looper
+import com.example.clickplus.data.AdvancedRuleRepository
+import com.example.clickplus.data.AppPreferencesRepository
+import com.example.clickplus.data.KeyActionConfig
 
 class LearnedTapExecutor(private val service: AccessibilityService) {
     private val handler = Handler(Looper.getMainLooper())
