@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.LayoutDirection
+import com.example.clickplus.data.ActionType
 import com.example.clickplus.data.ActionTextFormatter
 import com.example.clickplus.data.AdvancedRuleRepository
 import com.example.clickplus.data.AppMode
