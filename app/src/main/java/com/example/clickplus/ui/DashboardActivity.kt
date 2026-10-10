@@ -157,6 +157,7 @@ import com.example.clickplus.data.RuleAdvancedMetadata
 import com.example.clickplus.data.SystemActionPreset
 import com.example.clickplus.data.TriggerType
 import com.example.clickplus.service.ActionExecutor
+import com.example.clickplus.service.BasicForegroundMonitorService
 import com.example.clickplus.service.BasicActionPerformer
 import com.example.clickplus.service.KeyInterceptorAccessibilityService
 import com.example.clickplus.service.RuleExecutionCoordinator
@@ -299,6 +300,36 @@ private fun ClickPlusDashboard(
     var route by remember { mutableStateOf<DashboardRoute>(DashboardRoute.Home) }
     var themeMode by remember { mutableStateOf(advanced.themeMode()) }
     var mode by remember { mutableStateOf(AdvancedRuleRepository.currentMode(context)) }
+    var lifecycleRefresh by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) lifecycleRefresh++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(mode, mappings, lifecycleRefresh) {
+        val needsBasicMonitor = mode == AppMode.BASIC &&
+            hasUsageAccess(context) &&
+            mappings.any { it.enabled && it.triggerType == TriggerType.APP_ENTRY }
+        val monitorIntent = Intent(context, BasicForegroundMonitorService::class.java)
+        if (needsBasicMonitor) {
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    ContextCompat.startForegroundService(context, monitorIntent)
+                } else {
+                    context.startService(monitorIntent)
+                }
+            }.onFailure {
+                android.util.Log.w("ClickPlus", "Could not start Basic mode app-entry monitor", it)
+            }
+        } else {
+            context.stopService(monitorIntent)
+        }
+    }
 
     val dark = when (themeMode) {
         "dark" -> true
