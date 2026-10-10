@@ -107,7 +107,15 @@ object StandaloneLauncherEngine {
         )
     }
 
+    @Synchronized
     fun resetOpenAppTracking(context: Context) {
+        handler.removeCallbacksAndMessages("activation")
+        tapCount = 0
+        lastTriggerAt = 0L
+        pendingForegroundPackage = ""
+        pendingEnteredPackage = ""
+        pendingTriggerType = TriggerType.CLICKPLUS_ENTRY
+        pendingFailureReason = ""
         AdvancedRuleRepository.clearOpenedAppPackages(context)
         AdvancedRuleRepository.setLastExternalPackage(context, "")
         context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
