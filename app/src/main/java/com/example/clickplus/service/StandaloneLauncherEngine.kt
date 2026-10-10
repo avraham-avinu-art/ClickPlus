@@ -249,8 +249,8 @@ object StandaloneLauncherEngine {
         }.getOrDefault(false)
     }
 
-    private fun contextMatches(context: Context, config: KeyActionConfig, foregroundPackage: String): Boolean =
-        when (config.contextConditionType) {
+    private fun contextMatches(context: Context, config: KeyActionConfig, foregroundPackage: String): Boolean {
+        return when (config.contextConditionType) {
             ContextConditionType.ANY -> true
             ContextConditionType.APP ->
                 foregroundPackage.isNotBlank() && foregroundPackage == config.contextConditionValue
@@ -294,4 +294,5 @@ object StandaloneLauncherEngine {
                 round(current.toDouble() / maxVolume.toDouble() * 30.0).toInt().coerceIn(0, 30) == expected
             }
         }
+    }
 }
