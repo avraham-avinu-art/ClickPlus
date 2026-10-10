@@ -116,25 +116,25 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
                 }
                 ActionType.SYSTEM -> when (config.systemActionId) {
                     SystemActionPreset.MEDIA_STOP.id ->
-                        deviceActions.media(KeyEvent.KEYCODE_MEDIA_STOP, "נשלחה פקודת עצירת השמעה")
+                        deviceActions.deviceActions.media(KeyEvent.KEYCODE_MEDIA_STOP, "נשלחה פקודת עצירת השמעה")
                     SystemActionPreset.MEDIA_PLAY.id ->
-                        media(KeyEvent.KEYCODE_MEDIA_PLAY, "נשלחה פקודת הפעלת השמעה")
+                        deviceActions.media(KeyEvent.KEYCODE_MEDIA_PLAY, "נשלחה פקודת הפעלת השמעה")
                     SystemActionPreset.MEDIA_RESUME.id ->
-                        media(KeyEvent.KEYCODE_MEDIA_PLAY, "נשלחה פקודת המשך השמעה")
+                        deviceActions.media(KeyEvent.KEYCODE_MEDIA_PLAY, "נשלחה פקודת המשך השמעה")
                     SystemActionPreset.MEDIA_PLAY_PAUSE.id ->
-                        media(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, "נשלחה פקודת נגן / השהה")
+                        deviceActions.media(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, "נשלחה פקודת נגן / השהה")
                     SystemActionPreset.MEDIA_NEXT.id ->
-                        media(KeyEvent.KEYCODE_MEDIA_NEXT, "נשלחה פקודת השיר הבא")
+                        deviceActions.media(KeyEvent.KEYCODE_MEDIA_NEXT, "נשלחה פקודת השיר הבא")
                     SystemActionPreset.MEDIA_PREVIOUS.id ->
-                        media(KeyEvent.KEYCODE_MEDIA_PREVIOUS, "נשלחה פקודת השיר הקודם")
+                        deviceActions.media(KeyEvent.KEYCODE_MEDIA_PREVIOUS, "נשלחה פקודת השיר הקודם")
                     SystemActionPreset.MEDIA_FAST_FORWARD.id ->
-                        media(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, "נשלחה פקודת הרצה קדימה")
+                        deviceActions.media(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, "נשלחה פקודת הרצה קדימה")
                     SystemActionPreset.MEDIA_REWIND.id ->
-                        media(KeyEvent.KEYCODE_MEDIA_REWIND, "נשלחה פקודת הרצה לאחור")
+                        deviceActions.media(KeyEvent.KEYCODE_MEDIA_REWIND, "נשלחה פקודת הרצה לאחור")
                     SystemActionPreset.VOLUME_UP.id ->
                         deviceActions.adjustVolume(AudioManager.ADJUST_RAISE, "עוצמת השמע הוגברה")
                     SystemActionPreset.VOLUME_DOWN.id ->
-                        volume(AudioManager.ADJUST_LOWER, "עוצמת השמע הונמכה")
+                        deviceActions.adjustVolume(AudioManager.ADJUST_LOWER, "עוצמת השמע הונמכה")
                     SystemActionPreset.VOLUME_MUTE.id ->
                         deviceActions.muteVolume(true, "השמע הושתק")
                     SystemActionPreset.VOLUME_STATUS.id ->
@@ -146,7 +146,7 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
                     SystemActionPreset.BRIGHTNESS_SET.id ->
                         deviceActions.setBrightness(config.actionParameter, "הבהירות שונתה")
                     SystemActionPreset.SETTINGS.id -> {
-                        deviceActions.openSettings(Settings.ACTION_SETTINGS, "מסך ההגדרות נפתח")
+                        deviceActions.deviceActions.openSettings(Settings.ACTION_SETTINGS, "מסך ההגדרות נפתח")
                     }
                     SystemActionPreset.DIALER.id -> {
                         deviceActions.openIntent(Intent(Intent.ACTION_DIAL), "החייגן נפתח")
@@ -182,12 +182,12 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
                     SystemActionPreset.ANSWER_CALL.id,
                     SystemActionPreset.DECLINE_CALL.id ->
                         ActionExecutionResult.failure("פעולת שיחה זו דורשת הרשאות טלפוניה ולא מתבצעת במצב בסיסי")
-                    SystemActionPreset.WIFI_SETTINGS.id -> deviceActions.openSettings(Settings.ACTION_WIFI_SETTINGS, "הגדרות Wi‑Fi נפתחו")
-                    SystemActionPreset.BLUETOOTH_SETTINGS.id -> deviceActions.openSettings(Settings.ACTION_BLUETOOTH_SETTINGS, "הגדרות Bluetooth נפתחו")
-                    SystemActionPreset.DISPLAY_SETTINGS.id -> deviceActions.openSettings(Settings.ACTION_DISPLAY_SETTINGS, "הגדרות תצוגה נפתחו")
-                    SystemActionPreset.SOUND_SETTINGS.id -> deviceActions.openSettings(Settings.ACTION_SOUND_SETTINGS, "הגדרות שמע נפתחו")
-                    SystemActionPreset.BATTERY_SETTINGS.id -> deviceActions.openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS, "הגדרות סוללה נפתחו")
-                    SystemActionPreset.APP_SETTINGS.id -> deviceActions.openSettings(Settings.ACTION_APPLICATION_SETTINGS, "הגדרות אפליקציות נפתחו")
+                    SystemActionPreset.WIFI_SETTINGS.id -> deviceActions.deviceActions.openSettings(Settings.ACTION_WIFI_SETTINGS, "הגדרות Wi‑Fi נפתחו")
+                    SystemActionPreset.BLUETOOTH_SETTINGS.id -> deviceActions.deviceActions.openSettings(Settings.ACTION_BLUETOOTH_SETTINGS, "הגדרות Bluetooth נפתחו")
+                    SystemActionPreset.DISPLAY_SETTINGS.id -> deviceActions.deviceActions.openSettings(Settings.ACTION_DISPLAY_SETTINGS, "הגדרות תצוגה נפתחו")
+                    SystemActionPreset.SOUND_SETTINGS.id -> deviceActions.deviceActions.openSettings(Settings.ACTION_SOUND_SETTINGS, "הגדרות שמע נפתחו")
+                    SystemActionPreset.BATTERY_SETTINGS.id -> deviceActions.deviceActions.openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS, "הגדרות סוללה נפתחו")
+                    SystemActionPreset.APP_SETTINGS.id -> deviceActions.deviceActions.openSettings(Settings.ACTION_APPLICATION_SETTINGS, "הגדרות אפליקציות נפתחו")
                     else -> ActionExecutionResult.failure("פעולת המערכת אינה נתמכת במצב בסיסי")
                 }
             }
