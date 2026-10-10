@@ -337,7 +337,23 @@ internal fun PermissionIntroScreen(
                                 }
                             },
                             Modifier.fillMaxWidth(),
-                        ) { Text("הרשאת טלפון") }
+                        ) { Text("זיהוי צלצול") }
+
+                        OutlinedButton(
+                            onClick = {
+                                if (ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.ANSWER_PHONE_CALLS,
+                                    ) != PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    val callLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                                        ActivityResultContracts.RequestPermission()
+                                    ) { }
+                                    callLauncher.launch(Manifest.permission.ANSWER_PHONE_CALLS)
+                                }
+                            },
+                            Modifier.fillMaxWidth(),
+                        ) { Text("מענה/דחיית שיחה") }
 
                         OutlinedButton(
                             onClick = {
