@@ -159,6 +159,30 @@ class KeyActionConfigTest {
     }
 
     @Test
+    fun profileNormalizationAlwaysProvidesAnEnabledDefault() {
+        val normalized = AdvancedRuleRepository.normalizeProfiles(
+            listOf(
+                ClickPlusProfile(id = "custom", name = "מותאם", enabled = false),
+                ClickPlusProfile(id = "custom", name = "כפול", enabled = true),
+            )
+        )
+
+        assertTrue(normalized.any { it.id == "default" && it.enabled && it.name == "כללי" })
+        assertTrue(normalized.any { it.id == "custom" && !it.enabled && it.name == "מותאם" })
+        assertEquals(2, normalized.size)
+    }
+
+    @Test
+    fun profileNormalizationTrimsNamesAndEnablesDefaultWhenAllAreDisabled() {
+        val normalized = AdvancedRuleRepository.normalizeProfiles(
+            listOf(ClickPlusProfile(id = " default ", name = "   ", enabled = false))
+        )
+
+        assertEquals(1, normalized.size)
+        assertEquals(ClickPlusProfile(id = "default", name = "כללי", enabled = true), normalized.single())
+    }
+
+    @Test
     fun defaultActionIsEnabled() {
         assertTrue(KeyActionConfig().enabled)
     }
