@@ -1056,6 +1056,13 @@ internal fun isAccessibilityServiceResponsive(context: Context): Boolean {
     return alive && heartbeat > 0L && System.currentTimeMillis() - heartbeat < 5000L
 }
 
+internal fun isBasicForegroundMonitorResponsive(context: Context): Boolean {
+    val prefs = context.getSharedPreferences("clickplus_runtime", Context.MODE_PRIVATE)
+    val alive = prefs.getBoolean("basic_monitor_alive", false)
+    val heartbeat = prefs.getLong("basic_monitor_heartbeat", 0L)
+    return alive && heartbeat > 0L && System.currentTimeMillis() - heartbeat < 4000L
+}
+
 internal fun hasUsageAccess(context: Context): Boolean {
     val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
     return runCatching {
