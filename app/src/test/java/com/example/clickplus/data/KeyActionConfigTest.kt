@@ -135,7 +135,7 @@ class KeyActionConfigTest {
                 .put("screenTapXRatio", 1.8)
                 .put("screenTapYRatio", -0.4)
                 .put("screenTapSecondXRatio", "bad")
-                .put("screenTapSecondYRatio", Double.NaN)
+                .put("screenTapSecondYRatio", "bad")
         )
         assertEquals(1f, restored.screenTapXRatio, 0.0001f)
         assertEquals(-0.4f, restored.screenTapYRatio, 0.0001f)
