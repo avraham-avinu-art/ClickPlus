@@ -7,6 +7,7 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
+import android.os.SystemClock
 import android.os.Looper
 import android.provider.Settings
 import android.telephony.TelephonyManager
@@ -156,7 +157,7 @@ object StandaloneLauncherEngine {
         handler.postAtTime(
             { resolveActivation(context.applicationContext) },
             "activation",
-            now + AppPreferencesRepository.tapTimeoutSnapshot(context).coerceIn(300L, 1500L),
+            SystemClock.uptimeMillis() + AppPreferencesRepository.tapTimeoutSnapshot(context).coerceIn(300L, 1500L),
         )
     }
 
