@@ -95,6 +95,26 @@ class AdvancedRuleRepository(private val context: Context) {
             return next.name
         }
 
+        internal fun normalizeProfiles(items: List<ClickPlusProfile>): List<ClickPlusProfile> {
+            val unique = linkedMapOf<String, ClickPlusProfile>()
+            items.forEach { profile ->
+                val id = profile.id.trim()
+                if (id.isNotBlank() && !unique.containsKey(id)) {
+                    unique[id] = profile.copy(
+                        id = id,
+                        name = profile.name.trim().ifBlank { if (id == "default") "כללי" else "פרופיל" },
+                    )
+                }
+            }
+            if (!unique.containsKey("default")) {
+                unique["default"] = ClickPlusProfile("default", "כללי", true)
+            }
+            if (unique.values.none { it.enabled }) {
+                unique["default"] = unique.getValue("default").copy(enabled = true)
+            }
+            return unique.values.toList()
+        }
+
         fun lastExternalPackage(context: Context): String =
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LAST_PACKAGE, "").orEmpty()
 
@@ -227,27 +247,7 @@ class AdvancedRuleRepository(private val context: Context) {
     }
 
     fun saveProfiles(items: List<ClickPlusProfile>) {
-        val unique = linkedMapOf<String, ClickPlusProfile>()
-        items.forEach { profile ->
-            val id = profile.id.trim()
-            if (id.isNotBlank()) {
-                unique.putIfAbsent(
-                    id,
-                    profile.copy(
-                        id = id,
-                        name = profile.name.trim().ifBlank { if (id == "default") "כללי" else "פרופיל" },
-                    ),
-                )
-            }
-        }
-        if (!unique.containsKey("default")) {
-            unique["default"] = ClickPlusProfile("default", "כללי", true)
-        }
-        if (unique.values.none { it.enabled }) {
-            unique["default"] = unique.getValue("default").copy(enabled = true)
-        }
-
-        val normalized = unique.values.toList()
+        val normalized = normalizeProfiles(items)
         val array = JSONArray()
         normalized.forEach {
             array.put(JSONObject().put("id", it.id).put("name", it.name).put("enabled", it.enabled))
