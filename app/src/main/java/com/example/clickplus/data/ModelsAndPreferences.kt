@@ -229,8 +229,6 @@ class AppPreferencesRepository(private val context: Context) {
         val TAP_COUNT_POSITION = longPreferencesKey("tap_count_position")
         val TAP_COUNT_SIZE = longPreferencesKey("tap_count_size")
         val MAPPINGS_JSON = stringPreferencesKey("mappings_json")
-        private const val RUNTIME_PREFS = "clickplus_runtime"
-        private const val MAPPINGS_SNAPSHOT = "mappings_snapshot"
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
 
         @Volatile private var cachedTapTimeoutMs = 1200L
@@ -260,28 +258,23 @@ class AppPreferencesRepository(private val context: Context) {
             cachedTapCountSize.coerceIn(32, 96)
 
         /**
-         * A synchronous snapshot is needed by the launcher path, which must decide
-         * immediately whether the press should be counted. Prefer the mirrored
-         * SharedPreferences snapshot; on an older installation, load DataStore once.
+         * The launcher needs a synchronous snapshot before it can resolve an entry.
+         * DataStore remains the only persisted source of mappings; this blocks on IO
+         * only once per process and then uses the in-memory cache.
          */
         fun mappingsSnapshot(context: Context): List<KeyActionConfig> {
             if (cachedMappingsInitialized) return cachedMappings
 
-            val runtime = context.getSharedPreferences(RUNTIME_PREFS, Context.MODE_PRIVATE)
-            val stored = runtime.getString(MAPPINGS_SNAPSHOT, null)
-            val raw = stored ?: runCatching {
+            val raw = runCatching {
                 runBlocking(Dispatchers.IO) {
                     context.dataStore.data.first()[MAPPINGS_JSON]
                 }
             }.getOrNull()
 
-            val decoded = decodeMappings(raw)
-            cachedMappings = decoded
-            cachedMappingsInitialized = true
-            if (stored == null && raw != null) {
-                runtime.edit().putString(MAPPINGS_SNAPSHOT, raw).apply()
+            return decodeMappings(raw).also {
+                cachedMappings = it
+                cachedMappingsInitialized = true
             }
-            return decoded
         }
 
         private fun decodeMappings(raw: String?): List<KeyActionConfig> {
@@ -397,8 +390,6 @@ class AppPreferencesRepository(private val context: Context) {
         context.dataStore.edit { it[MAPPINGS_JSON] = raw }
         cachedMappings = mappings
         cachedMappingsInitialized = true
-        context.getSharedPreferences(RUNTIME_PREFS, Context.MODE_PRIVATE)
-            .edit().putString(MAPPINGS_SNAPSHOT, raw).apply()
     }
 }
 
