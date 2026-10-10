@@ -31,33 +31,34 @@ interface ClickActionPerformer {
 }
 
 object BasicActionCapabilities {
-    setOf(
-            SystemActionPreset.MEDIA_STOP.id,
-            SystemActionPreset.MEDIA_PLAY.id,
-            SystemActionPreset.MEDIA_RESUME.id,
-            SystemActionPreset.MEDIA_PLAY_PAUSE.id,
-            SystemActionPreset.MEDIA_NEXT.id,
-            SystemActionPreset.MEDIA_PREVIOUS.id,
-            SystemActionPreset.MEDIA_FAST_FORWARD.id,
-            SystemActionPreset.MEDIA_REWIND.id,
-            SystemActionPreset.VOLUME_UP.id,
-            SystemActionPreset.VOLUME_DOWN.id,
-            SystemActionPreset.VOLUME_MUTE.id,
-            SystemActionPreset.VOLUME_STATUS.id,
-            SystemActionPreset.BRIGHTNESS_UP.id,
-            SystemActionPreset.BRIGHTNESS_DOWN.id,
-            SystemActionPreset.BRIGHTNESS_SET.id,
-            SystemActionPreset.SETTINGS.id,
-            SystemActionPreset.WIFI_SETTINGS.id,
-            SystemActionPreset.BLUETOOTH_SETTINGS.id,
-            SystemActionPreset.DISPLAY_SETTINGS.id,
-            SystemActionPreset.SOUND_SETTINGS.id,
-            SystemActionPreset.BATTERY_SETTINGS.id,
-            SystemActionPreset.APP_SETTINGS.id,
-            SystemActionPreset.DIALER.id,
-            SystemActionPreset.DIAL_NUMBER.id,
-            SystemActionPreset.DIAL_CONTACT.id,
-        )
+    val supportedSystemActions = setOf(
+        SystemActionPreset.MEDIA_STOP.id,
+        SystemActionPreset.MEDIA_PLAY.id,
+        SystemActionPreset.MEDIA_RESUME.id,
+        SystemActionPreset.MEDIA_PLAY_PAUSE.id,
+        SystemActionPreset.MEDIA_NEXT.id,
+        SystemActionPreset.MEDIA_PREVIOUS.id,
+        SystemActionPreset.MEDIA_FAST_FORWARD.id,
+        SystemActionPreset.MEDIA_REWIND.id,
+        SystemActionPreset.VOLUME_UP.id,
+        SystemActionPreset.VOLUME_DOWN.id,
+        SystemActionPreset.VOLUME_MUTE.id,
+        SystemActionPreset.VOLUME_STATUS.id,
+        SystemActionPreset.BRIGHTNESS_UP.id,
+        SystemActionPreset.BRIGHTNESS_DOWN.id,
+        SystemActionPreset.BRIGHTNESS_SET.id,
+        SystemActionPreset.SETTINGS.id,
+        SystemActionPreset.WIFI_SETTINGS.id,
+        SystemActionPreset.BLUETOOTH_SETTINGS.id,
+        SystemActionPreset.DISPLAY_SETTINGS.id,
+        SystemActionPreset.SOUND_SETTINGS.id,
+        SystemActionPreset.BATTERY_SETTINGS.id,
+        SystemActionPreset.APP_SETTINGS.id,
+        SystemActionPreset.DIALER.id,
+        SystemActionPreset.DIAL_NUMBER.id,
+        SystemActionPreset.DIAL_CONTACT.id,
+    )
+
     fun supports(config: KeyActionConfig): Boolean =
         config.actionType == ActionType.APP ||
             config.actionType == ActionType.PROFILE ||
