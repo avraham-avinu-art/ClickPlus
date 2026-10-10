@@ -450,6 +450,7 @@ internal fun BackupScreen(
     tapCountSize: Int,
     actionDelay: Long,
     onBack: () -> Unit,
+    onSettingsRestored: (AppMode?, String?) -> Unit,
     onResetAll: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -533,6 +534,8 @@ internal fun BackupScreen(
     fun applyImport(root: JSONObject) {
         scope.launch {
             runCatching {
+                var restoredMode: AppMode? = null
+                var restoredTheme: String? = null
                 val array = root.optJSONArray("mappings") ?: JSONArray()
                 val imported = buildList {
                     for (i in 0 until array.length()) {
@@ -550,18 +553,23 @@ internal fun BackupScreen(
                     if (it.has("tapCountY")) basePrefs.saveTapCountY(it.optInt("tapCountY", 65))
                     else if (it.has("tapCountPosition")) basePrefs.saveTapCountPosition(it.optInt("tapCountPosition", 35))
                     if (it.has("tapCountSize")) basePrefs.saveTapCountSize(it.optInt("tapCountSize", 48))
-                    it.optString("mode", "").takeIf { mode -> mode.isNotBlank() }?.let { mode ->
+                    it.optString("mode", "").takeIf { mode -> mode.isNotBlank() }?.let { modeName ->
                         runCatching {
-                            AdvancedRuleRepository.setMode(context, AppMode.valueOf(mode))
+                            AppMode.valueOf(modeName)
+                        }.getOrNull()?.let { parsedMode ->
+                            restoredMode = parsedMode
+                            AdvancedRuleRepository.setMode(context, parsedMode)
                         }
                     }
                     it.optString("themeMode", "").takeIf { theme -> theme.isNotBlank() }?.let { theme ->
+                        restoredTheme = theme
                         advanced.saveThemeMode(theme)
                     }
                     it.optString("activeProfileId", "").takeIf { id -> id.isNotBlank() }?.let { id ->
                         AdvancedRuleRepository.setActiveProfileId(context, id)
                     }
                 }
+                onSettingsRestored(restoredMode, restoredTheme)
                 message = "הגיבוי יובא בהצלחה."
             }.onFailure { message = "הייבוא נכשל: " + (it.message ?: "שגיאה") }
         }
