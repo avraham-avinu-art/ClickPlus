@@ -1073,6 +1073,7 @@ internal fun BackupScreen(
     mappings: List<KeyActionConfig>,
     timeout: Long,
     showTapCount: Boolean,
+    tapCountSize: Int,
     actionDelay: Long,
     onBack: () -> Unit,
 ) {
@@ -1095,6 +1096,7 @@ internal fun BackupScreen(
         .put("showTapCount", showTapCount)
         .put("tapCountX", AppPreferencesRepository.tapCountXSnapshot(context))
         .put("tapCountY", AppPreferencesRepository.tapCountYSnapshot(context))
+        .put("tapCountSize", tapCountSize)
         .put("tapCountPosition", AppPreferencesRepository.tapCountPositionSnapshot(context))
         .put("mode", AdvancedRuleRepository.currentMode(context).name)
         .put("themeMode", advanced.themeMode())
@@ -1137,6 +1139,7 @@ internal fun BackupScreen(
                 }
                 basePrefs.saveMappings(imported)
 
+                advanced.importBundle(root)
                 root.optJSONObject("settings")?.let {
                     if (it.has("tapTimeoutMs")) basePrefs.saveTapTimeout(it.optLong("tapTimeoutMs", 1200L))
                     if (it.has("actionDelayMs")) basePrefs.saveActionDelay(it.optLong("actionDelayMs", 0L))
@@ -1144,6 +1147,7 @@ internal fun BackupScreen(
                     if (it.has("tapCountX")) basePrefs.saveTapCountX(it.optInt("tapCountX", 50))
                     if (it.has("tapCountY")) basePrefs.saveTapCountY(it.optInt("tapCountY", 65))
                     else if (it.has("tapCountPosition")) basePrefs.saveTapCountPosition(it.optInt("tapCountPosition", 35))
+                    if (it.has("tapCountSize")) basePrefs.saveTapCountSize(it.optInt("tapCountSize", 48))
                     it.optString("mode", "").takeIf { mode -> mode.isNotBlank() }?.let { mode ->
                         runCatching {
                             AdvancedRuleRepository.setMode(context, AppMode.valueOf(mode))
@@ -1156,7 +1160,6 @@ internal fun BackupScreen(
                         AdvancedRuleRepository.setActiveProfileId(context, id)
                     }
                 }
-                advanced.importBundle(root)
                 message = "הגיבוי יובא בהצלחה."
             }.onFailure { message = "הייבוא נכשל: " + (it.message ?: "שגיאה") }
         }
@@ -1194,6 +1197,7 @@ internal fun BackupScreen(
             basePrefs.saveActionDelay(0L)
             basePrefs.saveTapCountX(50)
             basePrefs.saveTapCountY(65)
+            basePrefs.saveTapCountSize(48)
             advanced.clearAllRuleMetadata()
             advanced.saveProfiles(listOf(ClickPlusProfile("default", "כללי", true)))
             AdvancedRuleRepository.setActiveProfileId(context, "default")
@@ -1204,7 +1208,15 @@ internal fun BackupScreen(
                 .edit()
                 .remove("permission_intro_completed")
                 .remove("permission_bootstrap_done")
+                .remove("tap_learning")
+                .remove("tap_capture_ready")
+                .remove("pending_activation_launches")
+                .remove("last_target_package")
+                .putBoolean("background_only", false)
                 .apply()
+            AdvancedRuleRepository.setLastExternalPackage(context, "")
+            AdvancedRuleRepository.clearOpenedAppPackages(context)
+            KeyInterceptorAccessibilityService.instance?.resetOpenAppTracking()
             message = "כל נתוני האפליקציה אופסו."
         }
     }
@@ -1271,14 +1283,6 @@ internal fun BackupScreen(
                         onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) },
                         Modifier.fillMaxWidth(),
                     ) { Text("ייבוא גיבוי") }
-                }
-            }
-            item {
-                SettingCard("איפוס מצב כניסות", "מאפס את זיהוי הכניסה ואת רשימת האפליקציות שנפתחו, בלי למחוק פעולות.") {
-                    OutlinedButton(
-                        onClick = { showResetRuntimeConfirm = true },
-                        Modifier.fillMaxWidth(),
-                    ) { Text("איפוס מצב כניסות ואפליקציות שנפתחו") }
                 }
             }
             item {
@@ -1965,7 +1969,7 @@ internal fun EditorScreen(
                                 modifier = Modifier.weight(1f).height(62.dp),
                             )
                             ChoiceChip(
-                                selected = actionTypeChosen && draft.actionType == ActionType.APP_TAP,
+                                selected = actionTypeChosen && draft.actionType in setOf(ActionType.APP_TAP, ActionType.MULTI_POINT_TAP),
                                 enabled = AdvancedRuleRepository.currentMode(context) == AppMode.FULL,
                                 onClick = {
                                     actionTypeChosen = true
