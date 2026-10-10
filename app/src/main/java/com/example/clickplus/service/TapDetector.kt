@@ -37,13 +37,16 @@ class TapDetector(
     private val advanced = AdvancedRuleRepository(context)
     // The first entry opens the selected app and is not counted as a trigger.
     // Re-entering an already-opened app can be counted.
-    private val enteredAppPackages = mutableSetOf<String>()
+    private val enteredAppPackages = AdvancedRuleRepository.openedAppPackages(context).toMutableSet()
 
     fun updateProfiles(newProfiles: List<KeyActionConfig>) {
         profiles = newProfiles.filter { it.enabled }
     }
 
-    fun resetOpenAppState() { enteredAppPackages.clear() }
+    fun resetOpenAppState() {
+        enteredAppPackages.clear()
+        AdvancedRuleRepository.clearOpenedAppPackages(context)
+    }
 
     fun processClickPlusEntry(previousForegroundPackage: String) {
         registerTrigger(
@@ -57,7 +60,9 @@ class TapDetector(
         if (enteredPackage.isBlank()) return
 
         val wasAlreadyOpened = enteredAppPackages.contains(enteredPackage)
-        enteredAppPackages.add(enteredPackage)
+        if (enteredAppPackages.add(enteredPackage)) {
+            AdvancedRuleRepository.setOpenedAppPackages(context, enteredAppPackages)
+        }
         if (!wasAlreadyOpened) return
 
         registerTrigger(
