@@ -55,8 +55,6 @@ class BasicActionPerformer(private val context: Context) : ClickActionPerformer 
         SystemActionPreset.BATTERY_SETTINGS.id,
         SystemActionPreset.APP_SETTINGS.id,
         SystemActionPreset.DIALER.id,
-        SystemActionPreset.ANSWER_CALL.id,
-        SystemActionPreset.DECLINE_CALL.id,
         SystemActionPreset.DIAL_NUMBER.id,
         SystemActionPreset.DIAL_CONTACT.id,
     )
