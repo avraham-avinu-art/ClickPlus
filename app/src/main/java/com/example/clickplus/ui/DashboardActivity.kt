@@ -281,6 +281,7 @@ private fun ClickPlusDashboard(
     onLaterPermissionSetup: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     if (showPermissionIntro) {
         PermissionIntroScreen(onEnter = onLaterPermissionSetup)
         return
@@ -325,7 +326,7 @@ private fun ClickPlusDashboard(
                     onAdd = { route = DashboardRoute.Editor(null) },
                     onEdit = { route = DashboardRoute.Editor(it) },
                     onDelete = { item ->
-                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                        scope.launch {
                             prefs.saveMappings(mappings.filterNot { it.id == item.id })
                             advanced.removeRuleMetadata(item.id)
                         }
@@ -373,6 +374,7 @@ private fun ClickPlusDashboard(
                     mappings = mappings,
                     timeout = timeout,
                     showTapCount = showTapCount,
+                    tapCountSize = tapCountSize,
                     actionDelay = actionDelay,
                     onBack = { route = DashboardRoute.Settings },
                 )
