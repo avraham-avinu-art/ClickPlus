@@ -309,10 +309,26 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
     }
 
     private fun saveLearningScreenshot(stage: Int, attempt: Int = 0) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         val prefs = getSharedPreferences("clickplus_runtime", MODE_PRIVATE)
         val targetPackage = prefs.getString("tap_learning_package", "").orEmpty()
         if (targetPackage.isBlank()) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            prefs.edit()
+                .putString("tap_learning_screenshot_error_$stage", "צילום מסך ללימוד נקודה דורש Android 11 ומעלה.")
+                .apply()
+            return
+        }
+        val foregroundPackage = rootInActiveWindow?.packageName?.toString().orEmpty()
+        if (foregroundPackage != targetPackage) {
+            if (attempt < 2) {
+                uiHandler.postDelayed({ saveLearningScreenshot(stage, attempt + 1) }, 700L)
+            } else {
+                prefs.edit()
+                    .putString("tap_learning_screenshot_error_$stage", "צילום המסך בוטל כי אפליקציית היעד לא הייתה בחזית.")
+                    .apply()
+            }
+            return
+        }
 
         takeScreenshot(
             android.view.Display.DEFAULT_DISPLAY,
