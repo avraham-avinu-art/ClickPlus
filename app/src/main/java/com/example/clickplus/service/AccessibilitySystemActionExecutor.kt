@@ -47,7 +47,7 @@ class AccessibilitySystemActionExecutor(
         SystemActionPreset.MEDIA_REWIND.id ->
             deviceActions.media(KeyEvent.KEYCODE_MEDIA_REWIND, "הרצה לאחור")
         SystemActionPreset.VOLUME_UP.id ->
-            deviceActions.deviceActions.adjustVolume(AudioManager.ADJUST_RAISE, "עוצמת השמע הוגברה")
+            deviceActions.adjustVolume(AudioManager.ADJUST_RAISE, "עוצמת השמע הוגברה")
         SystemActionPreset.VOLUME_DOWN.id ->
             deviceActions.adjustVolume(AudioManager.ADJUST_LOWER, "עוצמת השמע הונמכה")
         SystemActionPreset.VOLUME_MUTE.id ->
@@ -55,13 +55,13 @@ class AccessibilitySystemActionExecutor(
         SystemActionPreset.VOLUME_STATUS.id ->
             ActionExecutionResult.success("עוצמת השמע הנוכחית: " + deviceActions.currentVolumeText())
         SystemActionPreset.BRIGHTNESS_UP.id ->
-            deviceActions.deviceActions.changeBrightness(0.10f, "הבהירות הוגברה")
+            deviceActions.changeBrightness(0.10f, "הבהירות הוגברה")
         SystemActionPreset.BRIGHTNESS_DOWN.id ->
-            deviceActions.deviceActions.changeBrightness(-0.10f, "הבהירות הוחלשה")
+            deviceActions.changeBrightness(-0.10f, "הבהירות הוחלשה")
         SystemActionPreset.BRIGHTNESS_SET.id ->
-            deviceActions.deviceActions.setBrightness(actionParameter, "הבהירות שונתה")
+            deviceActions.setBrightness(actionParameter, "הבהירות שונתה")
         SystemActionPreset.WIFI_SETTINGS.id ->
-            deviceActions.deviceActions.openSettings(Settings.ACTION_WIFI_SETTINGS, "הגדרות Wi‑Fi נפתחו")
+            deviceActions.openSettings(Settings.ACTION_WIFI_SETTINGS, "הגדרות Wi‑Fi נפתחו")
         SystemActionPreset.BLUETOOTH_SETTINGS.id ->
             deviceActions.openSettings(Settings.ACTION_BLUETOOTH_SETTINGS, "הגדרות Bluetooth נפתחו")
         SystemActionPreset.DISPLAY_SETTINGS.id ->
