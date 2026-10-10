@@ -236,6 +236,10 @@ private fun ClickPlusDashboard(
                     tapCountSize = tapCountSize,
                     actionDelay = actionDelay,
                     onBack = { route = DashboardRoute.Settings },
+                    onSettingsRestored = { restoredMode, restoredTheme ->
+                        restoredMode?.let { mode = it }
+                        restoredTheme?.let { themeMode = it }
+                    },
                     onResetAll = {
                         mode = AppMode.FULL
                         themeMode = "system"
