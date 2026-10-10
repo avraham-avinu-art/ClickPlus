@@ -18,6 +18,7 @@ import android.os.Looper
 import java.io.File
 import androidx.core.app.NotificationCompat
 import com.example.clickplus.data.AdvancedRuleRepository
+import com.example.clickplus.data.AppMode
 import com.example.clickplus.data.AppPreferencesRepository
 import com.example.clickplus.ui.DashboardActivity
 import kotlinx.coroutines.CoroutineScope
@@ -263,7 +264,12 @@ class KeyInterceptorAccessibilityService : AccessibilityService() {
                     shouldTrackExternalPackage(eventPackage) -> {
                         val previousApp = lastExternalPackage
                         if (eventPackage != lastExternalPackage) {
-                            tapDetector.processAppEntry(eventPackage, previousApp)
+                            // In Basic mode the Usage Access monitor is the sole
+                            // app-entry trigger source; avoid executing the same
+                            // rule twice when Accessibility happens to remain enabled.
+                            if (AdvancedRuleRepository.currentMode(applicationContext) == AppMode.FULL) {
+                                tapDetector.processAppEntry(eventPackage, previousApp)
+                            }
                         }
                         lastExternalPackage = eventPackage
                         AdvancedRuleRepository.setLastExternalPackage(applicationContext, eventPackage)
